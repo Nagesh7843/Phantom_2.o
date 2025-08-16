@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login to phantom_2.o AI</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+</head>
+<body class="login-page">
+    <div id="login-screen">
+        <div class="login-card-custom">
+            <h2>🔐 Sign in to phantom_2.o AI</h2>
+            <p class="login-info">Use the demo credentials or Google Sign-In:</p>
+            <p class="login-hint">Demo Username: `user`, Password: `password`</p>
+
+            <form id="traditional-login-form">
+                <div class="login-input-group">
+                    <label for="user-display-name-input">Your Name:</label>
+                    <input type="text" id="user-display-name-input" placeholder="Enter your name" required>
+                </div>
+                <div class="login-input-group">
+                    <label for="username-input">Username/Email:</label>
+                    <input type="text" id="username-input" placeholder="Enter username/email" required>
+                </div>
+                <div class="login-input-group">
+                    <label for="password-input">Password:</label>
+                    <input type="password" id="password-input" placeholder="Enter password" required>
+                </div>
+                <p id="login-error-message" class="error-message hidden"></p>
+                <button type="submit" id="login-button" class="login-button">Login with Demo Account</button>
+            </form>
+
+            <div class="login-separator">OR</div>
+
+            <a href="{{ url_for('login_google') }}" class="login-button google-login-btn">
+                <i class="fab fa-google"></i> Sign in with Google
+            </a>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/login_script.js') }}"></script>
+</body>
+</html>

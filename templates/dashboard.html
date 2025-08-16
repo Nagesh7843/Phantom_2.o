@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>phantom_2.o AI Chat</title>
+
+    <link rel="icon" href="{{ url_for('static', filename='favicon.png') }}">
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div id="app-container">
+        <div id="sidebar">
+            <div class="sidebar-header">
+                <span>phantom_2.o</span>
+                <button id="settings-button-sidebar" title="Settings">
+                    <i class="fa-solid fa-gear"></i>
+                </button>
+            </div>
+            <button id="new-chat-button-sidebar" class="nav-item new-chat-btn">
+                <i class="fa-solid fa-plus"></i>
+                New Chat
+            </button>
+            <div class="nav-list">
+                <div class="nav-item" id="nav-item-subscription">
+                    <i class="fa-solid fa-crown"></i>
+                    <span>Subscription</span>
+                </div>
+                <div class="nav-item" id="nav-item-search">
+                    <i class="fa-solid fa-search"></i>
+                    <span>Search</span>
+                </div>
+                <div class="nav-item" id="nav-item-explore">
+                    <i class="fa-solid fa-compass"></i>
+                    <span>Explore</span>
+                </div>
+                <div class="nav-item" id="nav-item-history-toggle">
+                    <i class="fa-solid fa-history"></i>
+                    <span>History</span>
+                </div>
+
+                <div id="actual-chat-history-list" class="actual-chat-history-list hidden">
+                    </div>
+            </div>
+            <div class="user-section" id="user-profile-click-area">
+                <div class="user-profile-info">
+                    <div class="user-avatar" id="user-sidebar-avatar">
+                        {% if user_picture_url %}
+                            <img src="{{ user_picture_url }}" alt="Profile Picture" class="w-full h-full object-cover">
+                        {% else %}
+                            {% endif %}
+                    </div>
+                    <div class="user-details">
+                        <span id="user-sidebar-name" class="user-display-name">{{ user_display_name }}</span>
+                        <span id="user-sidebar-email" class="user-email">{{ user_email }}</span>
+                        <span class="user-tier">Free Plan</span>
+                    </div>
+                </div>
+                <a href="{{ url_for('logout') }}" id="logout-button" class="logout-button" title="Logout">Logout</a>
+            </div>
+        </div>
+
+        <div id="main-content">
+            <div class="chat-header">
+                <button id="sidebar-toggle-button" title="Toggle Sidebar">
+                    <i class="fa-solid fa-bars"></i>
+                </button>
+                <span>Chat</span>
+                <button id="settings-button-main" title="Settings">
+                    <i class="fa-solid fa-gear"></i>
+                </button>
+            </div>
+            <div class="chat-messages" id="chat-messages">
+                <div class="initial-prompt" id="initial-prompt">
+                    What's on your mind today?
+                </div>
+                </div>
+            <div class="loading-indicator hidden" id="loading-indicator">Thinking...</div>
+            <div class="chat-input-area-wrapper">
+                <div class="chat-input-area">
+                    <input type="file" id="image-upload-input" accept="image/*" class="hidden">
+                    <input type="text" id="user-input" placeholder="Message phantom_2.o..." autofocus>
+                    <button id="image-upload-button" title="Upload Image">
+                        <i class="fa-solid fa-image"></i>
+                    </button>
+                    <button id="camera-capture-button" title="Capture from Camera">
+                        <i class="fa-solid fa-camera"></i>
+                    </button>
+                    <button id="mic-button" title="Start Voice Input">
+                        <i class="fa-solid fa-microphone"></i>
+                    </button>
+                    <button id="send-button" title="Send Message">
+                        <i class="fa-solid fa-paper-plane"></i>
+                        Send
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="floating-tools" class="floating-modal hidden">
+        <div class="tool-header">
+            <span>Settings</span>
+            <button class="close-btn" id="close-tools-btn">&times;</button>
+        </div>
+        <div class="tool-option">
+            <label for="theme-select">Theme:</label>
+            <div class="select-wrapper">
+                <select id="theme-select"></select>
+                <i class="fa-solid fa-chevron-down select-arrow"></i>
+            </div>
+        </div>
+        <div class="tool-option">
+            <label for="language-select">Language:</label>
+            <div class="select-wrapper">
+                <select id="language-select"></select>
+                <i class="fa-solid fa-chevron-down select-arrow"></i>
+            </div>
+        </div>
+        <div class="tool-option">
+            <label for="voice-select">Voice:</label>
+            <div class="select-wrapper">
+                <select id="voice-select"></select>
+                <i class="fa-solid fa-chevron-down select-arrow"></i>
+            </div>
+        </div>
+        <div class="tool-option">
+            <label class="switch" title="Toggle automatic speech output">
+                <input type="checkbox" id="speech-toggle" checked>
+                <span class="slider round"></span>
+            </label>
+            <span>Auto Speak</span>
+        </div>
+        <button id="clear-chat-button-settings" class="mt-4 w-full bg-gray-700 hover:bg-gray-600 text-white py-2 rounded-md transition-colors">Clear Current Chat</button>
+    </div>
+
+    <div id="profile-modal" class="floating-modal hidden">
+        <div class="tool-header">
+            <span>Your Profile</span>
+            <button class="close-btn" id="close-profile-btn">&times;</button>
+        </div>
+        <div class="profile-content">
+            <div class="profile-avatar-large" id="profile-modal-avatar">
+                {% if user_picture_url %}
+                    <img src="{{ user_picture_url }}" alt="Profile Picture" class="w-full h-full object-cover">
+                {% else %}
+                    {% endif %}
+            </div>
+            <h3 id="profile-modal-name"></h3>
+            <p id="profile-modal-email" class="text-color-secondary"></p>
+            <div class="profile-options">
+                <button class="profile-option-btn"><i class="fa-solid fa-user-edit"></i> Edit Profile</button>
+                <button class="profile-option-btn"><i class="fa-solid fa-sync-alt"></i> Change Account</button>
+                <button class="profile-option-btn"><i class="fa-solid fa-user-plus"></i> Add Guest Account</button>
+                <span class="user-tier-modal">Current Plan: Free</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const FLASK_USER_DATA = {
+            displayName: "{{ user_display_name | e }}",
+            email: "{{ user_email | e }}",
+            pictureUrl: "{{ user_picture_url | e }}"
+        };
+    </script>
+    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+</body>
+</html>
