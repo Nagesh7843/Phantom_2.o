@@ -9,6 +9,7 @@ from pymongo import MongoClient # For MongoDB connection
 from werkzeug.security import generate_password_hash, check_password_hash # For password hashing
 from datetime import datetime, timezone
 from bson.objectid import ObjectId # For generating unique MongoDB ObjectIDs
+from flask import Flask, render_template, request, redirect, url_for, flash, session
 
 # Load environment variables from .env file at the very beginning
 load_dotenv()

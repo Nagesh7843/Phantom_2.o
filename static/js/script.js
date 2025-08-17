@@ -70,6 +70,7 @@ let currentUserEmail = "";
 let currentUserPictureUrl = null;
 let currentUserInitials = "U";
 
+
 function updateUserProfileUI() {
     currentUserName = FLASK_USER_DATA.displayName || localStorage.getItem(USER_DISPLAY_NAME_KEY) || "User";
     currentUserEmail = FLASK_USER_DATA.email || '';
