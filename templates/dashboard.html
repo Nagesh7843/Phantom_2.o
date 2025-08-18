@@ -3,171 +3,171 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>phantom_2.o AI Chat</title>
-
-    <link rel="icon" href="{{ url_for('static', filename='favicon.png') }}">
-    
+    <title>Dashboard - Phantom AI</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #1f2937; }
+        ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+        
+        #chat-body.is-empty { justify-content: center; }
+        #chat-body.is-empty #messages-container { flex-grow: 0; display: none; }
+        #chat-body.is-empty #input-container { background: transparent; border-color: transparent; }
+        #chat-body.is-empty #search-bar-wrapper { background-color: rgba(31, 41, 55, 0.8); backdrop-filter: blur(8px); }
+        #input-container, #search-bar-wrapper { transition: all 0.3s ease-in-out; }
+
+        #virtual-env-modal {
+            transition: transform 0.3s ease-in-out, opacity 0.3s ease-in-out;
+            transform: scale(0.95);
+            opacity: 0;
+            pointer-events: none;
+        }
+        #virtual-env-modal.open {
+            transform: scale(1);
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .resizer {
+            background: #4b5563;
+            cursor: col-resize;
+            width: 4px;
+            flex-shrink: 0;
+        }
+    </style>
 </head>
-<body>
-    <div id="app-container">
-        <div id="sidebar">
-            <div class="sidebar-header">
-                <span>phantom_2.o</span>
-                <button id="settings-button-sidebar" title="Settings">
-                    <i class="fa-solid fa-gear"></i>
-                </button>
-            </div>
-            <button id="new-chat-button-sidebar" class="nav-item new-chat-btn">
-                <i class="fa-solid fa-plus"></i>
-                New Chat
-            </button>
-            <div class="nav-list">
-                <div class="nav-item" id="nav-item-subscription">
-                    <i class="fa-solid fa-crown"></i>
-                    <span>Subscription</span>
-                </div>
-                <div class="nav-item" id="nav-item-search">
-                    <i class="fa-solid fa-search"></i>
-                    <span>Search</span>
-                </div>
-                <div class="nav-item" id="nav-item-explore">
-                    <i class="fa-solid fa-compass"></i>
-                    <span>Explore</span>
-                </div>
-                <div class="nav-item" id="nav-item-history-toggle">
-                    <i class="fa-solid fa-history"></i>
-                    <span>History</span>
-                </div>
+<body class="bg-gray-800 text-gray-200 flex h-screen antialiased overflow-hidden">
 
-                <div id="actual-chat-history-list" class="actual-chat-history-list hidden">
-                    </div>
+    <!-- Main App Wrapper -->
+    <div class="flex h-full w-full relative">
+        <!-- Sidebar -->
+        <aside class="bg-gray-900 text-gray-300 w-64 flex-shrink-0 flex flex-col transition-all duration-300" id="sidebar">
+            <div class="h-16 flex items-center justify-between flex-shrink-0 px-4 border-b border-gray-800"><h1 class="text-xl font-bold">Phantom AI</h1><button id="sidebar-toggle-btn-sidebar" class="p-2 rounded-md hover:bg-gray-700 md:hidden"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg></button></div>
+            <div id="sidebar-content" class="flex flex-col flex-1 overflow-hidden">
+                <div class="p-4"><button id="new-chat-btn" class="w-full bg-teal-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-teal-600 transition-colors flex items-center justify-center"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>New Chat</button></div>
+                <div class="px-4 pb-2"><div class="relative"><span class="absolute inset-y-0 left-0 flex items-center pl-3"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg></span><input type="search" class="w-full bg-gray-800 text-sm pl-10 pr-4 py-2 rounded-lg border border-gray-700 focus:outline-none focus:ring-1 focus:ring-teal-500" placeholder="Search history..."></div></div>
+                <nav id="chat-history-list" class="flex-1 overflow-y-auto px-4 space-y-2"></nav>
+                <div class="mt-auto p-4 space-y-2 border-t border-gray-800"><a href="#" class="flex items-center px-3 py-2 text-sm font-medium rounded-md hover:bg-gray-700"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9V3m0 18a9 9 0 009-9m-9 9a9 9 0 00-9-9" /></svg>Explore</a><a href="#" class="flex items-center px-3 py-2 text-sm font-medium rounded-md hover:bg-gray-700"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.196-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.783-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" /></svg>Subscription</a></div>
+                <div id="user-profile-btn" class="p-4 border-t border-gray-800 cursor-pointer hover:bg-gray-700"><div class="flex items-center"><img class="h-10 w-10 rounded-full object-cover" src="{{ user_picture_url or 'https://placehold.co/40x40/4A5568/E2E8F0?text=U' }}" alt="User Avatar"><div class="ml-3"><p class="text-sm font-semibold text-white">{{ user_display_name }}</p><a href="{{ url_for('logout') }}" class="text-xs text-gray-400 hover:text-teal-400">Log out</a></div></div></div>
             </div>
-            <div class="user-section" id="user-profile-click-area">
-                <div class="user-profile-info">
-                    <div class="user-avatar" id="user-sidebar-avatar">
-                        {% if user_picture_url %}
-                            <img src="{{ user_picture_url }}" alt="Profile Picture" class="w-full h-full object-cover">
-                        {% else %}
-                            {% endif %}
-                    </div>
-                    <div class="user-details">
-                        <span id="user-sidebar-name" class="user-display-name">{{ user_display_name }}</span>
-                        <span id="user-sidebar-email" class="user-email">{{ user_email }}</span>
-                        <span class="user-tier">Free Plan</span>
+        </aside>
+
+        <!-- Main Chat Area -->
+        <main id="main-chat-area" class="flex-1 flex flex-col bg-gray-800 overflow-hidden">
+            <header id="main-header" class="bg-gray-900/50 backdrop-blur-sm h-16 flex items-center justify-between px-6 border-b border-gray-700 flex-shrink-0">
+                 <button id="sidebar-toggle-btn-header" class="p-2 rounded-md hover:bg-gray-700"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" /></svg></button>
+                <h2 id="chat-title" class="text-lg font-semibold">New Chat</h2>
+                <button id="settings-btn" class="p-2 rounded-md hover:bg-gray-700"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><circle cx="12" cy="12" r="3" /></svg></button>
+            </header>
+
+            <div id="chat-body" class="flex-1 flex flex-col overflow-hidden">
+                <div id="empty-state-suggestions" class="hidden flex-1 flex items-center justify-center w-full max-w-4xl mx-auto p-6">
+                    <div class="text-center">
+                        <h1 class="text-4xl font-bold text-gray-400 mb-4">Phantom AI</h1>
+                        <div id="suggestion-grid" class="mt-8 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4"></div>
                     </div>
                 </div>
-                <a href="{{ url_for('logout') }}" id="logout-button" class="logout-button" title="Logout">Logout</a>
+                <div id="messages-container" class="flex-1 overflow-y-auto p-6 space-y-6"></div>
+
+                <div id="input-container" class="px-6 pb-6 pt-2 relative flex-shrink-0">
+                    <div id="image-preview-container" class="hidden w-full max-w-3xl mx-auto mb-2">
+                        <div class="relative inline-block">
+                            <img id="image-preview" src="" class="h-20 w-20 rounded-lg object-cover">
+                            <button id="remove-image-btn" class="absolute top-0 right-0 -mt-2 -mr-2 bg-gray-600 text-white rounded-full p-1 leading-none">&times;</button>
+                        </div>
+                    </div>
+                    <div id="search-bar-wrapper" class="w-full max-w-3xl mx-auto flex items-center gap-2 p-2 rounded-full bg-gray-700 border border-gray-600 shadow-lg focus-within:ring-2 focus-within:ring-teal-500 relative">
+                        <button id="toolkit-btn" class="flex-shrink-0 p-2 rounded-full hover:bg-gray-600 transition-colors"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg></button>
+                        <textarea id="chat-input" class="flex-grow bg-transparent border-none focus:ring-0 resize-none p-2 h-10 max-h-40" rows="1" placeholder="Message Phantom AI..."></textarea>
+                        <div class="flex-shrink-0 flex items-center space-x-1">
+                            <button id="gemini-toolkit-btn" class="p-2 rounded-full hover:bg-gray-600" title="Gemini Toolkit">✨</button>
+                            <button id="mic-button" class="p-2 rounded-full hover:bg-gray-600"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-14 0m7 10v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg></button>
+                            <button id="send-button" class="bg-teal-500 text-white p-2 rounded-full hover:bg-teal-600"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 -rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg></button>
+                        </div>
+                        <div id="toolkit-menu" class="hidden absolute bottom-full mb-2 w-56 bg-gray-700 rounded-lg shadow-lg p-2 z-10">
+                            <button id="tool-camera-btn" class="flex items-center w-full text-left p-2 rounded-md hover:bg-gray-600"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg><span>Camera</span></button>
+                            <button id="tool-file-btn" class="flex items-center w-full text-left p-2 rounded-md hover:bg-gray-600"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg><span>File Upload</span></button>
+                            <button id="tool-canva-btn" class="flex items-center w-full text-left p-2 rounded-md hover:bg-gray-600"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l-4 4-4-4 4-4" /></svg><span>Canva Code</span></button>
+                            <button id="tool-data-btn" class="flex items-center w-full text-left p-2 rounded-md hover:bg-gray-600"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg><span>Data Analyst</span></button>
+                            <input type="file" id="file-input" class="hidden" accept="image/*">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+    
+    <!-- Modals -->
+    <div id="settings-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50">
+        <div class="bg-gray-800 rounded-lg shadow-xl p-8 w-full max-w-md">
+            <div class="flex justify-between items-center mb-6"><h2 class="text-2xl font-bold">Settings</h2><button id="close-modal-btn" class="p-2 rounded-full hover:bg-gray-700 text-2xl leading-none">&times;</button></div>
+            <div class="space-y-6">
+                <div><label for="theme-select" class="block text-sm font-medium text-gray-400 mb-2">Theme</label><select id="theme-select" class="w-full bg-gray-700 rounded-md p-2 focus:ring-2 focus:ring-teal-500 focus:outline-none"><option value="theme-dark">Dark (Default)</option><option value="theme-light">Light</option></select></div>
+                <div><label for="voice-select" class="block text-sm font-medium text-gray-400 mb-2">Voice</label><select id="voice-select" class="w-full bg-gray-700 rounded-md p-2 focus:ring-2 focus:ring-teal-500 focus:outline-none"></select></div>
+                <div><label for="name-input" class="block text-sm font-medium text-gray-400 mb-2">Display Name</label><input type="text" id="name-input" value="{{ user_display_name }}" class="w-full bg-gray-700 rounded-md p-2 focus:ring-2 focus:ring-teal-500 focus:outline-none"></div>
+                <div class="flex justify-end"><button class="bg-teal-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-teal-600">Save Changes</button></div>
             </div>
         </div>
-
-        <div id="main-content">
-            <div class="chat-header">
-                <button id="sidebar-toggle-button" title="Toggle Sidebar">
-                    <i class="fa-solid fa-bars"></i>
-                </button>
-                <span>Chat</span>
-                <button id="settings-button-main" title="Settings">
-                    <i class="fa-solid fa-gear"></i>
-                </button>
+    </div>
+    
+    <div id="gemini-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50">
+        <div class="bg-gray-800 rounded-lg shadow-xl p-8 w-full max-w-md">
+            <div class="flex justify-between items-center mb-6"><h2 class="text-2xl font-bold flex items-center">✨ Phantom Toolkit</h2><button id="close-gemini-modal-btn" class="p-2 rounded-full hover:bg-gray-700 text-2xl leading-none">&times;</button></div>
+            <div class="space-y-4">
+                <button id="summarize-btn" class="w-full bg-gray-700 hover:bg-gray-600 text-left p-4 rounded-lg"><h3 class="font-semibold">Summarize Conversation</h3><p class="text-sm text-gray-400">Get a quick summary of the chat so far.</p></button>
+                <button id="suggest-reply-btn" class="w-full bg-gray-700 hover:bg-gray-600 text-left p-4 rounded-lg"><h3 class="font-semibold">Suggest Replies</h3><p class="text-sm text-gray-400">Get smart reply suggestions for the last message.</p></button>
+                <button id="tone-analyzer-btn" class="w-full bg-gray-700 hover:bg-gray-600 text-left p-4 rounded-lg"><h3 class="font-semibold">Analyze Tone</h3><p class="text-sm text-gray-400">Check the overall tone of the conversation.</p></button>
             </div>
-            <div class="chat-messages" id="chat-messages">
-                <div class="initial-prompt" id="initial-prompt">
-                    What's on your mind today?
+            <div id="gemini-output" class="mt-6 p-4 bg-gray-900 rounded-lg text-sm text-gray-300 min-h-[100px]"></div>
+        </div>
+    </div>
+
+    <div id="camera-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50">
+        <div class="bg-gray-800 rounded-lg shadow-xl p-8 w-full max-w-2xl">
+            <div class="flex justify-between items-center mb-4"><h2 class="text-2xl font-bold">Camera</h2><button id="close-camera-btn" class="p-2 rounded-full hover:bg-gray-700 text-2xl leading-none">&times;</button></div>
+            <video id="camera-stream" class="w-full rounded-lg" autoplay playsinline></video>
+            <canvas id="camera-capture-canvas" class="hidden"></canvas>
+            <div class="mt-4 flex justify-center"><button id="capture-btn" class="bg-teal-500 text-white font-semibold py-3 px-6 rounded-lg hover:bg-teal-600">Capture Photo</button></div>
+        </div>
+    </div>
+    
+    <div id="virtual-env-modal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50">
+        <div id="virtual-env-window" class="bg-gray-800 rounded-lg shadow-2xl w-full max-w-6xl h-5/6 flex flex-col">
+            <header id="virtual-env-header" class="bg-gray-900 h-12 flex items-center justify-between px-4 border-b border-gray-700 flex-shrink-0 rounded-t-lg cursor-move">
+                <h2 id="virtual-env-title" class="text-md font-semibold">Analysis Environment</h2>
+                <button id="close-virtual-env-btn" class="p-2 rounded-full hover:bg-gray-700 text-xl leading-none">&times;</button>
+            </header>
+            <div class="flex-1 flex flex-col md:flex-row overflow-hidden">
+                <div id="virtual-env-explorer" class="w-full md:w-1/4 bg-gray-900 p-4 overflow-y-auto border-r border-gray-700">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="font-semibold">Files</h3>
+                        <div>
+                            <button id="add-file-btn" title="New File" class="p-1 hover:bg-gray-700 rounded-md">+</button>
+                            <button id="add-folder-btn" title="New Folder" class="p-1 hover:bg-gray-700 rounded-md">📁</button>
+                        </div>
+                    </div>
+                    <div id="virtual-env-files"></div>
                 </div>
+                <div id="resizer-1" class="resizer"></div>
+                <div class="flex-1 flex flex-col p-4">
+                    <label for="virtual-env-input" class="mb-2 text-sm font-medium text-gray-400">Editor</label>
+                    <textarea id="virtual-env-input" class="flex-1 bg-gray-900 text-gray-300 rounded-lg p-4 font-mono text-sm resize-none focus:ring-2 focus:ring-teal-500 focus:outline-none"></textarea>
                 </div>
-            <div class="loading-indicator hidden" id="loading-indicator">Thinking...</div>
-            <div class="chat-input-area-wrapper">
-                <div class="chat-input-area">
-                    <input type="file" id="image-upload-input" accept="image/*" class="hidden">
-                    <input type="text" id="user-input" placeholder="Message phantom_2.o..." autofocus>
-                    <button id="image-upload-button" title="Upload Image">
-                        <i class="fa-solid fa-image"></i>
-                    </button>
-                    <button id="camera-capture-button" title="Capture from Camera">
-                        <i class="fa-solid fa-camera"></i>
-                    </button>
-                    <button id="mic-button" title="Start Voice Input">
-                        <i class="fa-solid fa-microphone"></i>
-                    </button>
-                    <button id="send-button" title="Send Message">
-                        <i class="fa-solid fa-paper-plane"></i>
-                        Send
-                    </button>
+                <div id="resizer-2" class="resizer"></div>
+                <div id="virtual-env-chat-panel" class="w-full md:w-1/3 bg-gray-900 flex flex-col p-4 border-t md:border-t-0 md:border-l border-gray-700">
+                    <h3 class="font-semibold mb-4">AI Analysis</h3>
+                    <div id="virtual-env-output" class="flex-1 rounded-lg p-2 font-mono text-sm overflow-y-auto space-y-4"></div>
+                    <div class="mt-4 flex items-center gap-2">
+                        <input id="virtual-env-followup" type="text" class="flex-grow bg-gray-700 rounded-full p-2 px-4 focus:ring-2 focus:ring-teal-500 focus:outline-none" placeholder="Ask a follow-up...">
+                        <button id="run-analysis-btn" class="bg-teal-500 text-white font-semibold py-2 px-4 rounded-full hover:bg-teal-600">Send</button>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <div id="floating-tools" class="floating-modal hidden">
-        <div class="tool-header">
-            <span>Settings</span>
-            <button class="close-btn" id="close-tools-btn">&times;</button>
-        </div>
-        <div class="tool-option">
-            <label for="theme-select">Theme:</label>
-            <div class="select-wrapper">
-                <select id="theme-select"></select>
-                <i class="fa-solid fa-chevron-down select-arrow"></i>
-            </div>
-        </div>
-        <div class="tool-option">
-            <label for="language-select">Language:</label>
-            <div class="select-wrapper">
-                <select id="language-select"></select>
-                <i class="fa-solid fa-chevron-down select-arrow"></i>
-            </div>
-        </div>
-        <div class="tool-option">
-            <label for="voice-select">Voice:</label>
-            <div class="select-wrapper">
-                <select id="voice-select"></select>
-                <i class="fa-solid fa-chevron-down select-arrow"></i>
-            </div>
-        </div>
-        <div class="tool-option">
-            <label class="switch" title="Toggle automatic speech output">
-                <input type="checkbox" id="speech-toggle" checked>
-                <span class="slider round"></span>
-            </label>
-            <span>Auto Speak</span>
-        </div>
-        <button id="clear-chat-button-settings" class="mt-4 w-full bg-gray-700 hover:bg-gray-600 text-white py-2 rounded-md transition-colors">Clear Current Chat</button>
-    </div>
-
-    <div id="profile-modal" class="floating-modal hidden">
-        <div class="tool-header">
-            <span>Your Profile</span>
-            <button class="close-btn" id="close-profile-btn">&times;</button>
-        </div>
-        <div class="profile-content">
-            <div class="profile-avatar-large" id="profile-modal-avatar">
-                {% if user_picture_url %}
-                    <img src="{{ user_picture_url }}" alt="Profile Picture" class="w-full h-full object-cover">
-                {% else %}
-                    {% endif %}
-            </div>
-            <h3 id="profile-modal-name"></h3>
-            <p id="profile-modal-email" class="text-color-secondary"></p>
-            <div class="profile-options">
-                <button class="profile-option-btn"><i class="fa-solid fa-user-edit"></i> Edit Profile</button>
-                <button class="profile-option-btn"><i class="fa-solid fa-sync-alt"></i> Change Account</button>
-                <button class="profile-option-btn"><i class="fa-solid fa-user-plus"></i> Add Guest Account</button>
-                <span class="user-tier-modal">Current Plan: Free</span>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        const FLASK_USER_DATA = {
-            displayName: "{{ user_display_name | e }}",
-            email: "{{ user_email | e }}",
-            pictureUrl: "{{ user_picture_url | e }}"
-        };
-    </script>
-    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/script.js') }}" defer></script>
 </body>
 </html>

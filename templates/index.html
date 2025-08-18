@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome to Phantom AI</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts for modern typography -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap">
+    <style>
+        /* Custom styles can be added here if needed */
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .hero-bg {
+            /* A subtle background gradient for the hero section */
+            background: radial-gradient(circle at 50% 50%, rgba(29, 233, 182, 0.08), transparent 70%);
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white antialiased">
+
+    <div class="page-container max-w-6xl mx-auto px-4">
+        <!-- SECTION 1: Navigation Header -->
+        <nav class="flex justify-between items-center py-6">
+            <div class="text-2xl font-bold">Phantom AI</div>
+            <a href="{{ url_for('login') }}" class="border border-gray-700 hover:bg-gray-800 text-white font-semibold py-2 px-4 rounded-lg transition-colors">
+                Log In
+            </a>
+        </nav>
+
+        <!-- SECTION 2: Main Hero Section -->
+        <main class="grid md:grid-cols-2 items-center gap-12 py-12 md:py-24 hero-bg">
+            <!-- Hero Text Content -->
+            <div class="hero-text text-center md:text-left">
+                <h1 class="text-4xl md:text-6xl font-extrabold leading-tight mb-6">
+                    Converse with the Future.
+                </h1>
+                <p class="text-lg text-gray-400 mb-8">
+                    Meet Phantom, your personal AI companion. Built to understand context, generate creative content, and assist with complex tasks. Unlock a new level of productivity and creativity.
+                </p>
+                <div class="hero-buttons">
+                    <a href="{{ url_for('login') }}" class="bg-teal-400 text-gray-900 font-bold py-3 px-8 rounded-xl inline-block hover:bg-teal-300 transition-transform transform hover:-translate-y-1">
+                        Get Started
+                    </a>
+                    </a>
+                </div>
+            </div>
+            <!-- Hero Image -->
+            <div class="hero-image-container flex justify-center items-center">
+                <img src="https://images.unsplash.com/photo-1620712943543-2858200f7426?q=80&w=1200&auto=format&fit=crop" 
+                     alt="AI robot hand touching a human hand" 
+                     class="rounded-3xl shadow-2xl shadow-teal-500/10 object-cover w-full max-h-96">
+            </div>
+        </main>
+    </div>
+
+    <!-- SECTION 3: Features Section -->
+    <section class="py-20 bg-gray-900">
+        <div class="max-w-6xl mx-auto px-4 text-center">
+            <h2 class="text-3xl md:text-4xl font-bold mb-4">Powerful Features, Effortless Interaction</h2>
+            <p class="text-gray-400 max-w-2xl mx-auto mb-12">Discover what makes Phantom AI the ultimate creative and analytical partner.</p>
+            
+            <!-- Features Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <!-- Feature Cards -->
+                <div class="bg-gray-800 p-8 rounded-xl border border-gray-700">
+                    <div class="bg-teal-400/10 text-teal-400 rounded-lg w-12 h-12 flex items-center justify-center mb-4 mx-auto"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg></div>
+                    <h3 class="text-xl font-bold mb-2">Creative Content</h3>
+                    <p class="text-gray-400">Generate everything from poetry and scripts to marketing copy and email drafts in seconds.</p>
+                </div>
+                <div class="bg-gray-800 p-8 rounded-xl border border-gray-700">
+                    <div class="bg-teal-400/10 text-teal-400 rounded-lg w-12 h-12 flex items-center justify-center mb-4 mx-auto"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg></div>
+                    <h3 class="text-xl font-bold mb-2">Data Analysis</h3>
+                    <p class="text-gray-400">Upload data and ask complex questions in plain English to get instant insights and visualizations.</p>
+                </div>
+                <div class="bg-gray-800 p-8 rounded-xl border border-gray-700">
+                    <div class="bg-teal-400/10 text-teal-400 rounded-lg w-12 h-12 flex items-center justify-center mb-4 mx-auto"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg></div>
+                    <h3 class="text-xl font-bold mb-2">Contextual Memory</h3>
+                    <p class="text-gray-400">Phantom remembers your previous conversations, providing more relevant and personalized responses over time.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SECTION 4: How It Works -->
+    <section class="py-20 bg-gray-800/50">
+        <div class="max-w-6xl mx-auto px-4 text-center">
+            <h2 class="text-3xl md:text-4xl font-bold mb-4">How It Works</h2>
+            <p class="text-gray-400 max-w-2xl mx-auto mb-12">Our model is trained using a combination of supervised learning and reinforcement learning from human feedback.</p>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8 text-left">
+                <!-- Step 1 -->
+                <div class="bg-gray-800 p-8 rounded-xl border border-gray-700">
+                    <div class="flex items-center mb-4">
+                        <span class="bg-teal-400 text-gray-900 text-lg font-bold rounded-full w-8 h-8 flex items-center justify-center mr-4">1</span>
+                        <h3 class="text-xl font-bold">Supervised Fine-Tuning</h3>
+                    </div>
+                    <p class="text-gray-400">We start with a base model and train it on a high-quality dataset of conversations where human AI trainers demonstrate the desired behavior.</p>
+                </div>
+                <!-- Step 2 -->
+                <div class="bg-gray-800 p-8 rounded-xl border border-gray-700">
+                    <div class="flex items-center mb-4">
+                        <span class="bg-teal-400 text-gray-900 text-lg font-bold rounded-full w-8 h-8 flex items-center justify-center mr-4">2</span>
+                        <h3 class="text-xl font-bold">Reward Modeling</h3>
+                    </div>
+                    <p class="text-gray-400">We collect comparison data by sampling several model responses to a prompt and having a human labeler rank them from best to worst. This data is used to train a reward model.</p>
+                </div>
+                <!-- Step 3 -->
+                <div class="bg-gray-800 p-8 rounded-xl border border-gray-700">
+                    <div class="flex items-center mb-4">
+                        <span class="bg-teal-400 text-gray-900 text-lg font-bold rounded-full w-8 h-8 flex items-center justify-center mr-4">3</span>
+                        <h3 class="text-xl font-bold">Reinforcement Learning</h3>
+                    </div>
+                    <p class="text-gray-400">The reward model is used to further fine-tune the AI using a reinforcement learning algorithm. This process optimizes the model's policy to generate better, more helpful responses.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SECTION 5: Limitations & Transparency -->
+    <section class="py-20 bg-gray-900">
+        <div class="max-w-4xl mx-auto px-4">
+            <h2 class="text-3xl md:text-4xl font-bold mb-4 text-center">Limitations & Transparency</h2>
+            <p class="text-gray-400 max-w-2xl mx-auto mb-12 text-center">We believe in being open about our technology. While powerful, Phantom AI has limitations to be aware of.</p>
+            <ul class="space-y-6 text-gray-300">
+                <li class="flex items-start">
+                    <svg class="w-6 h-6 text-teal-400 mr-4 flex-shrink-0 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    <span>May occasionally generate incorrect or nonsensical information. Always verify critical facts.</span>
+                </li>
+                <li class="flex items-start">
+                    <svg class="w-6 h-6 text-teal-400 mr-4 flex-shrink-0 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    <span>The quality of the response can be sensitive to the phrasing of your prompt. Rephrasing can often yield better results.</span>
+                </li>
+                <li class="flex items-start">
+                    <svg class="w-6 h-6 text-teal-400 mr-4 flex-shrink-0 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    <span>Knowledge is not updated in real-time and is limited to the model's last training date.</span>
+                </li>
+            </ul>
+        </div>
+    </section>
+
+    <!-- SECTION 6: Footer -->
+    <footer class="bg-gray-900 border-t border-gray-800">
+        <div class="max-w-6xl mx-auto px-4 py-16">
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-8 mb-8">
+                <!-- Footer Columns -->
+                <div class="col-span-2 md:col-span-1">
+                    <h4 class="text-sm font-semibold text-gray-400 tracking-wider uppercase mb-4">Contact Us</h4>
+                    <a href="mailto:hello@phantomai.com" class="text-gray-300 hover:text-teal-400 transition-colors">hello@phantomai.com</a>
+                </div>
+                <div>
+                    <h4 class="text-sm font-semibold text-gray-400 tracking-wider uppercase mb-4">Company</h4>
+                    <ul class="space-y-3">
+                        <li><a href="#" class="text-gray-300 hover:text-teal-400 transition-colors">About</a></li>
+                        <li><a href="#" class="text-gray-300 hover:text-teal-400 transition-colors">Careers</a></li>
+                        <li><a href="#" class="text-gray-300 hover:text-teal-400 transition-colors">Blog</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h4 class="text-sm font-semibold text-gray-400 tracking-wider uppercase mb-4">Legal</h4>
+                    <ul class="space-y-3">
+                        <li><a href="#" class="text-gray-300 hover:text-teal-400 transition-colors">Terms of Service</a></li>
+                        <li><a href="#" class="text-gray-300 hover:text-teal-400 transition-colors">Privacy Policy</a></li>
+                    </ul>
+                </div>
+                <div>
+                    <h4 class="text-sm font-semibold text-gray-400 tracking-wider uppercase mb-4">Follow Us</h4>
+                    <ul class="space-y-3">
+                        <li><a href="#" class="text-gray-300 hover:text-teal-400 transition-colors">LinkedIn</a></li>
+                        <li><a href="#" class="text-gray-300 hover:text-teal-400 transition-colors">X / Twitter</a></li>
+                        <li><a href="#" class="text-gray-300 hover:text-teal-400 transition-colors">YouTube</a></li>
+                    </ul>
+                </div>
+            </div>
+            <!-- Bottom Bar -->
+            <div class="border-t border-gray-800 pt-8 text-center text-gray-500">
+                <p>&copy; 2024 Phantom AI. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+</body>
+</html>

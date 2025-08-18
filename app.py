@@ -116,10 +116,46 @@ def save_user_info_to_db(email, display_name, google_id=None, picture_url=None, 
 # --- Flask Routes ---
 
 @app.route('/')
-def home():
-    if session.get('user'):
+def index():
+    # If the user is already logged in, send them to the dashboard.
+    if 'user' in session:
         return redirect(url_for('dashboard'))
+    # Otherwise, show them the new landing page.
+    return render_template('index.html')
+
+@app.route('/login')
+def login():
     return render_template('login.html')
+
+
+# NEW: A dedicated route to simply show the registration page.
+@app.route('/register')
+def register():
+    # You will need to create a 'register.html' file in your templates folder.
+    return render_template('register.html')
+
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('index')) # Redirect to landing page after logout
+
+@app.route('/dashboard')
+def dashboard():
+    user = session.get('user')
+    if not user:
+        # If no user in session, redirect to the login page
+        return redirect(url_for('login')) 
+    
+    # If user exists, show the dashboard
+    return render_template('dashboard.html', 
+                           user_display_name=session.get('user_display_name', 'Guest'),
+                           user_email=session.get('user_email', ''),
+                           user_picture_url=session.get('user_picture'),
+                           user_theme=session.get('user_theme', 'theme-dark'),
+                           user_language=session.get('user_language', 'en-US'),
+                           user_voice=session.get('user_voice', '')
+                           )
 
 @app.route('/login/google')
 def login_google():
@@ -168,26 +204,6 @@ def authorize():
     except Exception as e:
         app.logger.error(f"Google Authorization final step failed: {str(e)}", exc_info=True)
         return render_template('login.html', error_message=f"Login failed: {str(e)}")
-
-@app.route('/dashboard')
-def dashboard():
-    user = session.get('user')
-    if not user:
-        return redirect(url_for('home'))
-    
-    return render_template('dashboard.html', 
-                           user_display_name=session.get('user_display_name', 'Guest'),
-                           user_email=session.get('user_email', ''),
-                           user_picture_url=session.get('user_picture'),
-                           user_theme=session.get('user_theme', 'theme-dark'),
-                           user_language=session.get('user_language', 'en-US'),
-                           user_voice=session.get('user_voice', '')
-                           )
-
-@app.route('/logout')
-def logout():
-    session.clear()
-    return redirect(url_for('home'))
 
 # --- NEW: API for Traditional User Registration ---
 @app.route('/api/register', methods=['POST'])
@@ -238,7 +254,7 @@ def register_user():
         return jsonify({"error": "Registration failed due to server error."}), 500
 
 # --- NEW: API for Traditional User Login ---
-@app.route('/api/login', methods=['POST'])
+@app.route('/api/login', methods=['GET','POST'])
 def login_user():
     if users_collection is None:
         return jsonify({"error": "MongoDB not connected. Login unavailable."}), 500
@@ -456,19 +472,18 @@ def chat_api():
 
 
         instruction_text = f"""
-You are phantom_2.o, a large language model, developed and trained by Nagesh Gaikwad.
-Your primary goal is to provide helpful, comprehensive, and well-structured responses.
+        instruction_text = f
+You are Phantom_2.o, an advanced AI assistant created and trained by Nagesh Gaikwad.
+Your role is to provide clear, structured, and helpful responses to user queries.
 
-**ALWAYS structure your responses using the following Markdown headings in this exact order:**
+Use emojis naturally in your answers.  
+Always format responses in this style:
 
- Answer
-(Directly answer the user's question or provide the core solution.)
+ A short, relevant title for the response,\n
 
- Explanation
-(Offer detailed explanation, elaborate on the answer, provide examples, or present further information. Use subheadings, bold text, and lists as appropriate within this section.)
+A detailed but friendly explanation. Add emojis where suitable to make it engaging.\n
 
- Summary
-(Provide a very brief, high-level overview or conclusion of the entire response.)
+ Example (only if it makes sense):
 
 IMPORTANT:
 - Ensure all content fits within these sections.

@@ -1,992 +1,643 @@
-// --- IMPORTANT: CONFIGURE YOUR BACKEND URL ---
-const BACKEND_API_BASE_URL = "http://127.0.0.1:5000";
+document.addEventListener('DOMContentLoaded', () => {
 
-// --- DOM Element References ---
-const appContainer = document.getElementById('app-container');
-const sidebar = document.getElementById('sidebar');
-const mainContent = document.getElementById('main-content');
+    // --- CONFIGURATION ---
+    const BACKEND_API_BASE_URL = "http://127.0.0.1:5000";
 
-// Sidebar elements
-const userSidebarAvatar = document.getElementById('user-sidebar-avatar');
-const userSidebarName = document.getElementById('user-sidebar-name');
-const userSidebarEmail = document.getElementById('user-sidebar-email');
-const sidebarUserProfileSection = document.getElementById('user-profile-click-area');
+    // --- DOM Element References ---
+    const getEl = (id) => document.getElementById(id);
 
-const newChatButtonSidebar = document.getElementById('new-chat-button-sidebar');
-const chatHistorySidebar = document.querySelector('#actual-chat-history-list');
-const logoutButton = document.getElementById('logout-button');
-
-// Main content elements
-const chatHeader = document.querySelector('#main-content .chat-header');
-const settingsButtonMain = document.getElementById('settings-button-main');
-const settingsButtonSidebar = document.getElementById('settings-button-sidebar');
-
-const sidebarToggleButton = document.getElementById('sidebar-toggle-button');
-
-const chatMessages = document.getElementById('chat-messages');
-const initialPrompt = document.getElementById('initial-prompt');
-const userInput = document.getElementById('user-input');
-const sendButton = document.getElementById('send-button');
-const micButton = document.getElementById('mic-button');
-const imageUploadButton = document.getElementById('image-upload-button');
-const imageUploadInput = document.getElementById('image-upload-input');
-const cameraCaptureButton = document.getElementById('camera-capture-button');
-const loadingIndicator = document.getElementById('loading-indicator');
-
-// Settings popover elements
-const floatingTools = document.getElementById('floating-tools');
-const closeToolsBtn = document.getElementById('close-tools-btn');
-const clearChatSettingsButton = document.getElementById('clear-chat-button-settings');
-const themeSelect = document.getElementById('theme-select');
-const voiceSelect = document.getElementById('voice-select');
-const languageSelect = document.getElementById('language-select');
-const speechToggle = document.getElementById('speech-toggle');
-
-// History list container
-const actualChatHistoryList = document.getElementById('actual-chat-history-list');
-const navItemHistoryToggle = document.getElementById('nav-item-history-toggle');
-
-// NEW: Profile Modal elements
-const profileModal = document.getElementById('profile-modal');
-const closeProfileBtn = document.getElementById('close-profile-btn');
-const profileModalAvatar = document.getElementById('profile-modal-avatar');
-const profileModalName = document.getElementById('profile-modal-name');
-const profileModalEmail = document.getElementById('profile-modal-email');
-
-// --- Global State Variables ---
-let currentSessionId = null;
-let chatHistory = [];
-let selectedVoice = null;
-let selectedLanguage = 'en-US';
-let selectedTheme = 'theme-dark';
-let allConversations = JSON.parse(localStorage.getItem('chatConversations')) || [];
-
-// --- User Profile Management (Loaded from Jinja2 context and localStorage) ---
-const USER_DISPLAY_NAME_KEY = "phantom_2_o_user_name";
-const USER_LANGUAGE_KEY = "phantom_2_o_user_language";
-const USER_THEME_KEY = "phantom_2_o_user_theme";
-let currentUserName = "User";
-let currentUserEmail = "";
-let currentUserPictureUrl = null;
-let currentUserInitials = "U";
-
-
-function updateUserProfileUI() {
-    currentUserName = FLASK_USER_DATA.displayName || localStorage.getItem(USER_DISPLAY_NAME_KEY) || "User";
-    currentUserEmail = FLASK_USER_DATA.email || '';
-    currentUserPictureUrl = FLASK_USER_DATA.pictureUrl && FLASK_USER_DATA.pictureUrl !== 'None' ? FLASK_USER_DATA.pictureUrl : null;
-    currentUserInitials = getInitials(currentUserName);
-
-    if (userSidebarName) userSidebarName.textContent = currentUserName;
-    if (userSidebarEmail) userSidebarEmail.textContent = currentUserEmail;
-
-    if (userSidebarAvatar) {
-        if (currentUserPictureUrl) {
-            userSidebarAvatar.innerHTML = `<img src="${currentUserPictureUrl}" alt="Profile Picture" class="w-full h-full rounded-full object-cover">`;
-        } else {
-            userSidebarAvatar.textContent = currentUserInitials;
-        }
+    const mainChatArea = getEl('main-chat-area');
+    const chatBody = getEl('chat-body');
+    const messagesContainer = getEl('messages-container');
+    const emptyStateSuggestions = getEl('empty-state-suggestions');
+    const suggestionGrid = getEl('suggestion-grid');
+    const chatInput = getEl('chat-input');
+    const sendButton = getEl('send-button');
+    const sidebar = getEl('sidebar');
+    const sidebarContent = getEl('sidebar-content');
+    const toolkitMenu = getEl('toolkit-menu');
+    const toolkitBtn = getEl('toolkit-btn');
+    const chatHistoryList = getEl('chat-history-list');
+    const chatTitle = getEl('chat-title');
+    const newChatBtn = getEl('new-chat-btn');
+    const settingsBtn = getEl('settings-btn');
+    const userProfileBtn = getEl('user-profile-btn');
+    const settingsModal = getEl('settings-modal');
+    const closeModalBtn = getEl('close-modal-btn');
+    const fileInput = getEl('file-input');
+    const themeSelect = getEl('theme-select');
+    const voiceSelect = getEl('voice-select');
+    const micButton = getEl('mic-button');
+    const sidebarToggleBtnHeader = getEl('sidebar-toggle-btn-header');
+    const sidebarToggleBtnSidebar = getEl('sidebar-toggle-btn-sidebar');
+    const geminiToolkitBtn = getEl('gemini-toolkit-btn');
+    const geminiModal = getEl('gemini-modal');
+    const closeGeminiModalBtn = getEl('close-gemini-modal-btn');
+    const summarizeBtn = getEl('summarize-btn');
+    const suggestReplyBtn = getEl('suggest-reply-btn');
+    const toneAnalyzerBtn = getEl('tone-analyzer-btn');
+    const geminiOutput = getEl('gemini-output');
+    const searchBarWrapper = getEl('search-bar-wrapper');
+    const cameraModal = getEl('camera-modal');
+    const closeCameraBtn = getEl('close-camera-btn');
+    const cameraStreamEl = getEl('camera-stream');
+    const cameraCaptureCanvas = getEl('camera-capture-canvas');
+    const captureBtn = getEl('capture-btn');
+    const activeToolIndicator = getEl('active-tool-indicator');
+    const imagePreviewContainer = getEl('image-preview-container');
+    const imagePreview = getEl('image-preview');
+    const removeImageBtn = getEl('remove-image-btn');
+    const virtualEnvModal = getEl('virtual-env-modal');
+    const virtualEnvWindow = getEl('virtual-env-window');
+    const virtualEnvHeader = getEl('virtual-env-header');
+    const closeVirtualEnvBtn = getEl('close-virtual-env-btn');
+    const virtualEnvTitle = getEl('virtual-env-title');
+    const virtualEnvInput = getEl('virtual-env-input');
+    const virtualEnvOutput = getEl('virtual-env-output');
+    const runAnalysisBtn = getEl('run-analysis-btn');
+    const virtualEnvFiles = getEl('virtual-env-files');
+    const virtualEnvFollowup = getEl('virtual-env-followup');
+    const addFileBtn = getEl('add-file-btn');
+    const addFolderBtn = getEl('add-folder-btn');
+    
+    const loadingIndicator = document.createElement('div');
+    loadingIndicator.innerHTML = `<div class="text-center p-4 text-gray-400">Thinking...</div>`;
+    loadingIndicator.style.display = 'none';
+    if (messagesContainer) {
+        messagesContainer.parentNode.insertBefore(loadingIndicator, messagesContainer.nextSibling);
     }
 
-    if (profileModalName) profileModalName.textContent = currentUserName;
-    if (profileModalEmail) profileModalEmail.textContent = currentUserEmail;
-    if (profileModalAvatar) {
-        if (currentUserPictureUrl) {
-            profileModalAvatar.innerHTML = `<img src="${currentUserPictureUrl}" alt="Profile Picture" class="w-full h-full rounded-full object-cover">`;
-        } else {
-            profileModalAvatar.innerHTML = currentUserInitials;
-        }
-    }
-}
+    // --- Global State & Data ---
+    let currentSessionId = null;
+    let chatHistory = [];
+    let virtualEnvHistory = [];
+    let availableVoices = [];
+    let activeStream = null;
+    let activeTool = null;
+    let attachedFile = null;
+    let virtualFileSystem = {};
+    let activeVirtualFile = null;
+    let selectedVirtualFolder = null;
+    const synth = window.speechSynthesis;
+    const allPrompts = [
+        { title: "Explain quantum computing", subtitle: "in simple terms" },
+        { title: "Creative birthday ideas", subtitle: "for a 10 year old" },
+        { title: "Write a thank-you note", subtitle: "to my interviewer" },
+        { title: "HTTP requests in Javascript", subtitle: "show me an example" },
+        { title: "Plan a trip to the Alps", subtitle: "on a budget" },
+        { title: "Write a short sci-fi story", subtitle: "about a friendly robot" },
+        { title: "Healthy meal prep ideas", subtitle: "for a busy week" },
+        { title: "How to learn a new language", subtitle: "best methods and tips" }
+    ];
 
-function getInitials(name) {
-    if (!name) return "U";
-    const parts = name.split(' ').filter(Boolean);
-    if (parts.length === 1) {
-        return parts[0].charAt(0).toUpperCase();
-    } else if (parts.length >= 2) {
-        return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
-    }
-    return "U";
-}
-
-// --- General Modal/Popover Control Functions ---
-function toggleModal(modalElement) {
-    const isModalOpen = modalElement.classList.contains('open');
-    const overlay = document.getElementById('modal-overlay');
-
-    if (isModalOpen) {
-        modalElement.classList.remove('open');
-        if (overlay) overlay.classList.remove('open');
-    } else {
-        // Close any other open modals first
-        if (floatingTools && floatingTools.classList.contains('open')) {
-            floatingTools.classList.remove('open');
-        }
-        if (profileModal && profileModal.classList.contains('open') && modalElement !== profileModal) {
-            profileModal.classList.remove('open');
-        }
-
-        modalElement.classList.add('open');
-        if (!overlay) {
-            const newOverlay = document.createElement('div');
-            newOverlay.id = 'modal-overlay';
-            document.body.appendChild(newOverlay);
-            newOverlay.addEventListener('click', () => {
-                toggleModal(modalElement);
-            }, {once: true});
-            requestAnimationFrame(() => newOverlay.classList.add('open'));
-        } else {
-            overlay.classList.add('open');
-            overlay.addEventListener('click', () => { toggleModal(modalElement); }, {once: true}); 
-        }
-    }
-}
-
-// --- Event Listeners for UI Interactions ---
-
-// Settings Popover Logic
-if (settingsButtonSidebar) {
-    settingsButtonSidebar.addEventListener('click', () => { toggleModal(floatingTools); });
-}
-if (settingsButtonMain) {
-    settingsButtonMain.addEventListener('click', () => { toggleModal(floatingTools); });
-}
-if (closeToolsBtn) {
-    closeToolsBtn.addEventListener('click', () => { toggleModal(floatingTools); });
-}
-
-// Clicking user profile area in sidebar opens profile modal
-if (sidebarUserProfileSection) {
-    sidebarUserProfileSection.addEventListener('click', () => {
-        updateUserProfileUI();
-        toggleModal(profileModal);
-    });
-}
-if (closeProfileBtn) {
-    closeProfileBtn.addEventListener('click', () => { toggleModal(profileModal); });
-}
-
-
-// Sidebar Toggle Button (Hamburger Menu)
-if (sidebarToggleButton) {
-    sidebarToggleButton.addEventListener('click', () => {
-        document.body.classList.toggle('sidebar-closed');
-        const overlay = document.getElementById('sidebar-overlay');
-
-        if (document.body.classList.contains('sidebar-closed')) {
-            if (overlay) overlay.remove();
-        } else {
-            if (!overlay) {
-                const newOverlay = document.createElement('div');
-                newOverlay.id = 'sidebar-overlay';
-                document.body.appendChild(newOverlay);
-                newOverlay.addEventListener('click', () => {
-                    document.body.classList.add('sidebar-closed');
-                    newOverlay.remove();
-                }, {once: true});
+    // =====================================================================
+    // --- API FUNCTIONS ---
+    // =====================================================================
+    async function fetchApi(endpoint, options = {}) {
+        try {
+            const response = await fetch(`${BACKEND_API_BASE_URL}${endpoint}`, options);
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
             }
+            return response.json();
+        } catch (error) {
+            console.error(`API Error on ${endpoint}:`, error);
+            return null;
         }
-    });
-}
-
-function setInitialSidebarState() {
-    if (window.innerWidth <= 768) {
-        document.body.classList.add('sidebar-closed');
-        const existingOverlay = document.getElementById('sidebar-overlay');
-        if (existingOverlay) existingOverlay.remove();
-    } else {
-        document.body.classList.remove('sidebar-closed');
-        const existingOverlay = document.getElementById('sidebar-overlay');
-        if (existingOverlay) existingOverlay.remove();
     }
-}
-window.addEventListener('resize', setInitialSidebarState);
 
+    const api = {
+        getAllSessions: () => fetchApi('/api/all_sessions'),
+        getSessionHistory: (sessionId) => fetchApi(`/api/history/${sessionId}`),
+        startNewChat: () => fetchApi('/api/new_chat_session', { method: 'POST' }),
+        sendMessage: (payload) => fetchApi('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        })
+    };
 
-// History Toggle
-if (navItemHistoryToggle && actualChatHistoryList) {
-    console.log("History toggle elements found. Attaching listener."); // DEBUG
-    navItemHistoryToggle.addEventListener('click', () => {
-        console.log("History nav item clicked."); // DEBUG
-        actualChatHistoryList.classList.toggle('hidden');
-        console.log("History list is now hidden:", actualChatHistoryList.classList.contains('hidden')); // DEBUG
-        // Re-render history sidebar content to ensure it's up-to-date when toggled
-        renderHistorySidebar(); 
-    });
-} else {
-    console.warn("History toggle elements (navItemHistoryToggle or actualChatHistoryList) not found on DOM."); // DEBUG
-}
-
-
-// --- Chat History Management ---
-function saveCurrentConversation() {
-    const hasAnyActualMessage = chatHistory.some(msg => msg.role === 'user' && msg.parts && msg.parts.length > 0 && msg.parts.some(p => p.text && p.text.trim() !== ''));
-
-    if (hasAnyActualMessage) {
-        const firstUserMessage = chatHistory.find(msg => msg.role === 'user')?.parts.find(p => p.text)?.text;
-        const title = firstUserMessage ? firstUserMessage.substring(0, 40) + (firstUserMessage.length > 40 ? '...' : '') : "New Chat";
-        const timestamp = new Date().toLocaleString('en-IN', {
-            month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-        });
+    // =====================================================================
+    // --- UI RENDERING & STATE ---
+    // =====================================================================
+    function renderSuggestionPrompts() {
+        if (!suggestionGrid) return;
+        suggestionGrid.innerHTML = '';
+        const shuffled = allPrompts.sort(() => 0.5 - Math.random());
+        const selectedPrompts = shuffled.slice(0, 4);
         
-        if (!chatHistory[0].sessionId) {
-            chatHistory.unshift({ sessionId: Date.now(), parts: [] });
-        }
-
-        const existingIndex = allConversations.findIndex(c => c.id === chatHistory[0].sessionId);
-        const conversationData = {
-            id: chatHistory[0].sessionId,
-            title: title,
-            timestamp: timestamp,
-            messages: JSON.parse(JSON.stringify(chatHistory))
-        };
-
-        if (existingIndex !== -1) {
-            allConversations[existingIndex] = conversationData;
-        } else {
-            allConversations.unshift(conversationData);
-        }
-
-        allConversations = allConversations.slice(0, 10);
-        localStorage.setItem('chatConversations', JSON.stringify(allConversations));
-    }
-}
-
-function loadConversation(convoId) {
-    saveCurrentConversation();
-
-    const convo = allConversations.find(c => c.id === convoId);
-    if (convo) {
-        chatHistory = JSON.parse(JSON.stringify(convo.messages));
-        if (!chatHistory[0].sessionId) {
-            chatHistory.unshift({ sessionId: convoId, parts: [] });
-        }
-        initialPrompt.classList.add('hidden');
-        renderChatMessages();
-        setActiveChat(convoId);
-        if (actualChatHistoryList) actualChatHistoryList.classList.remove('hidden');
-    }
-    userInput.focus();
-}
-
-function renderChatMessages() {
-    chatMessages.innerHTML = '';
-    const hasActualMessages = chatHistory.some(msg => msg.parts && msg.parts.length > 0 && !msg.sessionId);
-
-    if (!hasActualMessages) {
-        initialPrompt.classList.remove('hidden');
-        return;
-    } else {
-        initialPrompt.classList.add('hidden');
+        selectedPrompts.forEach(prompt => {
+            const button = document.createElement('button');
+            button.className = "suggestion-btn bg-gray-700 p-4 rounded-lg hover:bg-gray-600 text-left";
+            button.innerHTML = `<h3 class="font-semibold">${prompt.title}</h3><p class="text-sm text-gray-400">${prompt.subtitle}</p>`;
+            button.addEventListener('click', () => useSuggestion(`${prompt.title} ${prompt.subtitle}`));
+            suggestionGrid.appendChild(button);
+        });
     }
 
-    chatHistory.forEach(msg => {
-        if (!msg.parts || msg.parts.length === 0 || msg.sessionId) {
+    function renderChatHistory(sessionsData, activeSessionId) {
+        if (!chatHistoryList) return;
+        chatHistoryList.innerHTML = '';
+        
+        const actualSessions = sessionsData ? sessionsData.sessions : null;
+
+        if (!Array.isArray(actualSessions)) {
+            chatHistoryList.innerHTML = '<p class="text-center text-gray-500 text-sm p-4">Error loading history.</p>';
             return;
         }
-        
-        const role = msg.role === 'user' ? 'user' : 'bot';
 
-        const messageWrapper = document.createElement('div');
-        messageWrapper.classList.add('message-wrapper', role);
-
-        const messageDiv = document.createElement('div');
-        messageDiv.classList.add('message', role);
-
-        const avatarDiv = document.createElement('div');
-        avatarDiv.classList.add('message-avatar');
-        if (role === 'user') {
-            if (FLASK_USER_DATA.pictureUrl && FLASK_USER_DATA.pictureUrl !== 'None') {
-                avatarDiv.innerHTML = `<img src="${FLASK_USER_DATA.pictureUrl}" alt="User Picture" class="w-full h-full rounded-full object-cover">`;
-            } else {
-                avatarDiv.textContent = currentUserInitials;
-            }
-        } else {
-            avatarDiv.textContent = 'AI';
+        if (actualSessions.length === 0) {
+            chatHistoryList.innerHTML = '<p class="text-center text-gray-500 text-sm p-4">No chat history.</p>';
+            return;
         }
+        actualSessions.forEach(session => {
+            const isActive = session.session_id === activeSessionId;
+            const activeClasses = isActive ? 'bg-gray-700 text-white' : 'hover:bg-gray-700';
+            const html = `<div class="group relative"><a href="#" data-chat-id="${session.session_id}" class="${activeClasses} flex items-center w-full px-3 py-2 text-sm font-medium rounded-md truncate">${session.title}</a><div class="absolute right-2 top-1/2 -translate-y-1/2 flex items-center opacity-0 group-hover:opacity-100 transition-opacity"><button title="Rename" class="p-1 text-gray-400 hover:text-white"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg></button><button title="Delete" class="p-1 text-gray-400 hover:text-white"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button></div></div>`;
+            chatHistoryList.innerHTML += html;
+        });
+    }
 
-        const contentDiv = document.createElement('div');
-        contentDiv.classList.add('message-content');
+    function renderMessages() {
+        if (!messagesContainer) return;
+        messagesContainer.innerHTML = '';
+        if (!Array.isArray(chatHistory)) return;
         
-        let combinedTextContent = '';
+        chatHistory.forEach(msg => {
+            const userAvatarSrc = userProfileBtn?.querySelector('img')?.src || `https://placehold.co/40x40/4A5568/E2E8F0?text=U`;
+            const messageText = msg.parts && msg.parts[0] ? msg.parts[0].text : '[empty message]';
+            const messageHTML = msg.role === 'user'
+                ? `<div class="message-bubble flex items-start gap-3 justify-end"><div class="bg-teal-500 text-white p-4 rounded-lg max-w-lg"><p>${messageText}</p></div><img class="h-10 w-10 rounded-full object-cover" src="${userAvatarSrc}" alt="User Avatar"></div>`
+                : `<div class="message-bubble flex items-start gap-3"><img class="h-10 w-10 rounded-full object-cover" src="https://placehold.co/40x40/1F2D37/E2E8F0?text=AI" alt="AI Avatar"><div class="bg-gray-700 p-4 rounded-lg max-w-lg">${messageText}</div></div>`;
+            messagesContainer.insertAdjacentHTML('beforeend', messageHTML);
+        });
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        checkChatState();
+    }
+    
+    function checkChatState() {
+        if (!chatBody || !messagesContainer || !chatInput || !emptyStateSuggestions) return;
+        
+        const messageCount = messagesContainer.querySelectorAll('.message-bubble').length;
+        const isEffectivelyEmpty = messageCount === 0 && chatInput.value.length === 0 && !attachedFile;
 
-        msg.parts.forEach(part => {
-            if (typeof part.text === 'string') {
-                const tempDiv = document.createElement('div');
-                let formattedText = part.text;
-                formattedText = formattedText.replace(/```([\s\S]*?)```/g, (match, codeContent) => {
-                    return `<pre>${codeContent.trim()}</pre>`;
-                });
-                
-                formattedText = formattedText.replace(/^### (.*$)/gim, '<h3>$1</h3>');
-                formattedText = formattedText.replace(/^## (.*$)/gim, '<h2>$1</h2>');
-                formattedText = formattedText.replace(/^# (.*$)/gim, '<h1>$1</h1>');
-                formattedText = formattedText.replace(/\*\*(.*?)\*\*/gim, '<strong>$1</strong>');
-                formattedText = formattedText.replace(/\*(.*?)\*/gim, '<em>$1</em>');
-                formattedText = formattedText.replace(/`(.*?)`/gim, '<code>$1</code>');
+        if (isEffectivelyEmpty) {
+            chatBody.classList.add('is-empty');
+            emptyStateSuggestions.classList.remove('hidden');
+        } else {
+            chatBody.classList.remove('is-empty');
+            emptyStateSuggestions.classList.add('hidden');
+        }
+    }
+    
+    // =====================================================================
+    // --- SPEECH & THEME ---
+    // =====================================================================
+    function populateVoiceList() {
+        if (!voiceSelect) return;
+        availableVoices = synth.getVoices();
+        const currentVal = voiceSelect.value;
+        voiceSelect.innerHTML = '';
+        availableVoices.forEach(voice => {
+            const option = document.createElement('option');
+            option.textContent = `${voice.name} (${voice.lang})`;
+            option.value = voice.name;
+            voiceSelect.appendChild(option);
+        });
+        voiceSelect.value = currentVal;
+    }
+    
+    if (synth.onvoiceschanged !== undefined) {
+        synth.onvoiceschanged = populateVoiceList;
+    }
 
-                let lines = formattedText.split('\n');
-                let inUnorderedList = false;
-                let inOrderedList = false;
-                let processedLines = [];
+    function speakText(text) {
+        const utterance = new SpeechSynthesisUtterance(text);
+        if (voiceSelect && voiceSelect.value) {
+            const selectedVoice = availableVoices.find(voice => voice.name === voiceSelect.value);
+            if (selectedVoice) utterance.voice = selectedVoice;
+        }
+        synth.speak(utterance);
+    }
+    
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition && micButton) {
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'en-US';
+        micButton.addEventListener('click', () => recognition.start());
+        recognition.onresult = (event) => {
+            if(chatInput) {
+                chatInput.value = event.results[0][0].transcript;
+                handleSendMessage();
+            }
+        };
+        recognition.onerror = (event) => console.error("Speech recognition error:", event.error);
+    }
 
-                for (let i = 0; i < lines.length; i++) {
-                    let line = lines[i];
-                    if (line.match(/^\s*[-*+]\s/)) {
-                        if (inOrderedList) { processedLines.push('</ol>'); inOrderedList = false; }
-                        if (!inUnorderedList) { processedLines.push('<ul>'); inUnorderedList = true; }
-                        processedLines.push(`<li>${line.replace(/^\s*[-*+]\s/, '').trim()}</li>`);
-                    } else if (line.match(/^\s*\d+\.\s/)) {
-                        if (inUnorderedList) { processedLines.push('</ul>'); inUnorderedList = false; }
-                        if (!inOrderedList) { processedLines.push('<ol>'); inOrderedList = true; }
-                        processedLines.push(`<li>${line.replace(/^\s*\d+\.\s/, '').trim()}</li>`);
-                    } else {
-                        if (inUnorderedList) { processedLines.push('</ul>'); inUnorderedList = false; }
-                        if (inOrderedList) { processedLines.push('</ol>'); inOrderedList = false; }
-                        processedLines.push(line);
+    // =====================================================================
+    // --- EVENT HANDLERS ---
+    // =====================================================================
+    async function handleSendMessage(parts) {
+        let messageParts = parts;
+        if (!messageParts) {
+            const messageText = chatInput.value.trim();
+            if (messageText === '' && !attachedFile) return;
+            messageParts = [];
+            if (attachedFile) {
+                const imageBase64 = await convertFileToBase64(attachedFile);
+                messageParts.push({
+                    inlineData: {
+                        mimeType: attachedFile.type,
+                        data: imageBase64.split(',')[1]
                     }
-                }
-                if (inUnorderedList) processedLines.push('</ul>');
-                if (inOrderedList) processedLines.push('</ol>');
-
-                formattedText = processedLines.join('\n');
-                tempDiv.innerHTML = formattedText;
-                while(tempDiv.firstChild) { contentDiv.appendChild(tempDiv.firstChild); }
-                combinedTextContent += part.text + ' ';
-            } else if (part.inlineData && part.inlineData.mimeType.startsWith('image/')) {
-                const imgElement = document.createElement('img');
-                imgElement.src = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
-                imgElement.classList.add('max-w-full', 'h-auto', 'rounded-lg', 'mt-2', 'shadow-md');
-                contentDiv.appendChild(imgElement);
+                });
             }
-        });
-
-        messageDiv.appendChild(avatarDiv);
-        contentDiv.style.userSelect = 'text';
-        messageDiv.appendChild(contentDiv);
-
-        if (role === 'bot') {
-            const speakerIcon = document.createElement('span');
-            speakerIcon.classList.add('speaker-icon');
-            speakerIcon.innerHTML = `<i class="fa-solid fa-volume-high"></i>`;
-            speakerIcon.title = "Listen to message";
-            speakerIcon.onclick = () => {
-                if (synth.speaking) synth.cancel();
-                const tempUtterance = new SpeechSynthesisUtterance(combinedTextContent.trim());
-                if (selectedVoice) {
-                    tempUtterance.voice = selectedVoice;
-                } else {
-                    const langVoice = availableVoices.find(voice => voice.lang.startsWith(selectedLanguage.substring(0,2)));
-                    if (langVoice) tempUtterance.voice = langVoice;
-                }
-                synth.speak(tempUtterance);
-            };
-            messageDiv.appendChild(speakerIcon);
-
-            const messageActionsDiv = document.createElement('div');
-            messageActionsDiv.classList.add('message-actions');
-
-            const likeBtn = document.createElement('button');
-            likeBtn.title = "Like this response";
-            likeBtn.innerHTML = `<i class="fa-solid fa-thumbs-up"></i>`;
-            likeBtn.addEventListener('click', () => alert('Feedback: Liked!'));
-
-            const dislikeBtn = document.createElement('button');
-            dislikeBtn.title = "Dislike this response";
-            dislikeBtn.innerHTML = `<i class="fa-solid fa-thumbs-down"></i>`;
-            dislikeBtn.addEventListener('click', () => alert('Feedback: Disliked!'));
-
-            const shareBtn = document.createElement('button');
-            shareBtn.title = "Share this response";
-            shareBtn.innerHTML = `<i class="fa-solid fa-share-nodes"></i>`;
-            shareBtn.addEventListener('click', () => {
-                if (navigator.share) {
-                    navigator.share({
-                        title: 'Chatbot Response',
-                        text: combinedTextContent.trim(),
-                        url: window.location.href,
-                    }).then(() => {
-                        console.log('Shared successfully!');
-                    }).catch((error) => {
-                        console.error('Error sharing:', error);
-                        alert('Could not share. Please copy the text manually.');
-                    });
-                } else {
-                    navigator.clipboard.writeText(combinedTextContent.trim()).then(() => {
-                        alert('Response copied to clipboard!');
-                    });
-                }
-            });
-
-            messageActionsDiv.appendChild(likeBtn);
-            messageActionsDiv.appendChild(dislikeBtn);
-            messageActionsDiv.appendChild(shareBtn);
-            messageDiv.appendChild(messageActionsDiv);
+            if (messageText) {
+                messageParts.push({ text: messageText });
+            }
         }
-        messageWrapper.appendChild(messageDiv);
-        chatMessages.appendChild(messageWrapper);
-    });
-    chatMessages.scrollTop = chatMessages.scrollHeight;
-}
-
-function renderHistorySidebar() {
-    if (actualChatHistoryList) {
-        actualChatHistoryList.innerHTML = '';
-    } else {
-        console.error("actualChatHistoryList element not found!");
-        return;
-    }
-
-    if (!document.getElementById('current-chat-sidebar-item')) {
-        const currentChatStatic = document.createElement('div');
-        currentChatStatic.classList.add('nav-item');
-        currentChatStatic.id = 'current-chat-sidebar-item';
-        currentChatStatic.innerHTML = `<i class="fa-solid fa-message"></i><span>Current Chat</span>`;
-        currentChatStatic.addEventListener('click', () => {
-            initialPrompt.classList.add('hidden');
-            renderChatMessages();
-            setActiveChat(chatHistory[0]?.sessionId || null);
-            if (actualChatHistoryList) actualChatHistoryList.classList.remove('hidden');
-        });
         
-     if (chatHistorySidebar) {
-        chatHistorySidebar.prepend(currentChatStatic);
-    } else {  
-    console.error("chatHistorySidebar element not found, cannot prepend.");
-    }
-    }
-
-
-    if (allConversations.length === 0) {
-        const noHistoryItem = document.createElement('div');
-        noHistoryItem.classList.add('nav-item', 'no-hover-effect');
-        noHistoryItem.textContent = 'No past chats';
-        actualChatHistoryList.appendChild(noHistoryItem);
-    } else {
-        allConversations.forEach(convo => {
-            if (convo.id === chatHistory[0]?.sessionId || (convo.messages.length === 1 && convo.messages[0].sessionId && (!convo.messages[0].parts || convo.messages[0].parts.length === 0))) {
-                return;
+        if (activeTool) {
+            const textPart = messageParts.find(p => p.text);
+            if (textPart) {
+                textPart.text = `Act as a ${activeTool}. ${textPart.text}`;
+            } else {
+                messageParts.push({ text: `Act as a ${activeTool}.` });
             }
-            const navItemDiv = document.createElement('div');
-            navItemDiv.classList.add('nav-item');
-            navItemDiv.dataset.id = convo.id;
-            navItemDiv.innerHTML = `<i class="fa-solid fa-history"></i><span>${convo.title}</span>`;
-            navItemDiv.addEventListener('click', () => loadConversation(convo.id));
-            actualChatHistoryList.appendChild(navItemDiv);
-        });
-    }
-    setActiveChat(chatHistory[0]?.sessionId || null);
-}
-
-function setActiveChat(id) {
-    document.querySelectorAll('.nav-list .nav-item').forEach(item => {
-        item.classList.remove('active');
-    });
-    const currentChatElement = document.getElementById('current-chat-sidebar-item');
-    if (currentChatElement) {
-        const hasActualMessages = chatHistory.some(msg => msg.parts && msg.parts.length > 0 && !msg.sessionId);
-        if (hasActualMessages && (chatHistory[0]?.sessionId === id || id === null)) {
-            currentChatElement.classList.add('active');
-        } else if (!hasActualMessages && id === null) {
-            currentChatElement.classList.add('active');
-        }
-    }
-    
-    if (id) {
-        const activeElement = document.querySelector(`.nav-item[data-id="${id}"]`);
-        if (activeElement) {
-            activeElement.classList.add('active');
-        }
-    }
-}
-
-// --- Web Speech API - Speech Synthesis (Text-to-Speech) ---
-const synth = window.speechSynthesis;
-let availableVoices = [];
-
-function populateVoiceList() {
-    availableVoices = synth.getVoices();
-    voiceSelect.innerHTML = '';
-
-    const autoOption = document.createElement('option');
-    autoOption.textContent = 'Auto (Browser Default)';
-    autoOption.value = '';
-    voiceSelect.appendChild(autoOption);
-
-    availableVoices.forEach(voice => {
-        const option = document.createElement('option');
-        option.textContent = `${voice.name} (${voice.lang})`;
-        option.value = voice.name;
-        if (voice.lang === selectedLanguage || (voice.default && voice.lang.startsWith('en-'))) {
-            option.selected = true;
-            selectedVoice = voice;
-        }
-        voiceSelect.appendChild(option);
-    });
-
-    if (!selectedVoice && availableVoices.length > 0) {
-        const defaultVoice = availableVoices.find(voice => voice.lang.startsWith(selectedLanguage.substring(0,2))) || availableVoices.find(voice => voice.default);
-        if (defaultVoice) {
-            voiceSelect.value = defaultVoice.name;
-            selectedVoice = defaultVoice;
-        } else {
-            voiceSelect.value = availableVoices[0].name;
-            selectedVoice = availableVoices[0];
-        }
-    }
-}
-
-function populateLanguageList() {
-    const languages = [
-        { name: "English (US)", code: "en-US" },
-        { name: "Hindi (India)", code: "hi-IN" },
-        { name: "Marathi (India)", code: "mr-IN" },
-        { name: "Spanish (Spain)", code: "es-ES" },
-        { name: "French (France)", code: "fr-FR" },
-        { name: "German (Germany)", code: "de-DE" },
-        { name: "Japanese (Japan)", code: "ja-JP" },
-        { name: "Chinese (Mandarin)", code: "zh-CN" },
-    ];
-
-    languageSelect.innerHTML = '';
-    languages.forEach(lang => {
-        const option = document.createElement('option');
-        option.textContent = lang.name;
-        option.value = lang.code;
-        if (lang.code === selectedLanguage) {
-            option.selected = true;
-        }
-        languageSelect.appendChild(option);
-    });
-}
-
-function populateThemeList() {
-    const themes = [
-        { name: "Dark (Default)", code: "theme-dark" },
-        { name: "Light", code: "theme-light" },
-        { name: "Blue Accent", code: "theme-blue-accent" },
-        { name: "Green Accent", code: "theme-green-accent" },
-        { name: "Warm Grey", code: "theme-warm-grey" },
-        { name: "High Contrast", code: "theme-high-contrast" },
-    ];
-
-    themeSelect.innerHTML = '';
-    themes.forEach(theme => {
-        const option = document.createElement('option');
-        option.textContent = theme.name;
-        option.value = theme.code;
-        if (theme.code === selectedTheme) { // Corrected: theme.code === selectedTheme
-            option.selected = true;
-        }
-        themeSelect.appendChild(option);
-    });
-}
-
-function applyTheme(themeName) {
-    document.body.classList.remove('theme-dark', 'theme-light', 'theme-blue-accent', 'theme-green-accent', 'theme-warm-grey', 'theme-high-contrast');
-    document.body.classList.add(themeName);
-    localStorage.setItem(USER_THEME_KEY, themeName);
-}
-
-
-synth.onvoiceschanged = () => {
-    populateVoiceList();
-    populateLanguageList();
-    populateThemeList();
-};
-
-if (synth.getVoices().length > 0) {
-    populateVoiceList();
-    populateLanguageList();
-    populateThemeList();
-}
-
-voiceSelect.addEventListener('change', () => {
-    const selectedVoiceName = voiceSelect.value;
-    selectedVoice = availableVoices.find(voice => voice.name === selectedVoiceName) || null;
-    if (selectedVoice) {
-        console.log('Selected voice:', selectedVoice.name);
-    } else {
-        console.log('Using browser default voice.');
-    }
-});
-
-languageSelect.addEventListener('change', () => {
-    selectedLanguage = languageSelect.value;
-    localStorage.setItem(USER_LANGUAGE_KEY, selectedLanguage);
-    populateVoiceList();
-    console.log('Selected language:', selectedLanguage);
-});
-
-themeSelect.addEventListener('change', () => {
-    selectedTheme = themeSelect.value;
-    applyTheme(selectedTheme);
-    console.log('Selected theme:', selectedTheme);
-});
-
-
-function speakText(text) {
-    if (!speechToggle.checked) {
-        return;
-    }
-    if (synth.speaking) {
-        synth.cancel();
-    }
-    const utterance = new SpeechSynthesisUtterance(text);
-    
-    let voiceToUse = null;
-    if (selectedVoice && selectedVoice.lang.startsWith(selectedLanguage.substring(0,2))) {
-        voiceToUse = selectedVoice;
-    } else {
-        voiceToUse = availableVoices.find(voice => voice.lang.startsWith(selectedLanguage.substring(0,2)));
-    }
-
-    if (voiceToUse) {
-        utterance.voice = voiceToUse;
-    } else {
-        console.warn(`No specific voice found for language ${selectedLanguage}. Browser will use default.`);
-    }
-    
-    utterance.lang = selectedLanguage;
-    utterance.rate = 1.0;
-    utterance.pitch = 1.0;
-    synth.speak(utterance);
-}
-
-// --- Web Speech API - Speech Recognition ---
-const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-let recognition = null;
-if (SpeechRecognition) {
-    recognition = new SpeechRecognition();
-    recognition.continuous = false;
-    recognition.lang = 'en-US';
-    recognition.interimResults = false;
-    recognition.maxAlternatives = 1;
-
-    recognition.onstart = () => {
-        micButton.classList.add('recording');
-        userInput.placeholder = "Listening...";
-        userInput.disabled = true;
-        sendButton.disabled = true;
-        imageUploadButton.disabled = true;
-        cameraCaptureButton.disabled = true;
-        speechToggle.disabled = true;
-        voiceSelect.disabled = true;
-        languageSelect.disabled = true;
-        themeSelect.disabled = true;
-        floatingTools.style.pointerEvents = 'none';
-        newChatButtonSidebar.disabled = true;
-        clearChatSettingsButton.disabled = true;
-        logoutButton.disabled = true;
-        if (sidebarToggleButton) sidebarToggleButton.disabled = true;
-    };
-
-    recognition.onresult = (event) => {
-        const transcript = event.results[0][0].transcript;
-        userInput.value = transcript;
-        micButton.classList.remove('recording');
-        userInput.placeholder = "Type your message...";
-        userInput.disabled = false;
-        sendButton.disabled = false;
-        imageUploadButton.disabled = false;
-        cameraCaptureButton.disabled = false;
-        speechToggle.disabled = false;
-        voiceSelect.disabled = false;
-        languageSelect.disabled = false;
-        themeSelect.disabled = false;
-        floatingTools.style.pointerEvents = 'auto';
-        newChatButtonSidebar.disabled = false;
-        clearChatSettingsButton.disabled = false;
-        logoutButton.disabled = false;
-        if (sidebarToggleButton) sidebarToggleButton.disabled = false;
-        sendButton.click();
-    };
-
-    recognition.onerror = (event) => {
-        console.error("Speech recognition error:", event.error);
-        micButton.classList.remove('recording');
-        userInput.placeholder = "Type your message...";
-        userInput.disabled = false;
-        sendButton.disabled = false;
-        imageUploadButton.disabled = false;
-        cameraCaptureButton.disabled = false;
-        speechToggle.disabled = false;
-        voiceSelect.disabled = false;
-        languageSelect.disabled = false;
-        themeSelect.disabled = false;
-        floatingTools.style.pointerEvents = 'auto';
-        newChatButtonSidebar.disabled = false;
-        clearChatSettingsButton.disabled = false;
-        logoutButton.disabled = false;
-        if (sidebarToggleButton) sidebarToggleButton.disabled = false;
-        alert("Speech recognition error: " + event.error + "\nMake sure your microphone is connected and allowed.");
-    };
-
-    recognition.onend = () => {
-        micButton.classList.remove('recording');
-        userInput.placeholder = "Type your message...";
-        userInput.disabled = false;
-        sendButton.disabled = false;
-        imageUploadButton.disabled = false;
-        cameraCaptureButton.disabled = false;
-        speechToggle.disabled = false;
-        voiceSelect.disabled = false;
-        languageSelect.disabled = false;
-        themeSelect.disabled = false;
-        floatingTools.style.pointerEvents = 'auto';
-        newChatButtonSidebar.disabled = false;
-        clearChatSettingsButton.disabled = false;
-        logoutButton.disabled = false;
-        if (sidebarToggleButton) sidebarToggleButton.disabled = false;
-    };
-} else {
-    micButton.style.display = 'none';
-    console.warn("Speech Recognition API not supported in this browser.");
-}
-
-// Add this entire new function to your script.js file
-async function startNewChat() {
-    console.log("Starting a new chat session via backend...");
-    try {
-        const response = await fetch(`${BACKEND_API_BASE_URL}/api/new_chat_session`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-                // Your backend automatically uses the Flask session cookie for authentication
-            }
-        });
-
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || 'Failed to create a new chat session on the server.');
         }
 
-        const data = await response.json();
-        const newSessionId = data.session_id; // <-- This is the VALID ID from the backend
-
-        // Now use this valid ID to reset the chat state
-        chatMessages.innerHTML = '';
-        initialPrompt.classList.remove('hidden');
-        // IMPORTANT: The first item in chatHistory should just hold the ID
-        chatHistory = [{ sessionId: newSessionId, parts: [] }];
-
-        if (synth.speaking) {
-            synth.cancel();
+        chatHistory.push({ role: "user", parts: messageParts });
+        renderMessages();
+        
+        if (chatInput) {
+            chatInput.value = '';
+            chatInput.style.height = 'auto';
         }
-        userInput.focus();
-        // You might want to refresh the history from the server here too
-        renderHistorySidebar(); 
-        setActiveChat(newSessionId);
+        removeAttachedFile();
+        selectTool(null);
 
-    } catch (error) {
-        console.error("Error starting new chat:", error);
-        alert("Could not start a new chat. Please check your connection and try again.");
-    }
-}
-// Function to send message to Gemini API (through backend proxy)
-async function getGeminiResponse() {
-    loadingIndicator.classList.remove('hidden');
-    sendButton.disabled = true;
-    micButton.disabled = true;
-    imageUploadButton.disabled = true;
-    cameraCaptureButton.disabled = true;
-    userInput.disabled = true;
-    speechToggle.disabled = true;
-    voiceSelect.disabled = true;    
-    languageSelect.disabled = true;
-    themeSelect.disabled = true;
-    floatingTools.style.pointerEvents = 'none';
-    newChatButtonSidebar.disabled = true;
-    clearChatSettingsButton.disabled = true;
-    logoutButton.disabled = true;
-    if (sidebarToggleButton) sidebarToggleButton.disabled = true;
-
-    const messagesForBackend = chatHistory
-        .filter(msg => msg.parts && msg.parts.length > 0)
-        .map(msg => {
-            const { sessionId, ...rest } = msg;
-            return rest;
-        });
-
-    const languageName = languageSelect.options[languageSelect.selectedIndex].textContent.split('(')[0].trim();
-
-    // --- START OF THE FIX ---
-  
-    // 1. Get the current session ID from the chatHistory array.
-    const currentSessionId = chatHistory[0]?.sessionId;
-
-    const payload = {
-        contents: messagesForBackend,
-        language_name: languageName,
-        session_id: String(currentSessionId) // 2. Add the session_id to the payload.
-    };
-
-    // --- END OF THE FIX ---
-
-    const apiUrl = `${BACKEND_API_BASE_URL}/api/chat`;
-    const headers = { 'Content-Type': 'application/json' };
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 20000);
-
-    try {
-        const response = await fetch(apiUrl, {
-            method: 'POST',
-            headers: headers,
-            body: JSON.stringify(payload),
-            signal: controller.signal
-        });
-
-        clearTimeout(timeoutId);
-
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
-        }
-
-        const result = await response.json();
-
-        let modelResponseText = "Error: Could not get a response.";
-        if (result.candidates && result.candidates.length > 0 &&
-            result.candidates[0].content && result.candidates[0].content.parts &&
-            result.candidates[0].content.parts.length > 0) {
+        const payload = { contents: chatHistory, session_id: currentSessionId };
+        const result = await api.sendMessage(payload);
+        
+        let modelResponseText = "Sorry, something went wrong.";
+        if (result && result.candidates && result.candidates[0]?.content?.parts[0]?.text) {
             modelResponseText = result.candidates[0].content.parts[0].text;
-        } else if (result.error && result.error.message) {
-            modelResponseText = `Backend Error: ${result.error.message}`;
-        } else if (result.promptFeedback && result.promptFeedback.blockReason) {
-            modelResponseText = `Sorry, your request was blocked due to: ${result.promptFeedback.blockReason}.`;
+        } else if (result && result.error?.message) {
+            modelResponseText = result.error.message;
         }
         
         chatHistory.push({ role: "model", parts: [{ text: modelResponseText }] });
-        return modelResponseText;
-
-    } catch (error) {
-        clearTimeout(timeoutId);
-        console.error("Error fetching from backend API:", error);
-        let errorMessage;
-        if (error.name === 'AbortError') {
-            errorMessage = `Sorry, the request to the backend timed out. Please try again.`;
-        } else if (error.message.includes("HTTP error!")) {
-             errorMessage = `Backend/Server Error: ${error.message}. Please check your backend server and network.`;
-        } else {
-            errorMessage = `Sorry, I'm having trouble connecting right now. (${error.message})`;
-        }
-        chatHistory.push({ role: "model", parts: [{ text: errorMessage }] });
-        return errorMessage;
-    } finally {
-        loadingIndicator.classList.add('hidden');
-        sendButton.disabled = false;
-        micButton.disabled = false;
-        imageUploadButton.disabled = false;
-        cameraCaptureButton.disabled = false;
-        userInput.disabled = false;
-        speechToggle.disabled = false;
-        voiceSelect.disabled = false;
-        languageSelect.disabled = false;
-        themeSelect.disabled = false;
-        floatingTools.style.pointerEvents = 'auto';
-        newChatButtonSidebar.disabled = false;
-        clearChatSettingsButton.disabled = false;
-        logoutButton.disabled = false;
-        if (sidebarToggleButton) sidebarToggleButton.disabled = false;
-        userInput.focus();
+        renderMessages();
+        speakText(modelResponseText);
         
-        renderChatMessages();
-        saveCurrentConversation();
-        renderHistorySidebar();
-    }
-}
-
-sendButton.addEventListener('click', async () => {
-    const messageText = userInput.value.trim();
-    let userMessageParts = [];
-
-    if (messageText) {
-        userMessageParts.push({ text: messageText });
+        const sessions = await api.getAllSessions();
+        if (sessions) renderChatHistory(sessions, currentSessionId);
     }
 
-    if (imageUploadInput.files.length > 0) {
-        const file = imageUploadInput.files[0];
-        if (file) {
-            const imageBase64 = await convertFileToBase64(file);
-            userMessageParts.push({
-                inlineData: {
-                    mimeType: file.type,
-                    data: imageBase64.split(',')[1]
+    async function loadChat(sessionId) {
+        if (!messagesContainer || !loadingIndicator) return;
+        messagesContainer.innerHTML = '';
+        loadingIndicator.style.display = 'block';
+        
+        const data = await api.getSessionHistory(sessionId);
+        chatHistory = data ? data.history : [];
+        currentSessionId = sessionId;
+
+        loadingIndicator.style.display = 'none';
+        renderMessages();
+        
+        const sessionsData = await api.getAllSessions();
+        if (sessionsData) {
+            renderChatHistory(sessionsData, currentSessionId);
+            const selectedSession = sessionsData.sessions.find(s => s.session_id === sessionId);
+            if (chatTitle && selectedSession) chatTitle.textContent = selectedSession.title;
+        }
+    }
+
+    async function handleNewChat() {
+        const data = await api.startNewChat();
+        if (data && data.session_id) {
+            currentSessionId = data.session_id;
+            chatHistory = [];
+            renderMessages();
+            renderSuggestionPrompts();
+            if (chatTitle) chatTitle.textContent = "New Chat";
+            const sessions = await api.getAllSessions();
+            if (sessions) renderChatHistory(sessions, currentSessionId);
+        }
+    }
+    
+    function toggleSidebar() {
+        if(sidebar && sidebarContent) {
+            sidebar.classList.toggle('w-64');
+            sidebar.classList.toggle('w-0');
+            sidebarContent.classList.toggle('hidden');
+        }
+    }
+
+    function useSuggestion(text) {
+        if(chatInput) {
+            chatInput.value = text.replace(/\n/g, ' ').trim();
+            handleSendMessage();
+        }
+    }
+    
+    // =====================================================================
+    // --- GEMINI & CAMERA & TOOLKIT FUNCTIONS ---
+    // =====================================================================
+    async function handleSummarize() {
+        if (!geminiOutput) return;
+        geminiOutput.textContent = 'Summarizing...';
+        
+        const conversationText = chatHistory.map(msg => `${msg.role}: ${msg.parts[0].text}`).join('\n');
+        const prompt = `Please summarize the following conversation:\n\n${conversationText}`;
+        
+        const payload = { contents: [{ role: "user", parts: [{ text: prompt }] }], session_id: currentSessionId };
+        const result = await api.sendMessage(payload);
+        
+        if (result && result.candidates && result.candidates[0]?.content?.parts[0]?.text) {
+            geminiOutput.textContent = result.candidates[0].content.parts[0].text;
+        } else {
+            geminiOutput.textContent = 'Could not generate a summary.';
+        }
+    }
+
+    async function openCamera() {
+        if (!cameraModal || !cameraStreamEl) return;
+        try {
+            activeStream = await navigator.mediaDevices.getUserMedia({ video: true });
+            cameraStreamEl.srcObject = activeStream;
+            openModal(cameraModal);
+        } catch (err) {
+            console.error("Error accessing camera:", err);
+            alert("Could not access camera. Please ensure you have a webcam and have granted permission.");
+        }
+    }
+
+    function closeCamera() {
+        if (activeStream) {
+            activeStream.getTracks().forEach(track => track.stop());
+        }
+        closeModal(cameraModal);
+    }
+
+    function capturePhoto() {
+        if (!cameraCaptureCanvas || !cameraStreamEl) return;
+        const context = cameraCaptureCanvas.getContext('2d');
+        cameraCaptureCanvas.width = cameraStreamEl.videoWidth;
+        cameraCaptureCanvas.height = cameraStreamEl.videoHeight;
+        context.drawImage(cameraStreamEl, 0, 0, cameraStreamEl.videoWidth, cameraStreamEl.videoHeight);
+        
+        cameraCaptureCanvas.toBlob(blob => {
+            attachedFile = new File([blob], "capture.jpg", { type: "image/jpeg" });
+            showImagePreview(attachedFile);
+        }, 'image/jpeg');
+        
+        closeCamera();
+    }
+
+    function selectTool(toolName) {
+        activeTool = toolName;
+        if (activeToolIndicator) {
+            if (toolName) {
+                activeToolIndicator.innerHTML = `<span class="bg-teal-500/20 text-teal-300 text-xs font-medium px-2.5 py-0.5 rounded-full inline-flex items-center">Mode: ${toolName}<button class="ml-1.5 font-bold text-teal-200 hover:text-white" onclick="selectTool(null)">&times;</button></span>`;
+                if (chatInput) chatInput.placeholder = `Ask a question in ${toolName} mode...`;
+            } else {
+                activeToolIndicator.innerHTML = '';
+                if (chatInput) chatInput.placeholder = 'Message Phantom AI...';
+            }
+        }
+    }
+    window.selectTool = selectTool;
+
+    function showImagePreview(file) {
+        if (file && imagePreviewContainer && imagePreview) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                imagePreview.src = e.target.result;
+                imagePreviewContainer.classList.remove('hidden');
+            };
+            reader.readAsDataURL(file);
+            checkChatState();
+        }
+    }
+
+    function removeAttachedFile() {
+        attachedFile = null;
+        if (fileInput) fileInput.value = '';
+        if (imagePreviewContainer) imagePreviewContainer.classList.add('hidden');
+        if (imagePreview) imagePreview.src = '';
+        checkChatState();
+    }
+    
+    function convertFileToBase64(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        });
+    }
+
+    // =====================================================================
+    // --- VIRTUAL ENVIRONMENT FUNCTIONS ---
+    // =====================================================================
+    function openVirtualEnv(mode) {
+        if (!virtualEnvModal || !virtualEnvTitle || !virtualEnvInput || !virtualEnvOutput) return;
+        virtualEnvTitle.textContent = `${mode} Environment`;
+        virtualEnvInput.value = '';
+        virtualEnvOutput.innerHTML = '';
+        virtualEnvHistory = [];
+        virtualFileSystem = { 'Project': { type: 'folder', children: { 'main.js': { type: 'file', content: '' } } } };
+        activeVirtualFile = 'main.js';
+        selectedVirtualFolder = virtualFileSystem.Project;
+        renderVirtualFiles();
+        virtualEnvModal.classList.add('open');
+    }
+
+    function closeVirtualEnv() {
+        if (virtualEnvModal) virtualEnvModal.classList.remove('open');
+    }
+
+    function renderVirtualFiles(container = virtualEnvFiles, folder = virtualFileSystem, level = 0) {
+        if (!container) return;
+        if (level === 0) container.innerHTML = '';
+
+        Object.keys(folder).forEach(name => {
+            const item = folder[name];
+            const itemEl = document.createElement('div');
+            itemEl.className = `group relative flex items-center p-2 rounded-md cursor-pointer ${name === activeVirtualFile ? 'bg-teal-500/20' : 'hover:bg-gray-700'}`;
+            itemEl.style.paddingLeft = `${level * 1.5 + 0.5}rem`;
+            
+            const icon = item.type === 'folder' ? '📁' : '📄';
+            itemEl.innerHTML = `<span>${icon} ${name}</span>`;
+            
+            const controls = document.createElement('div');
+            controls.className = 'absolute right-2 top-1/2 -translate-y-1/2 flex items-center opacity-0 group-hover:opacity-100 transition-opacity';
+            
+            const deleteBtn = document.createElement('button');
+            deleteBtn.title = "Delete";
+            deleteBtn.className = "p-1 text-gray-400 hover:text-white";
+            deleteBtn.innerHTML = `&times;`;
+            deleteBtn.onclick = (e) => {
+                e.stopPropagation();
+                if (confirm(`Are you sure you want to delete ${name}?`)) {
+                    delete virtualFileSystem[name]; // Simplified for root level
+                    renderVirtualFiles();
                 }
+            };
+            controls.appendChild(deleteBtn);
+            itemEl.appendChild(controls);
+
+            itemEl.addEventListener('click', () => {
+                if (item.type === 'file') {
+                    if (activeVirtualFile && virtualFileSystem[activeVirtualFile]) {
+                        virtualFileSystem[activeVirtualFile].content = virtualEnvInput.value;
+                    }
+                    activeVirtualFile = name;
+                    virtualEnvInput.value = item.content;
+                }
+                selectedVirtualFolder = item.type === 'folder' ? item : folder;
+                renderVirtualFiles();
             });
-        }
-    }
 
-    if (userMessageParts.length > 0) {
-        chatHistory.push({ role: "user", parts: userMessageParts });
-        userInput.value = '';
-        imageUploadInput.value = '';
-        renderChatMessages();
+            container.appendChild(itemEl);
 
-        const botResponseText = await getGeminiResponse();
-        if (speechToggle.checked) {
-            speakText(botResponseText);
-        }
-    }
-});
-
-imageUploadButton.addEventListener('click', () => {
-    imageUploadInput.click();
-});
-
-function convertFileToBase64(file) {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-    });
-}
-
-cameraCaptureButton.addEventListener('click', async () => {
-    alert("Camera access functionality is a placeholder. In a real app, this would open your camera.");
-});
-
-if (micButton) {
-    micButton.addEventListener('click', () => {
-        if (recognition) {
-            try {
-                recognition.start();
+            if (item.type === 'folder' && item.children) {
+                renderVirtualFiles(container, item.children, level + 1);
             }
-            catch (e) {
-                console.error("Speech recognition already started or other error:", e);
-                alert("Speech recognition is already active or an error occurred. Please try again.");
+        });
+    }
+    
+    async function handleRunAnalysis() {
+        if (!virtualEnvInput || !virtualEnvOutput || !virtualEnvFollowup) return;
+        const followupText = virtualEnvFollowup.value.trim();
+        if (activeVirtualFile) {
+            virtualFileSystem[activeVirtualFile].content = virtualEnvInput.value;
+        }
+
+        let prompt = `Act as a ${virtualEnvTitle.textContent.includes('Code') ? 'Canva Code expert' : 'Data Analyst'}. `;
+        prompt += `Here are the files in the project:\n`;
+        Object.keys(virtualFileSystem).forEach(name => {
+            prompt += `--- ${name} ---\n${virtualFileSystem[name].content}\n\n`;
+        });
+        prompt += `My question is: ${followupText}`;
+
+        virtualEnvOutput.innerHTML += `<div class="p-2 bg-gray-700 rounded-lg"><strong>You:</strong> ${followupText}</div>`;
+        virtualEnvOutput.scrollTop = virtualEnvOutput.scrollHeight;
+        virtualEnvFollowup.value = '';
+
+        const payload = { contents: [{ role: 'user', parts: [{ text: prompt }] }], session_id: currentSessionId };
+        const result = await api.sendMessage(payload);
+        
+        let modelResponseText = "Could not get an analysis.";
+        if (result && result.candidates && result.candidates[0]?.content?.parts[0]?.text) {
+            modelResponseText = result.candidates[0].content.parts[0].text;
+        }
+        
+        virtualEnvOutput.innerHTML += `<div class="p-2 bg-gray-800 rounded-lg"><strong>AI:</strong> ${modelResponseText}</div>`;
+        virtualEnvOutput.scrollTop = virtualEnvOutput.scrollHeight;
+    }
+
+    // --- Attaching Event Listeners Safely ---
+    if (sendButton) sendButton.addEventListener('click', () => handleSendMessage());
+    if (chatInput) {
+        chatInput.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } });
+        chatInput.addEventListener('input', () => { chatInput.style.height = 'auto'; chatInput.style.height = (chatInput.scrollHeight) + 'px'; checkChatState(); });
+    }
+    if (newChatBtn) newChatBtn.addEventListener('click', handleNewChat);
+    if (chatHistoryList) {
+        chatHistoryList.addEventListener('click', (e) => {
+            const link = e.target.closest('a');
+            if (link && link.dataset.chatId) {
+                e.preventDefault();
+                loadChat(link.dataset.chatId);
             }
+        });
+    }
+    if (fileInput) fileInput.addEventListener('change', (e) => { 
+        if (e.target.files.length > 0) {
+            attachedFile = e.target.files[0];
+            showImagePreview(attachedFile);
         }
     });
-}
-
-userInput.addEventListener('keypress', (event) => {
-    if (event.key === 'Enter') {
-        sendButton.click();
+    if (removeImageBtn) removeImageBtn.addEventListener('click', removeAttachedFile);
+    if (themeSelect) themeSelect.addEventListener('change', () => {
+        document.body.className = "bg-gray-800 text-gray-200 flex h-screen antialiased";
+        document.body.classList.add(themeSelect.value);
+    });
+    
+    // Sidebar Toggles
+    if (sidebarToggleBtnHeader) sidebarToggleBtnHeader.addEventListener('click', toggleSidebar);
+    if (sidebarToggleBtnSidebar) sidebarToggleBtnSidebar.addEventListener('click', toggleSidebar);
+    
+    // Suggestion Buttons (delegated)
+    if(suggestionGrid) {
+        suggestionGrid.addEventListener('click', (e) => {
+            const btn = e.target.closest('.suggestion-btn');
+            if (btn) {
+                useSuggestion(btn.innerText);
+            }
+        });
     }
+
+    // Modals
+    function openModal(modal) { if (modal) modal.classList.remove('hidden'); }
+    function closeModal(modal) { if (modal) modal.classList.add('hidden'); }
+    if (settingsBtn) settingsBtn.addEventListener('click', () => openModal(settingsModal));
+    if (userProfileBtn) userProfileBtn.addEventListener('click', () => openModal(settingsModal));
+    if (closeModalBtn) closeModalBtn.addEventListener('click', () => closeModal(settingsModal));
+    if (settingsModal) settingsModal.addEventListener('click', (e) => { if (e.target === settingsModal) closeModal(settingsModal); });
+    
+    // Toolkits
+    if (toolkitBtn) toolkitBtn.addEventListener('click', () => toolkitMenu.classList.toggle('hidden'));
+    if (getEl('tool-file-btn')) getEl('tool-file-btn').addEventListener('click', () => { fileInput.click(); toolkitMenu.classList.add('hidden'); });
+    if (getEl('tool-camera-btn')) getEl('tool-camera-btn').addEventListener('click', () => { openCamera(); toolkitMenu.classList.add('hidden'); });
+    if (getEl('tool-canva-btn')) getEl('tool-canva-btn').addEventListener('click', () => { openVirtualEnv('Canva Code'); toolkitMenu.classList.add('hidden'); });
+    if (getEl('tool-data-btn')) getEl('tool-data-btn').addEventListener('click', () => { openVirtualEnv('Data Analyst'); toolkitMenu.classList.add('hidden'); });
+    if (captureBtn) captureBtn.addEventListener('click', capturePhoto);
+    if (closeCameraBtn) closeCameraBtn.addEventListener('click', closeCamera);
+    if (closeVirtualEnvBtn) closeVirtualEnvBtn.addEventListener('click', closeVirtualEnv);
+    if (runAnalysisBtn) runAnalysisBtn.addEventListener('click', handleRunAnalysis);
+    if (addFileBtn) addFileBtn.addEventListener('click', () => {
+        const name = prompt("Enter file name:");
+        if (name) {
+            const targetFolder = selectedVirtualFolder || virtualFileSystem;
+            targetFolder[name] = { type: 'file', content: '' };
+            renderVirtualFiles();
+        }
+    });
+    if (addFolderBtn) addFolderBtn.addEventListener('click', () => {
+        const name = prompt("Enter folder name:");
+        if (name) {
+            const targetFolder = selectedVirtualFolder || virtualFileSystem;
+            targetFolder[name] = { type: 'folder', children: {} };
+            renderVirtualFiles();
+        }
+    });
+    
+    // Gemini Toolkit
+    if (geminiToolkitBtn) geminiToolkitBtn.addEventListener('click', () => openModal(geminiModal));
+    if (closeGeminiModalBtn) closeGeminiModalBtn.addEventListener('click', () => closeModal(geminiModal));
+    if (geminiModal) geminiModal.addEventListener('click', (e) => { if (e.target === geminiModal) closeModal(geminiModal); });
+    if (summarizeBtn) summarizeBtn.addEventListener('click', handleSummarize);
+    if (suggestReplyBtn) suggestReplyBtn.addEventListener('click', () => alert('Suggest Replies feature coming soon!'));
+    if (toneAnalyzerBtn) toneAnalyzerBtn.addEventListener('click', () => alert('Tone Analyzer feature coming soon!'));
+
+    // --- INITIALIZATION ---
+    async function initializeApp() {
+        populateVoiceList();
+        const sessionsData = await api.getAllSessions();
+        renderChatHistory(sessionsData, null);
+        renderSuggestionPrompts();
+        if (sessionsData && sessionsData.sessions && sessionsData.sessions.length > 0) {
+            await loadChat(sessionsData.sessions[0].session_id);
+        } else {
+            await handleNewChat();
+        }
+        checkChatState();
+    }
+
+    initializeApp();
 });
-
-clearChatSettingsButton.addEventListener('click', startNewChat);
-
-newChatButtonSidebar.addEventListener('click', startNewChat);
-
-function initializeChat() {
-    updateUserProfileUI();
-    // loadUserProfile();     // This function seems missing from your provided code, you may need to check it
-    setInitialSidebarState(); 
-
-    // This part is now simplified
-    if (allConversations.length > 0) {
-        loadConversation(allConversations[0].id);
-    } else {
-        // If no conversations exist, ask the backend to create one
-        startNewChat();
-    }
-    userInput.focus();
-    renderHistorySidebar();
-}
-
-document.addEventListener('DOMContentLoaded', initializeChat);
