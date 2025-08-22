@@ -48,10 +48,18 @@
                 </div>
             </div>
             <!-- Hero Image -->
-            <div class="hero-image-container flex justify-center items-center">
-                <img src="https://images.unsplash.com/photo-1620712943543-2858200f7426?q=80&w=1200&auto=format&fit=crop" 
-                     alt="AI robot hand touching a human hand" 
-                     class="rounded-3xl shadow-2xl shadow-teal-500/10 object-cover w-full max-h-96">
+                         <!-- Hero Image -->
+                        <!-- And replace it with this block -->
+            <div class="hero-image-container flex justify-center items-center rounded-3xl overflow-hidden">
+                <video src="{{ url_for('static', filename='videos/hero-video.mp4') }}"
+                       class="shadow-2xl shadow-teal-500/10 object-cover w-full max-h-96"
+                       autoplay loop muted playsinline>
+                    Your browser does not support the video tag.
+                </video>
+            </div>
+                         <!-- Hero Animation -->
+            <div id="particles-js" class="hero-image-container w-full h-full min-h-96">
+                <!-- This div will be filled with the animation canvas -->
             </div>
         </main>
     </div>
@@ -179,6 +187,102 @@
             </div>
         </div>
     </footer>
+        <!-- Add this entire block just before the closing </body> tag -->
+    <!-- Particle.js Animation Script -->
+    <script src="https://cdn.jsdelivr.net/npm/tsparticles@2/tsparticles.bundle.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            tsParticles.load("particles-js", {
+                // Set the background to be transparent so the site background shows
+                background: {
+                    color: {
+                        value: "transparent"
+                    }
+                },
+                fpsLimit: 60, // Set a frame rate limit for performance
+                // Interactivity settings
+                interactivity: {
+                    events: {
+                        // Make particles "grab" the cursor on hover
+                        onHover: {
+                            enable: true,
+                            mode: "grab"
+                        },
+                        // Push particles away on click
+                        onClick: {
+                            enable: true,
+                            mode: "push"
+                        },
+                        resize: true
+                    },
+                    modes: {
+                        grab: {
+                            distance: 140, // How far the grab effect works
+                            links: {
+                                opacity: 1
+                            }
+                        },
+                        push: {
+                            quantity: 4 // How many particles to push on click
+                        }
+                    }
+                },
+                // Main particle settings
+                particles: {
+                    // The color matches your site's teal accent
+                    color: {
+                        value: "#2dd4bf" 
+                    },
+                    // The lines connecting the particles
+                    links: {
+                        color: "#ffffff",
+                        distance: 150,
+                        enable: true,
+                        opacity: 0.2, // Make lines subtle
+                        width: 1
+                    },
+                    collisions: {
+                        enable: true
+                    },
+                    // How the particles move
+                    move: {
+                        direction: "none",
+                        enable: true,
+                        outModes: {
+                            default: "bounce"
+                        },
+                        random: true, // They move in random directions
+                        speed: 2, // Speed of the particles
+                        straight: false
+                    },
+                    // How many particles are on screen
+                    number: {
+                        density: {
+                            enable: true,
+                            area: 800
+                        },
+                        value: 80 // Total number of particles
+                    },
+                    // Opacity and Size of the particles
+                    opacity: {
+                        value: 0.5,
+                        random: true
+                    },
+                    shape: {
+                        type: "circle"
+                    },
+                    size: {
+                        value: { min: 1, max: 4 },
+                        random: true
+                    }
+                },
+                detectRetina: true // Makes it look sharp on high-resolution screens
+            });
+        });
+    </script>
+
+</body>
+</html>
 
 </body>
 </html>

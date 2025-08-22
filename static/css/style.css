@@ -831,3 +831,129 @@ body:not(.sidebar-closed) #sidebar-overlay { /* When sidebar is NOT closed (i.e.
     border-color: var(--accent-color-main);
     box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
 }
+/* --- VIRTUAL ENVIRONMENT PANEL STYLES --- */
+#virtual-env-panel {
+    flex: 1; /* Take up all available space in main-content */
+    display: flex;
+    gap: 1rem;
+    padding: 1rem;
+    background-color: var(--bg-color-secondary);
+    min-height: 0; /* Important for flexbox children to scroll properly */
+}
+
+#virtual-env-panel.hidden {
+    display: none;
+}
+
+#file-explorer, #editor-container, #output-container {
+    display: flex;
+    flex-direction: column;
+    background-color: var(--bg-color-primary);
+    border-radius: 0.5rem;
+    overflow: hidden; /* Hide overflowing content */
+}
+
+#file-explorer {
+    flex: 0 0 200px; /* Do not grow, do not shrink, base width 200px */
+}
+
+#editor-container {
+    flex: 1; /* Grow to take up space */
+}
+
+#output-container {
+    flex: 1; /* Grow to take up space */
+}
+
+.panel-title {
+    font-weight: 600;
+    padding: 0.75rem 1rem;
+    background-color: var(--bg-color-tertiary);
+    color: var(--text-color-dark);
+    border-bottom: 1px solid var(--border-color-light);
+}
+
+#file-list {
+    padding: 0.5rem;
+    overflow-y: auto;
+}
+
+.file-item {
+    padding: 0.5rem 0.75rem;
+    margin-bottom: 0.25rem;
+    border-radius: 0.25rem;
+    cursor: pointer;
+    color: var(--text-color-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.file-item:hover {
+    background-color: var(--bg-color-tertiary);
+}
+
+.file-item.active {
+    background-color: var(--accent-color-main);
+    color: white;
+    font-weight: 500;
+}
+
+#virtual-env-input, #virtual-env-output {
+    flex: 1;
+    width: 100%;
+    border: none;
+    outline: none;
+    padding: 1rem;
+    background-color: transparent;
+    color: var(--text-color-primary);
+    font-family: 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    resize: none;
+}
+
+#virtual-env-output-wrapper {
+    flex: 1;
+    overflow-y: auto; /* Allow output to scroll */
+    min-height: 0;
+}
+
+.followup-area {
+    display: flex;
+    padding: 0.75rem;
+    border-top: 1px solid var(--border-color-light);
+    gap: 0.75rem;
+}
+
+#virtual-env-followup {
+    flex: 1;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--border-color-medium);
+    border-radius: 0.25rem;
+    background-color: var(--bg-color-secondary);
+    color: var(--text-color-primary);
+    outline: none;
+}
+
+#virtual-env-followup:focus {
+    border-color: var(--accent-color-main);
+}
+
+#run-assistant-btn {
+    background-color: var(--accent-color-main);
+    color: white;
+    border: none;
+    border-radius: 0.25rem;
+    padding: 0.5rem 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: background-color 0.2s ease;
+}
+
+#run-assistant-btn:hover {
+    background-color: var(--accent-color-hover);
+}

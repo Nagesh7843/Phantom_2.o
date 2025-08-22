@@ -47,18 +47,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const imagePreviewContainer = getEl('image-preview-container');
     const imagePreview = getEl('image-preview');
     const removeImageBtn = getEl('remove-image-btn');
-    const virtualEnvModal = getEl('virtual-env-modal');
-    const virtualEnvWindow = getEl('virtual-env-window');
-    const virtualEnvHeader = getEl('virtual-env-header');
-    const closeVirtualEnvBtn = getEl('close-virtual-env-btn');
-    const virtualEnvTitle = getEl('virtual-env-title');
-    const virtualEnvInput = getEl('virtual-env-input');
-    const virtualEnvOutput = getEl('virtual-env-output');
-    const runAnalysisBtn = getEl('run-analysis-btn');
-    const virtualEnvFiles = getEl('virtual-env-files');
-    const virtualEnvFollowup = getEl('virtual-env-followup');
-    const addFileBtn = getEl('add-file-btn');
-    const addFolderBtn = getEl('add-folder-btn');
     
     const loadingIndicator = document.createElement('div');
     loadingIndicator.innerHTML = `<div class="text-center p-4 text-gray-400">Thinking...</div>`;
@@ -70,14 +58,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Global State & Data ---
     let currentSessionId = null;
     let chatHistory = [];
-    let virtualEnvHistory = [];
     let availableVoices = [];
     let activeStream = null;
     let activeTool = null;
     let attachedFile = null;
-    let virtualFileSystem = {};
-    let activeVirtualFile = null;
-    let selectedVirtualFolder = null;
     const synth = window.speechSynthesis;
     const allPrompts = [
         { title: "Explain quantum computing", subtitle: "in simple terms" },
@@ -119,7 +103,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // =====================================================================
-    // --- UI RENDERING & STATE ---
+    // --- UI RENDERING & STATE (Main Chat) ---
     // =====================================================================
     function renderSuggestionPrompts() {
         if (!suggestionGrid) return;
@@ -139,15 +123,8 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderChatHistory(sessionsData, activeSessionId) {
         if (!chatHistoryList) return;
         chatHistoryList.innerHTML = '';
-        
         const actualSessions = sessionsData ? sessionsData.sessions : null;
-
-        if (!Array.isArray(actualSessions)) {
-            chatHistoryList.innerHTML = '<p class="text-center text-gray-500 text-sm p-4">Error loading history.</p>';
-            return;
-        }
-
-        if (actualSessions.length === 0) {
+        if (!Array.isArray(actualSessions) || actualSessions.length === 0) {
             chatHistoryList.innerHTML = '<p class="text-center text-gray-500 text-sm p-4">No chat history.</p>';
             return;
         }
@@ -178,10 +155,8 @@ document.addEventListener('DOMContentLoaded', () => {
     
     function checkChatState() {
         if (!chatBody || !messagesContainer || !chatInput || !emptyStateSuggestions) return;
-        
         const messageCount = messagesContainer.querySelectorAll('.message-bubble').length;
         const isEffectivelyEmpty = messageCount === 0 && chatInput.value.length === 0 && !attachedFile;
-
         if (isEffectivelyEmpty) {
             chatBody.classList.add('is-empty');
             emptyStateSuggestions.classList.remove('hidden');
@@ -236,7 +211,107 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // =====================================================================
-    // --- EVENT HANDLERS ---
+// --- SETTINGS FUNCTIONS ---
+// =====================================================================
+
+
+function applySettings() {
+    // Apply Theme
+    const selectedTheme = themeSelect.value;
+    document.body.className = "bg-gray-800 text-gray-200 flex h-screen antialiased overflow-hidden"; // Reset to base classes
+    if (selectedTheme === 'theme-light') {
+        // You can define light theme classes here if you create them
+        // For now, it just uses the default dark theme.
+    }
+    
+    // Apply Display Name
+    const displayName = getEl('name-input').value;
+    const profileNameEl = userProfileBtn?.querySelector('.text-sm.font-semibold');
+    if (profileNameEl) {
+        profileNameEl.textContent = displayName;
+    }
+}
+
+// =====================================================================
+// --- SETTINGS FUNCTIONS ---
+// =====================================================================
+
+function applySettings() {
+    // ... (leave your applySettings code as is)
+}
+
+
+// REPLACE THE OLD saveSettings function with THIS NEW async version
+async function saveSettings() {
+    const theme = themeSelect.value;
+    const voice = voiceSelect.value;
+    const displayName = getEl('name-input').value;
+
+    // --- NEW: API call to save settings to the backend ---
+    try {
+        const response = await fetch(`${BACKEND_API_BASE_URL}/api/update_profile`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                displayName: displayName,
+                theme: theme,
+                voice: voice
+            })
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+            // Also save to localStorage for instant UI updates
+            localStorage.setItem('phantom-theme', theme);
+            localStorage.setItem('phantom-voice', voice);
+            localStorage.setItem('phantom-display-name', displayName);
+            
+            applySettings(); // Apply visually
+            closeModal(settingsModal);
+            alert('Settings saved successfully!'); // Give user feedback
+            
+            // OPTIONAL: Reload the page to ensure all template variables are fresh
+            // window.location.reload(); 
+        } else {
+            alert('Error saving settings: ' + result.error);
+        }
+    } catch (error) {
+        console.error('Failed to save settings:', error);
+        alert('Could not connect to the server to save settings.');
+    }
+}
+
+
+function loadSettings() {
+    // ... (leave your loadSettings code as is)
+}
+
+function loadSettings() {
+    const theme = localStorage.getItem('phantom-theme') || 'theme-dark';
+    const voice = localStorage.getItem('phantom-voice');
+    const name = localStorage.getItem('phantom-display-name');
+
+    themeSelect.value = theme;
+    if (name && getEl('name-input')) {
+        getEl('name-input').value = name;
+    }
+    
+    // We need to wait for voices to be loaded before setting the value
+    const voiceInterval = setInterval(() => {
+        if (availableVoices.length) {
+            if (voice) voiceSelect.value = voice;
+            clearInterval(voiceInterval);
+        }
+    }, 100);
+
+    applySettings();
+}
+    // Add this line with your other modal event listeners
+getEl('save-settings-btn')?.addEventListener('click', saveSettings);
+
+    // =====================================================================
+    // --- EVENT HANDLERS (Main Chat) ---
     // =====================================================================
     async function handleSendMessage(parts) {
         let messageParts = parts;
@@ -278,7 +353,9 @@ document.addEventListener('DOMContentLoaded', () => {
         selectTool(null);
 
         const payload = { contents: chatHistory, session_id: currentSessionId };
+        loadingIndicator.style.display = 'block';
         const result = await api.sendMessage(payload);
+        loadingIndicator.style.display = 'none';
         
         let modelResponseText = "Sorry, something went wrong.";
         if (result && result.candidates && result.candidates[0]?.content?.parts[0]?.text) {
@@ -349,13 +426,10 @@ document.addEventListener('DOMContentLoaded', () => {
     async function handleSummarize() {
         if (!geminiOutput) return;
         geminiOutput.textContent = 'Summarizing...';
-        
         const conversationText = chatHistory.map(msg => `${msg.role}: ${msg.parts[0].text}`).join('\n');
         const prompt = `Please summarize the following conversation:\n\n${conversationText}`;
-        
         const payload = { contents: [{ role: "user", parts: [{ text: prompt }] }], session_id: currentSessionId };
         const result = await api.sendMessage(payload);
-        
         if (result && result.candidates && result.candidates[0]?.content?.parts[0]?.text) {
             geminiOutput.textContent = result.candidates[0].content.parts[0].text;
         } else {
@@ -388,12 +462,10 @@ document.addEventListener('DOMContentLoaded', () => {
         cameraCaptureCanvas.width = cameraStreamEl.videoWidth;
         cameraCaptureCanvas.height = cameraStreamEl.videoHeight;
         context.drawImage(cameraStreamEl, 0, 0, cameraStreamEl.videoWidth, cameraStreamEl.videoHeight);
-        
         cameraCaptureCanvas.toBlob(blob => {
             attachedFile = new File([blob], "capture.jpg", { type: "image/jpeg" });
             showImagePreview(attachedFile);
         }, 'image/jpeg');
-        
         closeCamera();
     }
 
@@ -441,103 +513,177 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // =====================================================================
-    // --- VIRTUAL ENVIRONMENT FUNCTIONS ---
+    // --- VIRTUAL ENVIRONMENT FUNCTIONS (NEW & COMPLETE) ---
     // =====================================================================
-    function openVirtualEnv(mode) {
-        if (!virtualEnvModal || !virtualEnvTitle || !virtualEnvInput || !virtualEnvOutput) return;
-        virtualEnvTitle.textContent = `${mode} Environment`;
-        virtualEnvInput.value = '';
-        virtualEnvOutput.innerHTML = '';
-        virtualEnvHistory = [];
-        virtualFileSystem = { 'Project': { type: 'folder', children: { 'main.js': { type: 'file', content: '' } } } };
-        activeVirtualFile = 'main.js';
-        selectedVirtualFolder = virtualFileSystem.Project;
-        renderVirtualFiles();
-        virtualEnvModal.classList.add('open');
-    }
+    function setupVirtualEnvironment() {
+        const virtualEnvModal = document.getElementById('virtual-env-modal');
+        if (!virtualEnvModal) {
+            console.log("Virtual Environment elements not found, skipping setup.");
+            return;
+        }
+        const closeVirtualEnvBtn = document.getElementById('close-virtual-env-btn');
+        const toolCanvaBtn = document.getElementById('tool-canva-btn');
+        const toolDataBtn = document.getElementById('tool-data-btn');
+        const fileListContainer = document.getElementById('virtual-env-files');
+        const virtualEnvInput = document.getElementById('virtual-env-input');
+        const virtualEnvOutput = document.getElementById('virtual-env-output');
+        const virtualEnvFollowup = document.getElementById('virtual-env-followup');
+        const runAnalysisBtn = document.getElementById('run-analysis-btn');
+        const virtualEnvTitle = document.getElementById('virtual-env-title');
+        const addFileBtn = document.getElementById('add-file-btn');
+        const addFolderBtn = document.getElementById('add-folder-btn');
 
-    function closeVirtualEnv() {
-        if (virtualEnvModal) virtualEnvModal.classList.remove('open');
-    }
-
-    function renderVirtualFiles(container = virtualEnvFiles, folder = virtualFileSystem, level = 0) {
-        if (!container) return;
-        if (level === 0) container.innerHTML = '';
-
-        Object.keys(folder).forEach(name => {
-            const item = folder[name];
-            const itemEl = document.createElement('div');
-            itemEl.className = `group relative flex items-center p-2 rounded-md cursor-pointer ${name === activeVirtualFile ? 'bg-teal-500/20' : 'hover:bg-gray-700'}`;
-            itemEl.style.paddingLeft = `${level * 1.5 + 0.5}rem`;
-            
-            const icon = item.type === 'folder' ? '📁' : '📄';
-            itemEl.innerHTML = `<span>${icon} ${name}</span>`;
-            
-            const controls = document.createElement('div');
-            controls.className = 'absolute right-2 top-1/2 -translate-y-1/2 flex items-center opacity-0 group-hover:opacity-100 transition-opacity';
-            
-            const deleteBtn = document.createElement('button');
-            deleteBtn.title = "Delete";
-            deleteBtn.className = "p-1 text-gray-400 hover:text-white";
-            deleteBtn.innerHTML = `&times;`;
-            deleteBtn.onclick = (e) => {
-                e.stopPropagation();
-                if (confirm(`Are you sure you want to delete ${name}?`)) {
-                    delete virtualFileSystem[name]; // Simplified for root level
-                    renderVirtualFiles();
+        let activeVirtualFile = 'public/index.html';
+        const virtualFileSystem = {
+            'public': {
+                type: 'folder',
+                children: {
+                    'index.html': { type: 'file', content: `<!DOCTYPE html>\n<html>\n<head>\n    <title>My App</title>\n</head>\n<body>\n    <h1>Welcome!</h1>\n</body>\n</html>` },
+                    'css': { type: 'folder', children: { 'style.css': { type: 'file', content: `body { font-family: sans-serif; }` } } }
                 }
-            };
-            controls.appendChild(deleteBtn);
-            itemEl.appendChild(controls);
+            },
+            'src': { type: 'folder', children: { 'app.js': { type: 'file', content: `console.log('Hello, World!');` } } },
+            'package.json': { type: 'file', content: `{\n    "name": "my-app",\n    "version": "1.0.0"\n}` }
+        };
 
-            itemEl.addEventListener('click', () => {
-                if (item.type === 'file') {
-                    if (activeVirtualFile && virtualFileSystem[activeVirtualFile]) {
-                        virtualFileSystem[activeVirtualFile].content = virtualEnvInput.value;
+        const renderFileExplorer = () => {
+            if (!fileListContainer) return;
+            fileListContainer.innerHTML = '';
+            const createTree = (node, pathPrefix = '') => {
+                const container = document.createElement('div');
+                Object.keys(node).sort((a, b) => {
+                    if (node[a].type === 'folder' && node[b].type === 'file') return -1;
+                    if (node[a].type === 'file' && node[b].type === 'folder') return 1;
+                    return a.localeCompare(b);
+                }).forEach(name => {
+                    const currentPath = pathPrefix ? `${pathPrefix}/${name}` : name;
+                    const item = node[name];
+                    const element = document.createElement('div');
+                    element.dataset.path = currentPath;
+                    if (item.type === 'folder') {
+                        element.className = 'folder-item p-1 rounded-md cursor-pointer hover:bg-gray-700';
+                        element.innerHTML = `<span class="flex items-center">📁 <span class="ml-2">${name}</span></span>`;
+                        container.appendChild(element);
+                        const childrenContainer = document.createElement('div');
+                        childrenContainer.className = 'folder-children pl-4';
+                        childrenContainer.appendChild(createTree(item.children, currentPath));
+                        container.appendChild(childrenContainer);
+                    } else {
+                        element.className = 'file-item p-1 rounded-md cursor-pointer hover:bg-gray-700';
+                        if (currentPath === activeVirtualFile) element.classList.add('bg-teal-500', 'text-white');
+                        element.innerHTML = `<span class="flex items-center text-gray-400">📄 <span class="ml-2 text-gray-200 truncate">${name}</span></span>`;
+                        container.appendChild(element);
                     }
-                    activeVirtualFile = name;
-                    virtualEnvInput.value = item.content;
+                });
+                return container;
+            };
+            fileListContainer.appendChild(createTree(virtualFileSystem));
+        };
+
+        const getNodeByPath = (path, startNode = virtualFileSystem) => {
+            const parts = path.split('/');
+            let currentNode = startNode;
+            for (const part of parts) {
+                const nextNode = currentNode.children ? currentNode.children[part] : currentNode[part];
+                if (!nextNode) return null;
+                currentNode = nextNode;
+            }
+            return currentNode;
+        };
+
+        const saveCurrentFileContent = () => {
+            if (!activeVirtualFile) return;
+            const node = getNodeByPath(activeVirtualFile);
+            if (node && node.type === 'file') node.content = virtualEnvInput.value;
+        };
+
+        const loadFileInEditor = (path) => {
+            const node = getNodeByPath(path);
+            if (node && node.type === 'file') {
+                activeVirtualFile = path;
+                virtualEnvInput.value = node.content;
+                renderFileExplorer();
+                virtualEnvInput.focus();
+            }
+        };
+
+        const createNewItem = (type) => {
+            const name = prompt(`Enter a name for the new ${type}:`);
+            if (!name || name.includes('/')) {
+                if (name) alert("Invalid name. Cannot contain '/'.");
+                return;
+            }
+            let parentPath = '';
+            if (activeVirtualFile) {
+                const activeNode = getNodeByPath(activeVirtualFile);
+                parentPath = activeNode.type === 'folder' ? activeVirtualFile : activeVirtualFile.split('/').slice(0, -1).join('/');
+            }
+            const parent = parentPath ? getNodeByPath(parentPath) : virtualFileSystem;
+            const targetChildren = parent.children || parent;
+            if (targetChildren[name]) {
+                alert(`${type} with that name already exists here.`);
+                return;
+            }
+            targetChildren[name] = (type === 'file') ? { type: 'file', content: '' } : { type: 'folder', children: {} };
+            renderFileExplorer();
+        };
+
+        const runAnalysis = async () => {
+            const followupText = virtualEnvFollowup.value.trim();
+            if (!followupText) return;
+            saveCurrentFileContent();
+            const flattenFileSystem = (node, prefix = '') => {
+                let text = '';
+                for (const name in node) {
+                    const path = prefix ? `${prefix}/${name}` : name;
+                    const item = node[name];
+                    if (item.type === 'file') text += `--- FILE: ${path} ---\n\`\`\`\n${item.content}\n\`\`\`\n\n`;
+                    else if (item.type === 'folder') text += flattenFileSystem(item.children, path);
                 }
-                selectedVirtualFolder = item.type === 'folder' ? item : folder;
-                renderVirtualFiles();
-            });
+                return text;
+            };
+            const mode = virtualEnvTitle.textContent.includes('Code') ? 'Canva Code expert' : 'Data Analyst';
+            const prompt = `Act as a ${mode}. Based on this project structure and content:\n\n${flattenFileSystem(virtualFileSystem)}My question is: "${followupText}"`;
+            const thinkingMessage = document.createElement('div');
+            thinkingMessage.className = 'p-3 rounded-lg text-sm bg-gray-800';
+            thinkingMessage.innerHTML = '...';
+            virtualEnvOutput.appendChild(thinkingMessage);
+            virtualEnvOutput.scrollTop = virtualEnvOutput.scrollHeight;
+            runAnalysisBtn.disabled = true;
+            try {
+                const result = await api.sendMessage({ contents: [{ role: 'user', parts: [{ text: prompt }] }], session_id: currentSessionId });
+                const aiResponseText = result?.candidates?.[0]?.content?.parts?.[0]?.text || "No valid response.";
+                thinkingMessage.innerHTML = aiResponseText.replace(/\n/g, '<br>');
+            } catch (error) {
+                thinkingMessage.innerHTML = `<p class="text-red-400">Error: ${error.message}</p>`;
+            } finally {
+                virtualEnvFollowup.value = '';
+                runAnalysisBtn.disabled = false;
+                virtualEnvOutput.scrollTop = virtualEnvOutput.scrollHeight;
+            }
+        };
 
-            container.appendChild(itemEl);
-
-            if (item.type === 'folder' && item.children) {
-                renderVirtualFiles(container, item.children, level + 1);
+        const openVirtualEnv = (mode) => {
+            virtualEnvTitle.textContent = mode === 'code' ? 'Canva Code Environment' : 'Data Analysis Environment';
+            renderFileExplorer();
+            loadFileInEditor(activeVirtualFile);
+            virtualEnvModal.classList.add('open');
+        };
+        
+        toolCanvaBtn?.addEventListener('click', () => { openVirtualEnv('code'); toolkitMenu.classList.add('hidden'); });
+        toolDataBtn?.addEventListener('click', () => { openVirtualEnv('data'); toolkitMenu.classList.add('hidden'); });
+        closeVirtualEnvBtn?.addEventListener('click', () => virtualEnvModal.classList.remove('open'));
+        addFileBtn?.addEventListener('click', () => createNewItem('file'));
+        addFolderBtn?.addEventListener('click', () => createNewItem('folder'));
+        runAnalysisBtn?.addEventListener('click', runAnalysis);
+        virtualEnvFollowup?.addEventListener('keypress', (e) => { if (e.key === 'Enter') runAnalysisBtn.click(); });
+        fileListContainer?.addEventListener('click', (e) => {
+            const target = e.target.closest('.file-item');
+            if (target) {
+                saveCurrentFileContent();
+                loadFileInEditor(target.dataset.path);
             }
         });
-    }
-    
-    async function handleRunAnalysis() {
-        if (!virtualEnvInput || !virtualEnvOutput || !virtualEnvFollowup) return;
-        const followupText = virtualEnvFollowup.value.trim();
-        if (activeVirtualFile) {
-            virtualFileSystem[activeVirtualFile].content = virtualEnvInput.value;
-        }
-
-        let prompt = `Act as a ${virtualEnvTitle.textContent.includes('Code') ? 'Canva Code expert' : 'Data Analyst'}. `;
-        prompt += `Here are the files in the project:\n`;
-        Object.keys(virtualFileSystem).forEach(name => {
-            prompt += `--- ${name} ---\n${virtualFileSystem[name].content}\n\n`;
-        });
-        prompt += `My question is: ${followupText}`;
-
-        virtualEnvOutput.innerHTML += `<div class="p-2 bg-gray-700 rounded-lg"><strong>You:</strong> ${followupText}</div>`;
-        virtualEnvOutput.scrollTop = virtualEnvOutput.scrollHeight;
-        virtualEnvFollowup.value = '';
-
-        const payload = { contents: [{ role: 'user', parts: [{ text: prompt }] }], session_id: currentSessionId };
-        const result = await api.sendMessage(payload);
-        
-        let modelResponseText = "Could not get an analysis.";
-        if (result && result.candidates && result.candidates[0]?.content?.parts[0]?.text) {
-            modelResponseText = result.candidates[0].content.parts[0].text;
-        }
-        
-        virtualEnvOutput.innerHTML += `<div class="p-2 bg-gray-800 rounded-lg"><strong>AI:</strong> ${modelResponseText}</div>`;
-        virtualEnvOutput.scrollTop = virtualEnvOutput.scrollHeight;
     }
 
     // --- Attaching Event Listeners Safely ---
@@ -568,11 +714,9 @@ document.addEventListener('DOMContentLoaded', () => {
         document.body.classList.add(themeSelect.value);
     });
     
-    // Sidebar Toggles
     if (sidebarToggleBtnHeader) sidebarToggleBtnHeader.addEventListener('click', toggleSidebar);
     if (sidebarToggleBtnSidebar) sidebarToggleBtnSidebar.addEventListener('click', toggleSidebar);
     
-    // Suggestion Buttons (delegated)
     if(suggestionGrid) {
         suggestionGrid.addEventListener('click', (e) => {
             const btn = e.target.closest('.suggestion-btn');
@@ -582,7 +726,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Modals
     function openModal(modal) { if (modal) modal.classList.remove('hidden'); }
     function closeModal(modal) { if (modal) modal.classList.add('hidden'); }
     if (settingsBtn) settingsBtn.addEventListener('click', () => openModal(settingsModal));
@@ -590,34 +733,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (closeModalBtn) closeModalBtn.addEventListener('click', () => closeModal(settingsModal));
     if (settingsModal) settingsModal.addEventListener('click', (e) => { if (e.target === settingsModal) closeModal(settingsModal); });
     
-    // Toolkits
-    if (toolkitBtn) toolkitBtn.addEventListener('click', () => toolkitMenu.classList.toggle('hidden'));
+    if (toolkitBtn) toolkitBtn.addEventListener('click', (e) => { e.stopPropagation(); toolkitMenu.classList.toggle('hidden'); });
     if (getEl('tool-file-btn')) getEl('tool-file-btn').addEventListener('click', () => { fileInput.click(); toolkitMenu.classList.add('hidden'); });
     if (getEl('tool-camera-btn')) getEl('tool-camera-btn').addEventListener('click', () => { openCamera(); toolkitMenu.classList.add('hidden'); });
-    if (getEl('tool-canva-btn')) getEl('tool-canva-btn').addEventListener('click', () => { openVirtualEnv('Canva Code'); toolkitMenu.classList.add('hidden'); });
-    if (getEl('tool-data-btn')) getEl('tool-data-btn').addEventListener('click', () => { openVirtualEnv('Data Analyst'); toolkitMenu.classList.add('hidden'); });
     if (captureBtn) captureBtn.addEventListener('click', capturePhoto);
     if (closeCameraBtn) closeCameraBtn.addEventListener('click', closeCamera);
-    if (closeVirtualEnvBtn) closeVirtualEnvBtn.addEventListener('click', closeVirtualEnv);
-    if (runAnalysisBtn) runAnalysisBtn.addEventListener('click', handleRunAnalysis);
-    if (addFileBtn) addFileBtn.addEventListener('click', () => {
-        const name = prompt("Enter file name:");
-        if (name) {
-            const targetFolder = selectedVirtualFolder || virtualFileSystem;
-            targetFolder[name] = { type: 'file', content: '' };
-            renderVirtualFiles();
-        }
-    });
-    if (addFolderBtn) addFolderBtn.addEventListener('click', () => {
-        const name = prompt("Enter folder name:");
-        if (name) {
-            const targetFolder = selectedVirtualFolder || virtualFileSystem;
-            targetFolder[name] = { type: 'folder', children: {} };
-            renderVirtualFiles();
-        }
-    });
     
-    // Gemini Toolkit
     if (geminiToolkitBtn) geminiToolkitBtn.addEventListener('click', () => openModal(geminiModal));
     if (closeGeminiModalBtn) closeGeminiModalBtn.addEventListener('click', () => closeModal(geminiModal));
     if (geminiModal) geminiModal.addEventListener('click', (e) => { if (e.target === geminiModal) closeModal(geminiModal); });
@@ -627,6 +748,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- INITIALIZATION ---
     async function initializeApp() {
+        loadSettings(); // ADD THIS LINE
         populateVoiceList();
         const sessionsData = await api.getAllSessions();
         renderChatHistory(sessionsData, null);
@@ -637,7 +759,10 @@ document.addEventListener('DOMContentLoaded', () => {
             await handleNewChat();
         }
         checkChatState();
+        
+        // This single line activates all the new virtual environment functionality.
+        setupVirtualEnvironment();
     }
-
+    
     initializeApp();
 });

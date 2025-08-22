@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register - Phantom</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style> body { font-family: 'Inter', sans-serif; } </style>
+</head>
+<body class="bg-gray-900 text-white antialiased">
+
+    <div class="flex items-center justify-center min-h-screen p-4">
+        <div class="max-w-md w-full bg-gray-800 rounded-2xl shadow-2xl p-8 md:p-12">
+            <h1 class="text-3xl font-bold mb-2 text-teal-400">Create Account</h1>
+            <h2 class="text-gray-400 mb-8">Join Phantom AI today.</h2>
+            
+            <form id="register-form">
+                <!-- Display Name Input -->
+                <div class="mb-5 relative">
+                    <input type="text" id="display-name" name="displayName" placeholder="Full Name" required class="w-full pl-4 pr-4 py-3 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none transition-all duration-300">
+                </div>
+
+                <!-- Email Input -->
+                <div class="mb-5 relative">
+                    <input type="email" id="email" name="username" placeholder="Email Address" required class="w-full pl-4 pr-4 py-3 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none transition-all duration-300">
+                </div>
+
+                <!-- Password Input -->
+                <div class="mb-5 relative">
+                    <input type="password" id="password" name="password" placeholder="Password" required class="w-full pl-4 pr-4 py-3 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none transition-all duration-300">
+                </div>
+                
+                <!-- Error Message -->
+                <p id="error-message" class="text-red-400 text-sm text-center mb-4 hidden"></p>
+
+                <!-- Sign Up Button -->
+                <button type="submit" class="w-full bg-teal-500 hover:bg-teal-600 text-white font-bold py-3 px-4 rounded-lg transition-all duration-300 shadow-lg shadow-teal-500/20 transform hover:scale-105">
+                    SIGN UP
+                </button>
+            </form>
+
+            <div class="mt-6 text-center text-sm">
+                <p class="text-gray-400">
+                    Already have an account? <a href="{{ url_for('login') }}" class="text-teal-400 hover:text-teal-300 transition-colors duration-300">Log In</a>
+                </p>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // --- IMPORTANT: CONFIGURE YOUR BACKEND URL ---
+        const BACKEND_API_BASE_URL = "http://127.0.0.1:5000";
+
+        document.getElementById('register-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const form = e.target;
+            const displayName = form.elements['displayName'].value;
+            const username = form.elements['username'].value; // email
+            const password = form.elements['password'].value;
+            const errorMessageEl = document.getElementById('error-message');
+
+            try {
+                const response = await fetch(`${BACKEND_API_BASE_URL}/api/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ displayName, username, password })
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    // Registration successful, backend logs us in and redirects
+                    window.location.href = `${BACKEND_API_BASE_URL}/dashboard`;
+                } else {
+                    errorMessageEl.textContent = result.error || 'Registration failed.';
+                    errorMessageEl.classList.remove('hidden');
+                }
+            } catch (error) {
+                errorMessageEl.textContent = 'Could not connect to the server.';
+                errorMessageEl.classList.remove('hidden');
+            }
+        });
+    </script>
+</body>
+</html>
