@@ -6,10 +6,46 @@
     <title>Login - Phantom</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <style> body { font-family: 'Inter', sans-serif; } </style>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            overflow: hidden; /* Prevent scrollbars if canvas is slightly larger */
+            position: relative; /* Needed for absolute positioning of canvas */
+            background-color: #1a202c; /* Fallback background color */
+        }
+
+        /* Styles for the particle canvas */
+        #particleCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: block;
+            z-index: -1; /* Place canvas behind other content */
+            background: linear-gradient(135deg, #1a1a2e, #16213e, #0f3460); /* Gradient for the background itself */
+        }
+
+        /* Ensure your login content is above the canvas */
+        .login-container {
+            position: relative;
+            z-index: 1;
+            /* Flexbox utilities from Tailwind will handle centering */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 1rem;
+        }
+    </style>
 </head>
-<body class="bg-gray-900 text-white antialiased">
-    <div class="flex items-center justify-center min-h-screen p-4">
+<body class="text-white antialiased">
+    <!-- Particle Canvas - will be filled by JS -->
+    <canvas id="particleCanvas"></canvas>
+
+    <!-- Main Login Content Container -->
+    <div class="login-container">
         <div class="grid md:grid-cols-2 gap-0 max-w-4xl w-full bg-gray-800 rounded-2xl shadow-2xl overflow-hidden">
             <div class="hidden md:flex flex-col justify-center items-center p-12 bg-gray-800/50" style="background-image: url('https://images.unsplash.com/photo-1511376777868-611b5456c4d5?q=80&w=1200&auto=format&fit=crop'); background-size: cover; background-position: center;">
                  <div class="bg-black bg-opacity-50 p-8 rounded-xl backdrop-blur-sm text-center">
@@ -81,6 +117,74 @@
                 errorMessageEl.classList.remove('hidden');
             }
         });
+
+        // --- Particle Background Script ---
+        const canvas = document.getElementById('particleCanvas');
+        const ctx = canvas.getContext('2d');
+        let particles = [];
+        const numParticles = 80; // Fewer particles for a less busy background
+
+        // Set canvas size to full window
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        // Handle window resizing
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            createParticles(); // Re-create particles for new dimensions
+        });
+
+        class Particle {
+            constructor() {
+                this.x = Math.random() * canvas.width;
+                this.y = Math.random() * canvas.height;
+                this.size = Math.random() * 3 + 0.5; // Smaller particles
+                this.speedX = Math.random() * 1.5 - 0.75; // Slower movement
+                this.speedY = Math.random() * 1.5 - 0.75;
+                this.color = `rgba(255, 255, 255, ${Math.random() * 0.4 + 0.1})`; // More transparent
+            }
+
+            update() {
+                this.x += this.speedX;
+                this.y += this.speedY;
+
+                // Wrap around edges (instead of bouncing)
+                if (this.x > canvas.width + this.size) this.x = -this.size;
+                else if (this.x < -this.size) this.x = canvas.width + this.size;
+                if (this.y > canvas.height + this.size) this.y = -this.size;
+                else if (this.y < -this.size) this.y = canvas.height + this.size;
+            }
+
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        function createParticles() {
+            particles = []; // Clear existing particles
+            for (let i = 0; i < numParticles; i++) {
+                particles.push(new Particle());
+            }
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            // Use a semi-transparent fill to create a "fade trail" effect
+            ctx.fillStyle = 'rgba(15, 52, 96, 0.1)'; // Darker background color of the gradient
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            for (let i = 0; i < particles.length; i++) {
+                particles[i].update();
+                particles[i].draw();
+            }
+        }
+
+        createParticles();
+        animate();
     </script>
 </body>
 </html>

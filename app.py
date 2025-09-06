@@ -470,26 +470,17 @@ def chat_api():
         elif new_user_message_content.strip():
             print("DEBUG: messages_collection not available, user message not saved to DB.")
 
-
         instruction_text = f"""
         instruction_text = f
-You are Phantom_2.o, an advanced AI assistant created and trained by Nagesh Gaikwad.
-Your role is to provide clear, structured, and helpful responses to user queries.
-Dont use # or * in answer any markups 
-Or you answer should be in structured format have a some spacing between woerd or line or in in paragraph format    
-Use emojis naturally in your answers.  
-Always format responses in this style:
+        You are Phantom_2.o, an advanced AI assistant created and trained by Nagesh Gaikwad.
+Your answers must always be well-structured, clear, and professional, similar to ChatGPT’s response style. 
+Do not use any special formatting characters like '*', '#', or extra placeholders. 
 
- A short, relevant title for the response,\n
-
-A detailed but friendly explanation. Add emojis where suitable to make it engaging.\n
-
- Example (only if it makes sense):
-
-IMPORTANT:
-- Ensure all content fits within these sections.
-- If you provide code, always use proper Markdown code blocks (e.g., ```python\\nprint('Hello');\\n```).
-- If you reference information, mention it generally (e.g., "Based on my knowledge..." or "Data indicates..."). Do not hallucinate specific sources if you don't have them.
+Response Guidelines:
+1. Begin with a short introduction or summary relevant to the user’s query.
+2. Present explanations in clean paragraphs with clear flow.
+3. When listing items or steps, use plain numbering (1, 2, 3...) or dashes (-) without symbols like '*' or '#'.
+4. If you provide code, always put it inside proper Markdown code blocks. Example:
 - Ensure your response is in {language_name} language.
 """
         
@@ -587,6 +578,56 @@ def get_session_history(session_id):
     except Exception as e:
         app.logger.error(f"Error fetching chat history for session {session_id}: {e}", exc_info=True)
         return jsonify({"error": "Failed to load history for this session."}), 500
+
+# --- NEW: API for updating/deleting a chat session ---
+@app.route('/api/session/<session_id>', methods=['PUT', 'DELETE'])
+def manage_session(session_id):
+    if not session.get('user') or mongo_db is None:
+        return jsonify({"error": "Unauthorized or MongoDB not connected."}), 401
+    
+    user_id = session['google_id']
+    try:
+        session_id_obj = ObjectId(session_id)
+    except Exception:
+        return jsonify({"error": "Invalid session ID format."}), 400
+
+    # Ensure the user owns this session before proceeding
+    session_doc = chat_sessions_collection.find_one({'_id': session_id_obj, 'user_id': user_id})
+    if not session_doc:
+        return jsonify({"error": "Session not found or not authorized."}), 404
+
+    # --- HANDLE DELETION ---
+    if request.method == 'DELETE':
+        try:
+            # Delete the session itself
+            chat_sessions_collection.delete_one({'_id': session_id_obj, 'user_id': user_id})
+            # Delete all messages associated with the session
+            messages_collection.delete_many({'session_id': session_id_obj, 'user_id': user_id})
+            return jsonify({"message": "Session and associated messages deleted successfully."}), 200
+        except Exception as e:
+            app.logger.error(f"Error deleting session {session_id} for user {user_id}: {e}", exc_info=True)
+            return jsonify({"error": "Failed to delete session."}), 500
+
+    # --- HANDLE RENAMING (PUT) ---
+    if request.method == 'PUT':
+        data = request.json
+        new_title = data.get('title')
+        if not new_title or not isinstance(new_title, str) or len(new_title.strip()) == 0:
+            return jsonify({"error": "New title is required and cannot be empty."}), 400
+        
+        try:
+            chat_sessions_collection.update_one(
+                {'_id': session_id_obj, 'user_id': user_id},
+                {'$set': {'title': new_title.strip()}}
+            )
+            return jsonify({"message": "Session renamed successfully.", "new_title": new_title.strip()}), 200
+        except Exception as e:
+            app.logger.error(f"Error renaming session {session_id} for user {user_id}: {e}", exc_info=True)
+            return jsonify({"error": "Failed to rename session."}), 500
+
+    # Fallback for other methods if any were added to the route
+    return jsonify({"error": "Method not allowed."}), 405
+
 
 # --- NEW: Subscription Integration (Sketch) ---
 @app.route('/api/create_payment_session', methods=['POST'])

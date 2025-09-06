@@ -19,13 +19,13 @@
         #chat-body.is-empty #search-bar-wrapper { background-color: rgba(31, 41, 55, 0.8); backdrop-filter: blur(8px); }
         #input-container, #search-bar-wrapper { transition: all 0.3s ease-in-out; }
 
-        #virtual-env-modal {
+        #virtual-env-modal, #profile-modal, #edit-profile-modal, #settings-modal {
             transition: transform 0.3s ease-in-out, opacity 0.3s ease-in-out;
             transform: scale(0.95);
             opacity: 0;
             pointer-events: none;
         }
-        #virtual-env-modal.open {
+        #virtual-env-modal.open, #profile-modal.open, #edit-profile-modal.open, #settings-modal.open {
             transform: scale(1);
             opacity: 1;
             pointer-events: auto;   
@@ -35,6 +35,41 @@
             cursor: col-resize;
             width: 4px;
             flex-shrink: 0;
+        }
+        
+        /* Styles from Code Editor */
+        .file-item:hover, .folder-header:hover {
+            background-color: #374151; /* gray-700 */
+        }
+        .context-menu {
+            display: none;
+            position: absolute;
+            background-color: #1f2937; /* gray-800 */
+            border: 1px solid #374151; /* gray-700 */
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+            z-index: 1000;
+            width: 150px;
+        }
+        .context-menu-item {
+            padding: 8px 16px;
+            cursor: pointer;
+        }
+        .context-menu-item:hover {
+            background-color: #374151; /* gray-700 */
+        }
+        .folder-content {
+            padding-left: 1rem;
+        }
+        .folder-arrow {
+            transition: transform 0.2s;
+        }
+        .folder-arrow.collapsed {
+            transform: rotate(-90deg);
+        }
+        .output-tab.active {
+            background-color: #374151; /* gray-700 */
+            color: #f3f4f6; /* gray-100 */
         }
     </style>
 </head>
@@ -50,18 +85,18 @@
                 <div class="px-4 pb-2"><div class="relative"><span class="absolute inset-y-0 left-0 flex items-center pl-3"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg></span><input type="search" class="w-full bg-gray-800 text-sm pl-10 pr-4 py-2 rounded-lg border border-gray-700 focus:outline-none focus:ring-1 focus:ring-teal-500" placeholder="Search history..."></div></div>
                 <nav id="chat-history-list" class="flex-1 overflow-y-auto px-4 space-y-2"></nav>
                 <div class="mt-auto p-4 space-y-2 border-t border-gray-800"><a href="#" class="flex items-center px-3 py-2 text-sm font-medium rounded-md hover:bg-gray-700"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9V3m0 18a9 9 0 009-9m-9 9a9 9 0 00-9-9" /></svg>Explore</a><a href="#" class="flex items-center px-3 py-2 text-sm font-medium rounded-md hover:bg-gray-700"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.196-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.783-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" /></svg>Subscription</a></div>
-                <div id="user-profile-btn" class="p-4 border-t border-gray-800 cursor-pointer hover:bg-gray-700"><div class="flex items-center"><img class="h-10 w-10 rounded-full object-cover" src="{{ user_picture_url or 'https://placehold.co/40x40/4A5568/E2E8F0?text=U' }}" alt="User Avatar"><div class="ml-3"><p class="text-sm font-semibold text-white">{{ user_display_name }}</p><a href="{{ url_for('logout') }}" class="text-xs text-gray-400 hover:text-teal-400">Log out</a></div></div></div>
+                <div id="user-profile-btn" class="p-4 border-t border-gray-800 cursor-pointer hover:bg-gray-700"><div class="flex items-center"><img class="user-avatar-img h-10 w-10 rounded-full object-cover" src="{{ user_picture_url or 'https://placehold.co/40x40/4A5568/E2E8F0?text=U' }}" alt="User Avatar"><div class="ml-3"><p class="user-display-name text-sm font-semibold text-white">{{ user_display_name }}</p><p class="text-xs text-gray-400">View Profile</p></div></div></div>
             </div>
             <div class="nav-item" id="nav-item-code-assistant">
-                    <i class="fa-solid fa-code"></i>
-                    <span>Code Assistant</span>
-                </div>
+                <i class="fa-solid fa-code"></i>
+                <span>   PHANTOM AI</span>
+            </div>
         </aside>
 
         <!-- Main Chat Area -->
         <main id="main-chat-area" class="flex-1 flex flex-col bg-gray-800 overflow-hidden">
             <header id="main-header" class="bg-gray-900/50 backdrop-blur-sm h-16 flex items-center justify-between px-6 border-b border-gray-700 flex-shrink-0">
-                 <button id="sidebar-toggle-btn-header" class="p-2 rounded-md hover:bg-gray-700"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" /></svg></button>
+                <button id="sidebar-toggle-btn-header" class="p-2 rounded-md hover:bg-gray-700"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" /></svg></button>
                 <h2 id="chat-title" class="text-lg font-semibold">New Chat</h2>
                 <button id="settings-btn" class="p-2 rounded-md hover:bg-gray-700"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><circle cx="12" cy="12" r="3" /></svg></button>
             </header>
@@ -104,14 +139,56 @@
     </div>
     
     <!-- Modals -->
+    <!-- NEW: Settings Modal (Theme, Voice) -->
     <div id="settings-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50">
         <div class="bg-gray-800 rounded-lg shadow-xl p-8 w-full max-w-md">
-            <div class="flex justify-between items-center mb-6"><h2 class="text-2xl font-bold">Settings</h2><button id="close-modal-btn" class="p-2 rounded-full hover:bg-gray-700 text-2xl leading-none">&times;</button></div>
+            <div class="flex justify-between items-center mb-6"><h2 class="text-2xl font-bold">Settings</h2><button id="close-settings-modal-btn" class="p-2 rounded-full hover:bg-gray-700 text-2xl leading-none">&times;</button></div>
             <div class="space-y-6">
                 <div><label for="theme-select" class="block text-sm font-medium text-gray-400 mb-2">Theme</label><select id="theme-select" class="w-full bg-gray-700 rounded-md p-2 focus:ring-2 focus:ring-teal-500 focus:outline-none"><option value="theme-dark">Dark (Default)</option><option value="theme-light">Light</option></select></div>
                 <div><label for="voice-select" class="block text-sm font-medium text-gray-400 mb-2">Voice</label><select id="voice-select" class="w-full bg-gray-700 rounded-md p-2 focus:ring-2 focus:ring-teal-500 focus:outline-none"></select></div>
+                <button id="save-settings-btn" class="w-full bg-teal-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-teal-600">Save Settings</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- NEW: Edit Profile Modal (Name) -->
+    <div id="edit-profile-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50">
+        <div class="bg-gray-800 rounded-lg shadow-xl p-8 w-full max-w-md">
+            <div class="flex justify-between items-center mb-6"><h2 class="text-2xl font-bold">Edit Profile</h2><button id="close-edit-profile-modal-btn" class="p-2 rounded-full hover:bg-gray-700 text-2xl leading-none">&times;</button></div>
+            <div class="space-y-6">
                 <div><label for="name-input" class="block text-sm font-medium text-gray-400 mb-2">Display Name</label><input type="text" id="name-input" value="{{ user_display_name }}" class="w-full bg-gray-700 rounded-md p-2 focus:ring-2 focus:ring-teal-500 focus:outline-none"></div>
-                <button id="save-settings-btn" class="bg-teal-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-teal-600">Save Changes</button>
+                <button id="save-profile-btn" class="w-full bg-teal-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-teal-600">Save Profile</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Profile Modal -->
+    <div id="profile-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50">
+        <div class="bg-gray-800 rounded-lg shadow-xl p-8 w-full max-w-sm text-center">
+            <div class="flex justify-end"><button id="close-profile-modal-btn" class="p-2 rounded-full hover:bg-gray-700 text-2xl leading-none -mt-4 -mr-4">&times;</button></div>
+            
+            <div class="relative w-24 h-24 mx-auto mb-4">
+                <img id="profile-modal-avatar" class="user-avatar-img w-24 h-24 rounded-full object-cover" src="{{ user_picture_url or 'https://placehold.co/96x96/4A5568/E2E8F0?text=U' }}" alt="User Avatar">
+                <label for="profile-picture-input" class="absolute bottom-0 right-0 bg-teal-500 text-white rounded-full p-2 cursor-pointer hover:bg-teal-600">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                </label>
+                <input type="file" id="profile-picture-input" class="hidden" accept="image/png, image/jpeg">
+            </div>
+
+            <h2 id="profile-modal-name" class="user-display-name text-2xl font-bold">{{ user_display_name }}</h2>
+            <p id="profile-modal-email" class="text-gray-400 mb-6">{{ user_email }}</p>
+
+            <div class="space-y-2 text-left">
+                <button id="profile-edit-btn" class="w-full flex items-center gap-3 bg-gray-700 hover:bg-gray-600 text-white font-medium py-3 px-4 rounded-lg transition-colors"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>Edit Profile</button>
+                <button id="profile-memory-btn" class="w-full flex items-center gap-3 bg-gray-700 hover:bg-gray-600 text-white font-medium py-3 px-4 rounded-lg transition-colors"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>My Memory (Coming Soon)</button>
+                <button id="profile-support-btn" class="w-full flex items-center gap-3 bg-gray-700 hover:bg-gray-600 text-white font-medium py-3 px-4 rounded-lg transition-colors"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z" /></svg>Contact Support</button>
+            </div>
+
+            <div class="mt-6 border-t border-gray-700 pt-4">
+                 <a href="{{ url_for('logout') }}" class="w-full flex items-center justify-center gap-3 bg-red-600/20 hover:bg-red-600/30 text-red-400 font-medium py-3 px-4 rounded-lg transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+                    Log Out
+                </a>
             </div>
         </div>
     </div>
@@ -127,29 +204,6 @@
             <div id="gemini-output" class="mt-6 p-4 bg-gray-900 rounded-lg text-sm text-gray-300 min-h-[100px]"></div>
         </div>
     </div>
-      <div id="virtual-env-panel" class="hidden">
-            <div id="file-explorer">
-                <h3 class="panel-title">File Explorer</h3>
-                <div id="file-list"></div>
-            </div>
-            <div id="editor-container">
-                <h3 class="panel-title" id="virtual-env-title">Code Editor</h3>
-                <textarea id="virtual-env-input" spellcheck="false"></textarea>
-            </div>
-            <div id="output-container">
-                <h3 class="panel-title">AI Assistant</h3>
-                <div id="virtual-env-output-wrapper">
-                    <textarea id="virtual-env-output" readonly placeholder="AI response will appear here..."></textarea>
-                </div>
-                <div class="followup-area">
-                    <input type="text" id="virtual-env-followup" placeholder="Ask a follow-up question about the code...">
-                    <button id="run-assistant-btn">
-                        <i class="fa-solid fa-play"></i> Run Assistant
-                    </button>
-                </div>
-            </div>
-        </div>
-        ```
 
     <div id="camera-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50">
         <div class="bg-gray-800 rounded-lg shadow-xl p-8 w-full max-w-2xl">
@@ -160,36 +214,64 @@
         </div>
     </div>
     
+    <!-- VIRTUAL ENVIRONMENT MODAL -->
     <div id="virtual-env-modal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50">
         <div id="virtual-env-window" class="bg-gray-800 rounded-lg shadow-2xl w-full max-w-6xl h-5/6 flex flex-col">
             <header id="virtual-env-header" class="bg-gray-900 h-12 flex items-center justify-between px-4 border-b border-gray-700 flex-shrink-0 rounded-t-lg cursor-move">
-                <h2 id="virtual-env-title" class="text-md font-semibold">Analysis Environment</h2>
+                <h2 id="virtual-env-title-header" class="text-md font-semibold">Analysis Environment</h2>
                 <button id="close-virtual-env-btn" class="p-2 rounded-full hover:bg-gray-700 text-xl leading-none">&times;</button>
             </header>
             <div class="flex-1 flex flex-col md:flex-row overflow-hidden">
-                <div id="virtual-env-explorer" class="w-full md:w-1/4 bg-gray-900 p-4 overflow-y-auto border-r border-gray-700">
-                    <div class="flex justify-between items-center mb-4">
+                <!-- Panel 1: File Explorer (Integrated) -->
+                <div id="virtual-env-explorer" class="w-full md:w-1/4 bg-gray-900 p-4 overflow-y-auto border-r border-gray-700 flex flex-col">
+                    <div class="flex justify-between items-center mb-4 flex-shrink-0">
                         <h3 class="font-semibold">Files</h3>
                         <div>
-                            <button id="add-file-btn" title="New File" class="p-1 hover:bg-gray-700 rounded-md">+</button>
-                            <button id="add-folder-btn" title="New Folder" class="p-1 hover:bg-gray-700 rounded-md">📁</button>
+                            <button id="collapse-all-btn" title="Collapse All" class="p-1 hover:bg-gray-700 rounded-md"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="9" x2="15" y1="12" y2="12"/></svg></button>
+                            <button id="add-folder-btn" title="New Folder" class="p-1 hover:bg-gray-700 rounded-md"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"></path><line x1="12" y1="10" x2="12" y2="16"></line><line x1="9" y1="13" x2="15" y2="13"></line></svg></button>
+                            <button id="add-file-btn" title="New File" class="p-1 hover:bg-gray-700 rounded-md"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line></svg></button>
                         </div>
                     </div>
-                    <div id="virtual-env-files"></div>
+                    <div id="virtual-env-files" class="flex-1 overflow-y-auto"></div>
                 </div>
                 <div id="resizer-1" class="resizer"></div>
-                <div class="flex-1 flex flex-col p-4">
-                    <label for="virtual-env-input" class="mb-2 text-sm font-medium text-gray-400">Editor</label>
-                    <textarea id="virtual-env-input" class="flex-1 bg-gray-900 text-gray-300 rounded-lg p-4 font-mono text-sm resize-none focus:ring-2 focus:ring-teal-500 focus:outline-none"></textarea>
+                <!-- Panel 2: Editor (Integrated) -->
+                <div class="flex-1 flex flex-col min-w-0">
+                    <div id="editor-panel" class="flex-1 flex flex-col bg-gray-800 min-h-0">
+                        <div id="tabs-container" class="flex bg-gray-900 border-b border-gray-700 overflow-x-auto flex-shrink-0"></div>
+                        <textarea id="virtual-env-input" class="w-full h-full p-4 bg-transparent text-gray-200 font-mono text-sm outline-none resize-none leading-relaxed tracking-wide" spellcheck="false"></textarea>
+                        <div id="editor-placeholder" class="flex flex-col items-center justify-center h-full text-gray-500">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+                            <p class="mt-4">Select or create a file to start editing</p>
+                        </div>
+                    </div>
                 </div>
                 <div id="resizer-2" class="resizer"></div>
-                <div id="virtual-env-chat-panel" class="w-full md:w-1/3 bg-gray-900 flex flex-col p-4 border-t md:border-t-0 md:border-l border-gray-700">
-                    <h3 class="font-semibold mb-4">AI Analysis</h3>
+                <!-- Panel 3: AI Analysis / Output (Integrated) -->
+                <div id="virtual-env-chat-panel" class="w-full md:w-1/3 bg-gray-900 flex flex-col border-t md:border-t-0 md:border-l border-gray-700">
+                    <div class="p-4 flex-shrink-0">
+                        <h3 class="font-semibold mb-4">AI Analysis</h3>
+                    </div>
+                    <div id="output-panel" class="flex-1 flex flex-col bg-gray-800 min-h-0">
+                        <div class="flex items-center border-b border-t border-gray-700 flex-shrink-0">
+                            <button id="output-tab-preview" class="output-tab px-4 py-2 text-sm font-medium">Preview</button>
+                            <button id="output-tab-console" class="output-tab px-4 py-2 text-sm font-medium">Console</button>
+                            <button id="output-tab-terminal" class="output-tab px-4 py-2 text-sm font-medium">Terminal</button>
+                            <div class="ml-auto pr-2">
+                                <button id="clear-output-btn" class="p-1 hover:bg-gray-700 rounded" title="Clear Output"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>
+                            </div>
+                        </div>
+                        <div id="output-content" class="flex-1 p-2 overflow-auto">
+                            <iframe id="preview-frame" class="w-full h-full bg-white"></iframe>
+                            <div id="console-output" class="hidden h-full p-2 font-mono text-sm text-gray-300 whitespace-pre-wrap"></div>
+                            <div id="terminal-output" class="hidden h-full p-2 font-mono text-sm text-gray-300 whitespace-pre-wrap"></div>
+                        </div>
+                    </div>
                     <div id="virtual-env-output" class="flex-1 rounded-lg p-2 font-mono text-sm overflow-y-auto space-y-4"></div>
                     <div class="mt-4">
                         <div class="w-full flex items-center gap-2 p-2 rounded-full bg-gray-700 border border-gray-600 shadow-lg focus-within:ring-2 focus-within:ring-teal-500 relative">
                             <input id="virtual-env-followup" type="text" class="flex-grow bg-transparent border-none focus:ring-0 p-2 text-gray-200" placeholder="Ask about the code...">
-        
+                            
                             <div class="flex-shrink-0 flex items-center space-x-1">
                                 <button id="run-code-btn" class="p-2 rounded-full hover:bg-gray-600 transition-colors" title="Run Code in Editor">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -199,7 +281,7 @@
                                 </button>
                                 <button id="run-analysis-btn" class="bg-teal-500 text-white p-2 rounded-full hover:bg-teal-600 transition-colors" title="Send to AI">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 -rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
                                     </svg>
                                 </button>
                             </div>
@@ -210,6 +292,425 @@
         </div>
     </div>
 
+    <!-- Context Menu for File Explorer -->
+    <div id="context-menu" class="context-menu">
+        <div id="context-rename" class="context-menu-item">Rename</div>
+        <div id="context-delete" class="context-menu-item text-red-400">Delete</div>
+    </div>
+
+    <!-- Modal for prompts -->
+    <div id="modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50">
+        <div class="bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-sm">
+            <h3 id="modal-title" class="text-lg font-bold mb-4 text-white"></h3>
+            <p id="modal-text" class="text-gray-400 mb-4"></p>
+            <input type="text" id="modal-input" class="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-white outline-none focus:ring-2 focus:ring-teal-500">
+            <div class="flex justify-end gap-3 mt-5">
+                <button id="modal-cancel" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md font-semibold">Cancel</button>
+                <button id="modal-confirm" class="px-4 py-2 bg-teal-500 hover:bg-teal-600 rounded-md font-semibold text-white">Confirm</button>
+            </div>
+        </div>
+    </div>
+
     <script src="{{ url_for('static', filename='js/script.js') }}" defer></script>
+    <script>
+        // --- START OF INTEGRATED CODE EDITOR SCRIPT ---
+        document.addEventListener('DOMContentLoaded', () => {
+            // This script targets elements inside the #virtual-env-modal
+            const virtualEnvModal = document.getElementById('virtual-env-modal');
+            if (!virtualEnvModal) return;
+
+            // --- STATE MANAGEMENT ---
+            let fileSystem = {};
+            let openFiles = [];
+            let activeFile = null;
+            let contextTarget = null;
+            let collapsedFolders = new Set();
+            let activeOutputTab = 'preview';
+
+            // --- DOM ELEMENTS (Mapped to Dashboard IDs) ---
+            const fileExplorer = document.getElementById('virtual-env-files');
+            const addFileBtn = document.getElementById('add-file-btn');
+            const addFolderBtn = document.getElementById('add-folder-btn');
+            const collapseAllBtn = document.getElementById('collapse-all-btn');
+            const codeEditor = document.getElementById('virtual-env-input');
+            const tabsContainer = document.getElementById('tabs-container');
+            const editorPlaceholder = document.getElementById('editor-placeholder');
+            const runBtn = document.getElementById('run-code-btn'); 
+            const previewFrame = document.getElementById('preview-frame');
+            const consoleOutput = document.getElementById('console-output');
+            const terminalOutput = document.getElementById('terminal-output');
+            const outputTabs = document.querySelectorAll('#output-panel .output-tab');
+            const clearOutputBtn = document.getElementById('clear-output-btn');
+            const contextMenu = document.getElementById('context-menu');
+            const contextRename = document.getElementById('context-rename');
+            const contextDelete = document.getElementById('context-delete');
+            const modal = document.getElementById('modal');
+            const modalTitle = document.getElementById('modal-title');
+            const modalText = document.getElementById('modal-text');
+            const modalInput = document.getElementById('modal-input');
+            const modalCancel = document.getElementById('modal-cancel');
+            const modalConfirm = document.getElementById('modal-confirm');
+            
+            // --- RENDER FUNCTIONS ---
+            const renderFileExplorer = () => {
+                if (!fileExplorer) return;
+                fileExplorer.innerHTML = '';
+                if (Object.keys(fileSystem).length === 0) {
+                    fileExplorer.innerHTML = `<div class="text-gray-500 p-4 text-center text-sm">No files yet.</div>`;
+                    return;
+                }
+                const fileTree = buildTree(fileSystem, '');
+                fileExplorer.appendChild(fileTree);
+            };
+
+            const buildTree = (node, path) => {
+                const fragment = document.createDocumentFragment();
+                Object.keys(node).sort((a, b) => {
+                    const nodeA = node[a]; const nodeB = node[b];
+                    if (nodeA.type === 'folder' && nodeB.type !== 'folder') return -1;
+                    if (nodeA.type !== 'folder' && nodeB.type === 'folder') return 1;
+                    return a.localeCompare(b);
+                }).forEach(name => {
+                    const currentPath = path ? `${path}/${name}` : name;
+                    const item = node[name];
+                    if (item.type === 'folder') {
+                        const folderContainer = document.createElement('div');
+                        const isCollapsed = collapsedFolders.has(currentPath);
+                        const folderHeader = document.createElement('div');
+                        folderHeader.className = `folder-header flex items-center gap-2 p-2 rounded-md cursor-pointer text-sm`;
+                        folderHeader.dataset.path = currentPath;
+                        folderHeader.innerHTML = `<svg class="folder-arrow ${isCollapsed ? 'collapsed' : ''} flex-shrink-0" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>${getFileIcon('folder')}<span class="flex-1 truncate">${name}</span>`;
+                        const folderContent = document.createElement('div');
+                        folderContent.className = 'folder-content';
+                        if (!isCollapsed) folderContent.appendChild(buildTree(item.children, currentPath));
+                        folderContent.style.display = isCollapsed ? 'none' : 'block';
+                        folderHeader.addEventListener('click', () => toggleFolder(currentPath));
+                        folderContainer.appendChild(folderHeader);
+                        folderContainer.appendChild(folderContent);
+                        fragment.appendChild(folderContainer);
+                    } else {
+                        const fileItem = document.createElement('div');
+                        fileItem.className = `file-item flex items-center gap-2 p-2 rounded-md cursor-pointer text-sm ${currentPath === activeFile ? 'bg-teal-500/20 text-teal-300' : ''}`;
+                        fileItem.dataset.path = currentPath;
+                        fileItem.innerHTML = `<span class="ml-4 flex-shrink-0">${getFileIcon(name)}</span><span class="flex-1 truncate">${name}</span>`;
+                        fragment.appendChild(fileItem);
+                    }
+                });
+                return fragment;
+            };
+
+            const toggleFolder = path => {
+                collapsedFolders.has(path) ? collapsedFolders.delete(path) : collapsedFolders.add(path);
+                renderFileExplorer();
+            };
+
+            const renderTabs = () => {
+                tabsContainer.innerHTML = '';
+                openFiles.forEach(path => {
+                    const filename = path.split('/').pop();
+                    const tab = document.createElement('div');
+                    tab.className = `flex-shrink-0 flex items-center gap-2 py-2 px-4 cursor-pointer border-r border-gray-700 text-sm ${path === activeFile ? 'bg-gray-800 text-white' : 'bg-gray-900 text-gray-400 hover:bg-gray-700'}`;
+                    tab.dataset.path = path;
+                    const name = document.createElement('span'); name.textContent = filename;
+                    const closeBtn = document.createElement('button'); closeBtn.innerHTML = '&times;';
+                    closeBtn.className = 'ml-2 text-lg hover:text-red-400';
+                    closeBtn.onclick = e => { e.stopPropagation(); closeFile(path); };
+                    tab.appendChild(name); tab.appendChild(closeBtn);
+                    tabsContainer.appendChild(tab);
+                });
+            };
+
+            const renderEditor = () => {
+                const fileNode = getNodeByPath(activeFile);
+                if (activeFile && fileNode && fileNode.type === 'file') {
+                    codeEditor.value = fileNode.content;
+                    codeEditor.style.display = 'block';
+                    editorPlaceholder.style.display = 'none';
+                } else {
+                    codeEditor.style.display = 'none';
+                    editorPlaceholder.style.display = 'flex';
+                }
+                renderTabs();
+                renderFileExplorer();
+            };
+
+            // --- FILE SYSTEM UTILS ---
+            const getNodeByPath = path => {
+                if (!path) return null;
+                const parts = path.split('/');
+                let current = fileSystem;
+                for (const part of parts) {
+                    current = current.type === 'folder' ? current.children[part] : current[part];
+                    if (!current) return null;
+                }
+                return current;
+            };
+
+            const getParentNode = path => {
+                const parts = path.split('/');
+                if (parts.length === 1) return { node: fileSystem, isRoot: true };
+                return { node: getNodeByPath(parts.slice(0, -1).join('/')), isRoot: false };
+            };
+
+            const addNodeByPath = (path, node) => {
+                const parts = path.split('/'); const name = parts.pop();
+                const parentData = getParentNode(path); const parentNode = parentData.node;
+                if (parentNode && parentNode.type === 'folder') {
+                    parentNode.children[name] = node; return true;
+                } else if (parentData.isRoot) {
+                    parentNode[name] = node; return true;
+                }
+                return false;
+            };
+
+            const deleteNodeByPath = path => {
+                const parts = path.split('/'); const name = parts.pop();
+                const parentData = getParentNode(path); const parentNode = parentData.node;
+                if (parentData.isRoot && parentNode[name]) {
+                    delete parentNode[name]; return true;
+                } else if (parentNode && parentNode.type === 'folder' && parentNode.children[name]) {
+                    delete parentNode.children[name]; return true;
+                }
+                return false;
+            };
+
+            // --- FILE OPERATIONS ---
+            const openFile = path => {
+                const node = getNodeByPath(path);
+                if (!node || node.type !== 'file') return;
+                if (!openFiles.includes(path)) openFiles.push(path);
+                activeFile = path;
+                renderEditor();
+            };
+
+            const closeFile = path => {
+                const index = openFiles.indexOf(path);
+                if (index > -1) openFiles.splice(index, 1);
+                if (activeFile === path) activeFile = openFiles.length > 0 ? openFiles[Math.max(0, index - 1)] : null;
+                renderEditor();
+            };
+
+            const createEntity = (path, type) => {
+                if (!path || getNodeByPath(path)) { alert('Invalid or duplicate name.'); return; }
+                const node = type === 'file' ? { type: 'file', content: '' } : { type: 'folder', children: {} };
+                if (addNodeByPath(path, node)) {
+                    if (type === 'file') openFile(path);
+                    renderFileExplorer();
+                } else { alert('Could not create entity.'); }
+            };
+
+            const deleteEntity = path => {
+                const node = getNodeByPath(path); if (!node) return;
+                let filesToDelete = (node.type === 'file') ? [path] : findAllFilesinPath(path);
+                filesToDelete.forEach(filePath => {
+                    const openIndex = openFiles.indexOf(filePath);
+                    if (openIndex > -1) openFiles.splice(openIndex, 1);
+                    if (activeFile === filePath) activeFile = null;
+                });
+                deleteNodeByPath(path);
+                if (!activeFile && openFiles.length > 0) activeFile = openFiles[0];
+                renderEditor();
+            };
+            
+            const renameEntity = (oldPath, newPath) => {
+                if (!newPath || oldPath === newPath || getNodeByPath(newPath)) { alert('Invalid or duplicate name.'); return; }
+                const nodeToMove = getNodeByPath(oldPath);
+                if (addNodeByPath(newPath, nodeToMove)) {
+                    deleteNodeByPath(oldPath);
+                    openFiles = openFiles.map(p => p.startsWith(oldPath) ? p.replace(oldPath, newPath) : p);
+                    if (activeFile && activeFile.startsWith(oldPath)) activeFile = activeFile.replace(oldPath, newPath);
+                    if (nodeToMove.type === 'folder' && collapsedFolders.has(oldPath)) { collapsedFolders.delete(oldPath); collapsedFolders.add(newPath); }
+                    renderEditor();
+                }
+            };
+            
+            const collapseAllFolders = () => {
+                const findAllFolderPaths = (node, currentPath = '') => {
+                    let paths = [];
+                    for (const name in node) {
+                        const item = node[name];
+                        const path = currentPath ? `${currentPath}/${name}` : name;
+                        if (item.type === 'folder') {
+                            paths.push(path);
+                            if (item.children) paths = paths.concat(findAllFolderPaths(item.children, path));
+                        }
+                    } return paths;
+                };
+                findAllFolderPaths(fileSystem).forEach(path => collapsedFolders.add(path));
+                renderFileExplorer();
+            };
+
+            // --- EVENT LISTENERS ---
+            fileExplorer.addEventListener('click', e => { const fileItem = e.target.closest('.file-item'); if (fileItem) openFile(fileItem.dataset.path); });
+            tabsContainer.addEventListener('click', e => { const tab = e.target.closest('[data-path]'); if (tab) openFile(tab.dataset.path); });
+            codeEditor.addEventListener('input', () => { const fileNode = getNodeByPath(activeFile); if (activeFile && fileNode) fileNode.content = codeEditor.value; });
+
+            const getCreationPath = () => {
+                let basePath = '';
+                if (contextTarget) {
+                    const node = getNodeByPath(contextTarget);
+                    if (node && node.type === 'folder') basePath = contextTarget;
+                    else if (contextTarget) basePath = contextTarget.split('/').slice(0, -1).join('/');
+                } return basePath;
+            };
+
+            addFileBtn.addEventListener('click', () => { const path = getCreationPath(); showModal('Create New File', 'Enter file name:', '', filename => { if (filename) createEntity(path ? `${path}/${filename}` : filename, 'file'); }); });
+            addFolderBtn.addEventListener('click', () => { const path = getCreationPath(); showModal('Create New Folder', 'Enter folder name:', '', foldername => { if (foldername) createEntity(path ? `${path}/${foldername}` : foldername, 'folder'); }); });
+            collapseAllBtn.addEventListener('click', collapseAllFolders);
+
+            clearOutputBtn.addEventListener('click', () => {
+                if (activeOutputTab === 'console') clearConsole();
+                else if (activeOutputTab === 'terminal') clearTerminal();
+                else if (activeOutputTab === 'preview') { previewFrame.srcdoc = 'about:blank'; logToConsole('Preview cleared.'); }
+            });
+
+            runBtn.addEventListener('click', () => {
+                const fileToRun = activeFile || Object.keys(fileSystem).find(f => f.endsWith('.html'));
+                if (!fileToRun) { runWebApp(); return; } // Let runWebApp handle the error message
+                const extension = fileToRun.split('.').pop();
+                if (['html', 'css', 'js'].includes(extension)) runWebApp();
+                else if (extension === 'py') { runSimulated('python', fileToRun); switchOutputTab('terminal'); }
+                else if (extension === 'java') { runSimulated('java', fileToRun); switchOutputTab('terminal'); }
+                else { runWebApp(); } // Default to trying a web app run
+            });
+            
+            outputTabs.forEach(tab => tab.addEventListener('click', () => switchOutputTab(tab.id.split('-')[2])));
+
+            fileExplorer.addEventListener('contextmenu', e => {
+                e.preventDefault();
+                const targetElement = e.target.closest('[data-path]');
+                if (targetElement) {
+                    contextTarget = targetElement.dataset.path;
+                    contextMenu.style.top = `${e.clientY}px`;
+                    contextMenu.style.left = `${e.clientX}px`;
+                    contextMenu.style.display = 'block';
+                }
+            });
+
+            document.addEventListener('click', () => { contextMenu.style.display = 'none'; contextTarget = null; });
+            contextRename.addEventListener('click', e => { e.stopPropagation(); if (!contextTarget) return; const oldName = contextTarget.split('/').pop(); const basePath = contextTarget.split('/').slice(0, -1).join('/'); showModal('Rename', `Rename "${oldName}":`, oldName, newName => { if (newName) renameEntity(contextTarget, basePath ? `${basePath}/${newName}` : newName); }); });
+            contextDelete.addEventListener('click', e => { e.stopPropagation(); if (!contextTarget) return; const name = contextTarget.split('/').pop(); showModal('Delete', `Are you sure you want to delete "${name}"?`, '', confirm => { if (confirm) deleteEntity(contextTarget); }, true); });
+
+            // --- RUNNER FUNCTIONS ---
+            const runWebApp = () => {
+                clearConsole(); logToConsole('Building web project...'); switchOutputTab('preview');
+                const allFiles = findFilesByExtension(fileSystem, /\.(html|css|js)$/);
+                let htmlFile = null;
+                if (activeFile && activeFile.endsWith('.html')) { const node = getNodeByPath(activeFile); if (node) htmlFile = { path: activeFile, content: node.content }; }
+                if (!htmlFile) htmlFile = allFiles.find(f => f.path === 'index.html') || allFiles.find(f => f.path.endsWith('.html'));
+                if (!htmlFile) { logToConsole('Error: No HTML file found.', 'error'); switchOutputTab('console'); previewFrame.srcdoc = `<html><body><p>Error: No HTML file to preview.</p></body></html>`; return; }
+                logToConsole(`Using "${htmlFile.path}" as entry point.`);
+                let htmlContent = htmlFile.content;
+                const css = allFiles.filter(f => f.path.endsWith('.css')).map(f => f.content).join('\n');
+                const js = allFiles.filter(f => f.path.endsWith('.js')).map(f => f.content).join('\n');
+                if (css) htmlContent = htmlContent.replace('</head>', `<style>${css}</style></head>`);
+                if (js) htmlContent = htmlContent.replace('</body>', `<script>${proxyConsoleInScript(js)}<\/script></body>`);
+                previewFrame.srcdoc = htmlContent; logToConsole('Preview updated.');
+            };
+
+            const runSimulated = (lang, file) => {
+                clearTerminal(); logToTerminal(`$ ${lang} ${file}`);
+                const node = getNodeByPath(file);
+                if (node && node.content) {
+                    const matches = [...node.content.matchAll(/(?:print|println)\("([^"]*)"\)/g)];
+                    if (matches.length > 0) matches.forEach(m => logToTerminal(m[1]));
+                    else logToTerminal("[No simple print statement found]");
+                }
+                logToTerminal(`\n[Process finished]`);
+            };
+
+            // --- UTILITY FUNCTIONS ---
+            const switchOutputTab = tabName => {
+                activeOutputTab = tabName;
+                previewFrame.style.display = 'none'; consoleOutput.style.display = 'none'; terminalOutput.style.display = 'none';
+                outputTabs.forEach(t => t.classList.remove('active'));
+                const activeTabEl = document.getElementById(`output-tab-${tabName}`);
+                if (activeTabEl) activeTabEl.classList.add('active');
+                if (tabName === 'preview') previewFrame.style.display = 'block';
+                else { const el = document.getElementById(`${tabName}-output`); if (el) el.style.display = 'block'; }
+            };
+
+            const findAllFilesinPath = basePath => {
+                const node = getNodeByPath(basePath); if (!node) return [];
+                let files = [];
+                const search = (n, currentPath) => { for (const name in n) { const i = n[name]; const p = currentPath ? `${currentPath}/${name}` : name; if (i.type === 'file') files.push(p); else if (i.type === 'folder') search(i.children, p); }};
+                if (node.type === 'file') files.push(basePath);
+                else if (node.type === 'folder') search(node.children, basePath);
+                return files;
+            };
+
+            const findFilesByExtension = (node, regex, currentPath = '') => {
+                let files = [];
+                for (const name in node) {
+                    const item = node[name];
+                    const path = currentPath ? `${currentPath}/${name}` : name;
+                    if (item.type === 'file' && regex.test(name)) files.push({ path, content: item.content });
+                    else if (item.type === 'folder') files = files.concat(findFilesByExtension(item.children, regex, path));
+                } return files;
+            };
+
+            const getFileIcon = filename => {
+                if (filename === 'folder') return '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"></path></svg>';
+                const ext = filename.split('.').pop();
+                const colors = { html: '#f06529', css: '#2965f1', js: '#f7df1e', py: '#3776ab', java: '#e76f00', json: '#a7a7a7', other: '#94a3b8' };
+                const color = colors[ext] || colors.other;
+                return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>`;
+            };
+            
+            const logToConsole = (message, type = 'log') => { const line = document.createElement('div'); const time = new Date().toLocaleTimeString(); line.textContent = `[${time}] ${message}`; if (type === 'error') line.className = 'text-red-400'; else if (type === 'warn') line.className = 'text-yellow-400'; consoleOutput.appendChild(line); consoleOutput.scrollTop = consoleOutput.scrollHeight; };
+            const clearConsole = () => { consoleOutput.innerHTML = ''; };
+            const logToTerminal = message => { const line = document.createElement('div'); line.textContent = message; terminalOutput.appendChild(line); terminalOutput.scrollTop = terminalOutput.scrollHeight; };
+            const clearTerminal = () => { terminalOutput.innerHTML = ''; };
+            const proxyConsoleInScript = script => `const _c={...console};window.alert=m=>_c.log('alert:',m);console.log=(...a)=>{window.parent.postMessage({type:'console',level:'log',args:a.map(x=>JSON.stringify(x))},'*');_c.log(...a);};console.error=(...a)=>{window.parent.postMessage({type:'console',level:'error',args:a.map(x=>JSON.stringify(x))},'*');_c.error(...a);};console.warn=(...a)=>{window.parent.postMessage({type:'console',level:'warn',args:a.map(x=>JSON.stringify(x))},'*');_c.warn(...a);};try{${script}}catch(e){console.error(e.message);}`;
+            window.addEventListener('message', e => { const { type, level, args } = e.data; if (type === 'console') logToConsole(args.join(' '), level); });
+
+            const showModal = (title, text, val, cb, confirmOnly = false) => {
+                modalTitle.textContent = title; modalText.textContent = text; modalInput.value = val;
+                modalInput.style.display = confirmOnly ? 'none' : 'block';
+                modalText.style.display = text ? 'block' : 'none';
+                modal.classList.remove('hidden');
+                confirmOnly ? modalConfirm.focus() : modalInput.focus();
+                const confirmHandler = () => { cb(confirmOnly ? true : modalInput.value); cleanup(); };
+                const cancelHandler = () => { cb(confirmOnly ? false : null); cleanup(); };
+                const keydownHandler = e => { if (e.key === 'Enter') confirmHandler(); if (e.key === 'Escape') cancelHandler(); };
+                const cleanup = () => { modal.classList.add('hidden'); modalConfirm.removeEventListener('click', confirmHandler); modalCancel.removeEventListener('click', cancelHandler); document.removeEventListener('keydown', keydownHandler); };
+                modalConfirm.addEventListener('click', confirmHandler);
+                modalCancel.addEventListener('click', cancelHandler);
+                document.addEventListener('keydown', keydownHandler);
+            };
+
+            // --- INITIALIZATION ---
+            renderEditor();
+            switchOutputTab('preview');
+        });
+        // --- END OF INTEGRATED CODE EDITOR SCRIPT ---
+    </script>
+    <script>
+        // --- SCRIPT TO OPEN/CLOSE THE VIRTUAL ENV MODAL ---
+        document.addEventListener('DOMContentLoaded', () => {
+            const canvaCodeBtn = document.getElementById('tool-canva-btn');
+            const virtualEnvModal = document.getElementById('virtual-env-modal');
+            const closeVirtualEnvBtn = document.getElementById('close-virtual-env-btn');
+
+            if (canvaCodeBtn && virtualEnvModal) {
+                canvaCodeBtn.addEventListener('click', () => {
+                    virtualEnvModal.classList.remove('hidden');
+                    setTimeout(() => {
+                        virtualEnvModal.classList.add('open');
+                    }, 10); 
+                });
+            }
+
+            if (closeVirtualEnvBtn && virtualEnvModal) {
+                closeVirtualEnvBtn.addEventListener('click', () => {
+                    virtualEnvModal.classList.remove('open');
+                    setTimeout(() => {
+                        virtualEnvModal.classList.add('hidden');
+                    }, 300);
+                });
+            }
+        });
+    </script>
 </body>
 </html>
+

@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web Code Editor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom scrollbar for a more editor-like feel */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1e293b;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #64748b;
+        }
+        /* Simple transition for UI elements */
+        .transition-all {
+            transition: all 0.2s ease-in-out;
+        }
+        .file-item:hover {
+            background-color: #334155;
+        }
+        .context-menu {
+            display: none;
+            position: absolute;
+            background-color: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+            z-index: 1000;
+            width: 150px;
+        }
+        .context-menu-item {
+            padding: 8px 16px;
+            cursor: pointer;
+        }
+        .context-menu-item:hover {
+            background-color: #334155;
+        }
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0,0,0,0.6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+        }
+        .modal-content {
+            background: #1e293b;
+            padding: 24px;
+            border-radius: 12px;
+            border: 1px solid #334155;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-300 font-sans antialiased">
+    <div id="app" class="h-screen w-screen flex flex-col">
+        <!-- Main Header -->
+        <header class="bg-slate-800 border-b border-slate-700 p-2 flex items-center justify-between shadow-md">
+            <div class="flex items-center gap-3">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-sky-400"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+                <h1 class="text-lg font-semibold text-slate-100">Analysis Environment</h1>
+            </div>
+            <button id="run-btn" class="bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 transition-all">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                Run
+            </button>
+        </header>
+
+        <!-- Main Content Area -->
+        <div class="flex flex-1 overflow-hidden">
+            <!-- File Explorer -->
+            <aside class="w-64 bg-slate-800/50 p-3 flex flex-col border-r border-slate-700">
+                <div class="flex justify-between items-center mb-3">
+                    <h2 class="text-sm font-bold uppercase tracking-wider text-slate-400">Files</h2>
+                    <div>
+                        <button id="new-file-btn" class="p-1 hover:bg-slate-600 rounded" title="New File">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line></svg>
+                        </button>
+                    </div>
+                </div>
+                <div id="file-explorer" class="flex-1 overflow-y-auto pr-1">
+                    <!-- File structure will be rendered here -->
+                </div>
+            </aside>
+
+            <!-- Editor and Output Panels -->
+            <main class="flex-1 flex flex-col">
+                <!-- Editor Panel -->
+                <div id="editor-panel" class="flex-1 flex flex-col bg-slate-900">
+                    <div id="tabs-container" class="flex bg-slate-800 border-b border-slate-700">
+                        <!-- Tabs will be rendered here -->
+                    </div>
+                    <textarea id="code-editor" class="w-full h-full p-4 bg-transparent text-slate-200 font-mono text-sm outline-none resize-none leading-relaxed tracking-wide" spellcheck="false"></textarea>
+                    <div id="editor-placeholder" class="flex flex-col items-center justify-center h-full text-slate-500">
+                         <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+                        <p class="mt-4">Select a file to start editing</p>
+                    </div>
+                </div>
+
+                <!-- Output Panel -->
+                <div id="output-panel" class="h-1/3 bg-slate-800/80 border-t border-slate-700 flex flex-col">
+                    <div class="flex border-b border-slate-700">
+                         <button id="output-tab-preview" class="px-4 py-2 text-sm font-medium bg-slate-700/50">Preview</button>
+                         <button id="output-tab-console" class="px-4 py-2 text-sm font-medium">Console</button>
+                    </div>
+                    <div id="output-content" class="flex-1 p-2 overflow-auto">
+                        <iframe id="preview-frame" class="w-full h-full bg-white" sandbox="allow-scripts allow-same-origin"></iframe>
+                        <div id="console-output" class="hidden h-full p-2 font-mono text-sm text-slate-300 whitespace-pre-wrap"></div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+    
+    <!-- Context Menu -->
+    <div id="context-menu" class="context-menu">
+        <div id="context-rename" class="context-menu-item">Rename</div>
+        <div id="context-delete" class="context-menu-item text-red-400">Delete</div>
+    </div>
+
+    <!-- Modal for prompts -->
+    <div id="modal" class="modal-overlay hidden">
+        <div class="modal-content w-full max-w-sm">
+            <h3 id="modal-title" class="text-lg font-bold mb-4 text-white"></h3>
+            <p id="modal-text" class="text-slate-400 mb-4"></p>
+            <input type="text" id="modal-input" class="w-full bg-slate-700 border border-slate-600 rounded-md px-3 py-2 text-white outline-none focus:ring-2 focus:ring-sky-500">
+            <div class="flex justify-end gap-3 mt-5">
+                <button id="modal-cancel" class="px-4 py-2 bg-slate-600 hover:bg-slate-500 rounded-md font-semibold">Cancel</button>
+                <button id="modal-confirm" class="px-4 py-2 bg-sky-600 hover:bg-sky-500 rounded-md font-semibold text-white">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- STATE MANAGEMENT ---
+            let fileSystem = {
+                'index.html': { content: `<!DOCTYPE html>\n<html>\n  <head>\n    <title>My Website</title>\n    <link rel="stylesheet" href="style.css">\n  </head>\n  <body>\n    <h1>Welcome!</h1>\n    <p>This is a test page.</p>\n    <script src="script.js"><\/script>\n  </body>\n</html>` },
+                'style.css': { content: `body {\n  font-family: sans-serif;\n  background-color: #f0f0f0;\n  color: #333;\n}\n\nh1 {\n  color: dodgerblue;\n}` },
+                'script.js': { content: `console.log("Hello from script.js!");\n\nconst heading = document.querySelector('h1');\nheading.addEventListener('click', () => {\n  console.log('Heading clicked!');\n  alert('You clicked the heading!');\n});` },
+            };
+            let openFiles = [];
+            let activeFile = null;
+            let contextTarget = null;
+
+            // --- DOM ELEMENTS ---
+            const fileExplorer = document.getElementById('file-explorer');
+            const newFileBtn = document.getElementById('new-file-btn');
+            const codeEditor = document.getElementById('code-editor');
+            const tabsContainer = document.getElementById('tabs-container');
+            const editorPlaceholder = document.getElementById('editor-placeholder');
+            const runBtn = document.getElementById('run-btn');
+            const previewFrame = document.getElementById('preview-frame');
+            const consoleOutput = document.getElementById('console-output');
+            const outputTabPreview = document.getElementById('output-tab-preview');
+            const outputTabConsole = document.getElementById('output-tab-console');
+            
+            // Context Menu
+            const contextMenu = document.getElementById('context-menu');
+            const contextRename = document.getElementById('context-rename');
+            const contextDelete = document.getElementById('context-delete');
+            
+            // Modal
+            const modal = document.getElementById('modal');
+            const modalTitle = document.getElementById('modal-title');
+            const modalText = document.getElementById('modal-text');
+            const modalInput = document.getElementById('modal-input');
+            const modalCancel = document.getElementById('modal-cancel');
+            const modalConfirm = document.getElementById('modal-confirm');
+
+            // --- RENDER FUNCTIONS ---
+            const renderFileExplorer = () => {
+                fileExplorer.innerHTML = '';
+                Object.keys(fileSystem).sort().forEach(filename => {
+                    const fileItem = document.createElement('div');
+                    fileItem.className = `file-item flex items-center gap-2 p-2 rounded-md cursor-pointer ${filename === activeFile ? 'bg-sky-500/20 text-sky-300' : 'hover:bg-slate-700/50'}`;
+                    fileItem.dataset.filename = filename;
+                    
+                    const icon = document.createElement('span');
+                    icon.innerHTML = getFileIcon(filename);
+                    
+                    const name = document.createElement('span');
+                    name.textContent = filename;
+                    name.className = 'flex-1 truncate';
+
+                    fileItem.appendChild(icon);
+                    fileItem.appendChild(name);
+                    fileExplorer.appendChild(fileItem);
+                });
+            };
+
+            const renderTabs = () => {
+                tabsContainer.innerHTML = '';
+                openFiles.forEach(filename => {
+                    const tab = document.createElement('div');
+                    tab.className = `flex items-center gap-2 py-2 px-4 cursor-pointer border-r border-slate-700 ${filename === activeFile ? 'bg-slate-900 text-white border-b-2 border-sky-400' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`;
+                    tab.dataset.filename = filename;
+
+                    const name = document.createElement('span');
+                    name.textContent = filename;
+                    
+                    const closeBtn = document.createElement('button');
+                    closeBtn.innerHTML = '&times;';
+                    closeBtn.className = 'ml-2 text-lg hover:text-red-400';
+                    closeBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        closeFile(filename);
+                    };
+
+                    tab.appendChild(name);
+                    tab.appendChild(closeBtn);
+                    tabsContainer.appendChild(tab);
+                });
+            };
+
+            const renderEditor = () => {
+                if (activeFile && fileSystem[activeFile]) {
+                    codeEditor.value = fileSystem[activeFile].content;
+                    codeEditor.style.display = 'block';
+                    editorPlaceholder.style.display = 'none';
+                } else {
+                    codeEditor.style.display = 'none';
+                    editorPlaceholder.style.display = 'flex';
+                }
+                renderTabs();
+                renderFileExplorer();
+            };
+            
+            // --- FILE OPERATIONS ---
+            const openFile = (filename) => {
+                if (!fileSystem[filename]) return;
+                if (!openFiles.includes(filename)) {
+                    openFiles.push(filename);
+                }
+                activeFile = filename;
+                renderEditor();
+            };
+
+            const closeFile = (filename) => {
+                const index = openFiles.indexOf(filename);
+                if (index > -1) {
+                    openFiles.splice(index, 1);
+                }
+                if (activeFile === filename) {
+                    activeFile = openFiles.length > 0 ? openFiles[Math.max(0, index - 1)] : null;
+                }
+                renderEditor();
+            };
+
+            const createFile = (filename) => {
+                if (!filename || fileSystem[filename]) {
+                    alert('Invalid or duplicate filename.');
+                    return;
+                }
+                fileSystem[filename] = { content: '' };
+                openFile(filename);
+            };
+
+            const deleteFile = (filename) => {
+                if (!fileSystem[filename]) return;
+
+                if(activeFile === filename) {
+                    closeFile(filename);
+                }
+                const index = openFiles.indexOf(filename);
+                if (index > -1) openFiles.splice(index, 1);
+
+                delete fileSystem[filename];
+                renderEditor();
+            };
+            
+            const renameFile = (oldName, newName) => {
+                if (!newName || !oldName || newName === oldName || fileSystem[newName]) {
+                    alert('Invalid or duplicate new filename.');
+                    return;
+                }
+                fileSystem[newName] = fileSystem[oldName];
+                delete fileSystem[oldName];
+
+                const openIndex = openFiles.indexOf(oldName);
+                if (openIndex > -1) {
+                    openFiles[openIndex] = newName;
+                }
+                if (activeFile === oldName) {
+                    activeFile = newName;
+                }
+                renderEditor();
+            };
+
+            // --- EVENT LISTENERS ---
+            fileExplorer.addEventListener('click', (e) => {
+                const fileItem = e.target.closest('.file-item');
+                if (fileItem) {
+                    openFile(fileItem.dataset.filename);
+                }
+            });
+
+            tabsContainer.addEventListener('click', (e) => {
+                const tab = e.target.closest('[data-filename]');
+                if (tab) {
+                    openFile(tab.dataset.filename);
+                }
+            });
+
+            codeEditor.addEventListener('input', () => {
+                if (activeFile) {
+                    fileSystem[activeFile].content = codeEditor.value;
+                }
+            });
+
+            newFileBtn.addEventListener('click', () => {
+                showModal('Create New File', 'Enter the name for the new file:', '', (filename) => {
+                    if (filename) createFile(filename);
+                });
+            });
+
+            runBtn.addEventListener('click', () => {
+                clearConsole();
+                logToConsole('Building project...');
+                const htmlFile = fileSystem['index.html'] ? fileSystem['index.html'].content : '<html><body>No index.html found</body></html>';
+                const cssFile = fileSystem['style.css'] ? `<style>${fileSystem['style.css'].content}</style>` : '';
+                const jsFile = fileSystem['script.js'] ? `<script>${proxyConsoleInScript(fileSystem['script.js'].content)}<\/script>` : '';
+                
+                const combinedSrc = htmlFile
+                    .replace('</head>', `${cssFile}</head>`)
+                    .replace('</body>', `${jsFile}</body>`);
+
+                previewFrame.srcdoc = combinedSrc;
+                logToConsole('Preview updated.');
+            });
+            
+            // Output tabs
+            outputTabPreview.addEventListener('click', () => {
+                previewFrame.style.display = 'block';
+                consoleOutput.style.display = 'none';
+                outputTabPreview.classList.add('bg-slate-700/50');
+                outputTabConsole.classList.remove('bg-slate-700/50');
+            });
+            outputTabConsole.addEventListener('click', () => {
+                previewFrame.style.display = 'none';
+                consoleOutput.style.display = 'block';
+                outputTabPreview.classList.remove('bg-slate-700/50');
+                outputTabConsole.classList.add('bg-slate-700/50');
+            });
+            
+            // Context Menu Logic
+            fileExplorer.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                const fileItem = e.target.closest('.file-item');
+                if (fileItem) {
+                    contextTarget = fileItem.dataset.filename;
+                    contextMenu.style.top = `${e.clientY}px`;
+                    contextMenu.style.left = `${e.clientX}px`;
+                    contextMenu.style.display = 'block';
+                }
+            });
+
+            document.addEventListener('click', () => {
+                contextMenu.style.display = 'none';
+            });
+
+            contextRename.addEventListener('click', () => {
+                if (contextTarget) {
+                    showModal('Rename File', `Rename "${contextTarget}":`, contextTarget, (newName) => {
+                         if(newName) renameFile(contextTarget, newName);
+                    });
+                }
+            });
+            contextDelete.addEventListener('click', () => {
+                if (contextTarget) {
+                   showModal('Delete File', `Are you sure you want to delete "${contextTarget}"? This cannot be undone.`, '', (confirm) => {
+                       if(confirm) deleteFile(contextTarget);
+                   }, true);
+                }
+            });
+
+            // --- UTILITY FUNCTIONS ---
+            const getFileIcon = (filename) => {
+                const ext = filename.split('.').pop();
+                switch (ext) {
+                    case 'html': return '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f06529" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path><polyline points="14 2 14 8 20 8"></polyline><path d="m10 10.5-2 2 2 2"></path><path d="m14 14.5 2-2-2-2"></path></svg>';
+                    case 'css': return '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2965f1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path><polyline points="14 2 14 8 20 8"></polyline><path d="M10.4 12.6a.4.4 0 0 0-.8 0l-1.8 4.2a.4.4 0 0 0 .4.5h3.6a.4.4 0 0 0 .4-.5Z"></path><path d="M16.2 12.6a.4.4 0 0 0-.8 0l-1.8 4.2a.4.4 0 0 0 .4.5h3.6a.4.4 0 0 0 .4-.5Z"></path></svg>';
+                    case 'js': return '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f7df1e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path><polyline points="14 2 14 8 20 8"></polyline><path d="M10 15.5c.5-.3 1.2-.5 2-.5s1.5.2 2 .5"></path><path d="M10 12.5c.5-.3 1.2-.5 2-.5s1.5.2 2 .5"></path></svg>';
+                    default: return '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>';
+                }
+            };
+            
+            const logToConsole = (message, type = 'log') => {
+                const line = document.createElement('div');
+                const timestamp = new Date().toLocaleTimeString();
+                line.textContent = `[${timestamp}] ${message}`;
+                if (type === 'error') {
+                    line.className = 'text-red-400';
+                } else if(type === 'warn') {
+                    line.className = 'text-yellow-400';
+                }
+                consoleOutput.appendChild(line);
+                consoleOutput.scrollTop = consoleOutput.scrollHeight;
+            };
+            
+            const clearConsole = () => {
+                consoleOutput.innerHTML = '';
+            };
+            
+            const proxyConsoleInScript = (scriptContent) => {
+                return `
+                    const _console = { ...console };
+                    console.log = (...args) => {
+                        window.parent.postMessage({ type: 'console', level: 'log', args: args.map(a => JSON.stringify(a)) }, '*');
+                        _console.log(...args);
+                    };
+                    console.error = (...args) => {
+                        window.parent.postMessage({ type: 'console', level: 'error', args: args.map(a => JSON.stringify(a)) }, '*');
+                        _console.error(...args);
+                    };
+                    console.warn = (...args) => {
+                        window.parent.postMessage({ type: 'console', level: 'warn', args: args.map(a => JSON.stringify(a)) }, '*');
+                        _console.warn(...args);
+                    };
+                    try {
+                        ${scriptContent}
+                    } catch(e) {
+                        console.error(e.message);
+                    }
+                `;
+            };
+            
+            window.addEventListener('message', (event) => {
+                const { type, level, args } = event.data;
+                if (type === 'console') {
+                    logToConsole(args.join(' '), level);
+                }
+            });
+
+            const showModal = (title, text, inputValue, callback, isConfirmOnly = false) => {
+                modalTitle.textContent = title;
+                modalText.textContent = text;
+                modalInput.value = inputValue;
+                
+                modalInput.style.display = isConfirmOnly ? 'none' : 'block';
+                modalText.style.display = isConfirmOnly ? 'block' : 'none';
+                if(isConfirmOnly) modalText.textContent = text;
+                
+                modal.classList.remove('hidden');
+                modalInput.focus();
+
+                const confirmHandler = () => {
+                    callback(isConfirmOnly ? true : modalInput.value);
+                    cleanup();
+                };
+
+                const cancelHandler = () => {
+                    callback(isConfirmOnly ? false : null);
+                    cleanup();
+                };
+
+                const keydownHandler = (e) => {
+                    if (e.key === 'Enter') confirmHandler();
+                    if (e.key === 'Escape') cancelHandler();
+                };
+
+                const cleanup = () => {
+                    modal.classList.add('hidden');
+                    modalConfirm.removeEventListener('click', confirmHandler);
+                    modalCancel.removeEventListener('click', cancelHandler);
+                    modalInput.removeEventListener('keydown', keydownHandler);
+                };
+
+                modalConfirm.addEventListener('click', confirmHandler);
+                modalCancel.addEventListener('click', cancelHandler);
+                modalInput.addEventListener('keydown', keydownHandler);
+            };
+
+            // --- INITIALIZATION ---
+            renderEditor();
+        });
+    </script>
+</body>
+</html>
