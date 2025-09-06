@@ -74,6 +74,58 @@
     </style>
 </head>
 <body class="bg-gray-800 text-gray-200 flex h-screen antialiased overflow-hidden">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/showdown/2.1.0/showdown.min.js"></script>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #1f2937; }
+        ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+        
+        #chat-body.is-empty { justify-content: center; }
+        #chat-body.is-empty #messages-container { display: none; }
+        #chat-body.is-empty #input-container { background: transparent; border-color: transparent; }
+        #chat-body.is-empty #search-bar-wrapper { background-color: rgba(31, 41, 55, 0.8); backdrop-filter: blur(8px); }
+        #input-container, #search-bar-wrapper { transition: all 0.3s ease-in-out; }
+
+        #virtual-env-modal, #profile-modal, #edit-profile-modal, #settings-modal, #gemini-modal, #camera-modal {
+            transition: transform 0.3s ease-in-out, opacity 0.3s ease-in-out;
+            transform: scale(0.95);
+            opacity: 0;
+            pointer-events: none;
+        }
+        #virtual-env-modal.open, #profile-modal.open, #edit-profile-modal.open, #settings-modal.open, #gemini-modal.open, #camera-modal.open {
+            transform: scale(1);
+            opacity: 1;
+            pointer-events: auto;   
+        }
+        
+        /* Styles from Code Editor */
+        .resizer { background: #4b5563; cursor: col-resize; width: 4px; flex-shrink: 0; }
+        .file-item:hover, .folder-header:hover { background-color: #374151; }
+        .context-menu { display: none; position: absolute; background-color: #1f2937; border: 1px solid #374151; border-radius: 0.5rem; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4); z-index: 1000; width: 150px; }
+        .context-menu-item { padding: 8px 16px; cursor: pointer; }
+        .context-menu-item:hover { background-color: #374151; }
+        .folder-content { padding-left: 1rem; }
+        .folder-arrow { transition: transform 0.2s; }
+        .folder-arrow.collapsed { transform: rotate(-90deg); }
+        .output-tab.active { background-color: #374151; color: #f3f4f6; }
+        
+        /* ADDED: Styles for AI-generated Markdown content */
+        .ai-message-content h1, .ai-message-content h2, .ai-message-content h3 { font-weight: 600; margin-bottom: 0.5rem; margin-top: 1rem; }
+        .ai-message-content p { margin-bottom: 0.5rem; }
+        .ai-message-content ul, .ai-message-content ol { margin-left: 1.5rem; margin-bottom: 0.5rem; list-style-position: outside; }
+        .ai-message-content ul { list-style-type: disc; }
+        .ai-message-content ol { list-style-type: decimal; }
+        .ai-message-content li { margin-bottom: 0.25rem; }
+        .ai-message-content pre { background-color: #1f2937; padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem; overflow-x: auto; font-family: 'Courier New', Courier, monospace; }
+        .ai-message-content code { background-color: rgba(31, 41, 55, 0.8); padding: 0.1rem 0.3rem; border-radius: 0.25rem; font-family: 'Courier New', Courier, monospace; }
+        .ai-message-content pre > code { background-color: transparent; padding: 0; }
+        .ai-message-content a { color: #2dd4bf; text-decoration: underline; }
+    </style>
+</head>
+<body class="bg-gray-800 text-gray-200 flex h-screen antialiased overflow-hidden">
 
     <!-- Main App Wrapper -->
     <div class="flex h-full w-full relative">
