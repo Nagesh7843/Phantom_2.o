@@ -167,7 +167,7 @@ def dashboard():
 
 @app.route('/login/google')
 def login_google():
-    redirect_uri = url_for('authorize', _external=True)
+    redirect_uri = url_for('authorize', _external=True) # This line is key
     return google.authorize_redirect(redirect_uri)
 
 @app.route('/authorize')
