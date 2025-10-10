@@ -32,107 +32,66 @@ document.addEventListener('DOMContentLoaded', () => {
     const saveProfileBtn = getEl('save-profile-btn');
     const profileModal = getEl('profile-modal');
     const closeProfileModalBtn = getEl('close-profile-modal-btn');
-    const profilePictureInput = getEl('profile-picture-input');
-    const profileEditBtn = getEl('profile-edit-btn');
-    const profileMemoryBtn = getEl('profile-memory-btn');
-    const profileSupportBtn = getEl('profile-support-btn');
 
-    const fileInput = getEl('file-input');
-    const themeSelect = getEl('theme-select');
-    const voiceSelect = getEl('voice-select');
-    const micButton = getEl('mic-button');
-    const sidebarToggleBtnHeader = getEl('sidebar-toggle-btn-header');
-    const sidebarToggleBtnSidebar = getEl('sidebar-toggle-btn-sidebar');
-    const geminiToolkitBtn = getEl('gemini-toolkit-btn');
-    const geminiModal = getEl('gemini-modal');
-    const closeGeminiModalBtn = getEl('close-gemini-modal-btn');
-    const summarizeBtn = getEl('summarize-btn');
-    const suggestReplyBtn = getEl('suggest-reply-btn');
-    const toneAnalyzerBtn = getEl('tone-analyzer-btn');
-    const geminiOutput = getEl('gemini-output');
-    const searchBarWrapper = getEl('search-bar-wrapper');
-    const cameraModal = getEl('camera-modal');
-    const closeCameraBtn = getEl('close-camera-btn');
-    const cameraStreamEl = getEl('camera-stream');
-    const cameraCaptureCanvas = getEl('camera-capture-canvas');
-    const captureBtn = getEl('capture-btn');
-    const activeToolIndicator = getEl('active-tool-indicator');
-    const imagePreviewContainer = getEl('image-preview-container');
-    const imagePreview = getEl('image-preview');
-    const removeImageBtn = getEl('remove-image-btn');
-
-    // Remove any floating composer/quick-action toolbar or leftover composer buttons
-    // (handles elements added earlier like composer-toolbar / composer-quick-actions)
-    (function removeComposerToolbarIfPresent() {
-        const ids = [
-            'composer-quick-actions',
-            'composer-toolbar',
-            'composer-more-btn',
-            'composer-edit-btn',
-            'composer-speak-ai-btn',
-            'composer-copy-btn',
-            'composer-share-btn',
-            'composer-like-btn',
-            'composer-dislike-btn'
-        ];
-        ids.forEach(id => {
-            const byId = document.getElementById(id);
-            if (byId) byId.remove();
-            const byClass = document.querySelector(`.${id}`);
-            if (byClass) byClass.remove();
-        });
-    })();
+    // --- UI Interaction Setup ---
     
-    const loadingIndicator = document.createElement('div');
-    loadingIndicator.innerHTML = `<div class="text-center p-4 text-gray-400">Thinking...</div>`;
-    loadingIndicator.style.display = 'none';
-    if (messagesContainer) {
-        messagesContainer.parentNode.insertBefore(loadingIndicator, messagesContainer.nextSibling);
-    }
+    // Generic Modal Controller
+    const setupModal = (modalId, openBtnId, closeBtnId) => {
+        const modal = getEl(modalId);
+        const openBtn = getEl(openBtnId);
+        const closeBtn = getEl(closeBtnId);
 
-    // --- Global State & Data ---
-    let currentSessionId = null;
-    let chatHistory = [];
-    let availableVoices = [];
-    let activeStream = null;
-    let activeTool = null;
-    let attachedFile = null;
-    const synth = window.speechSynthesis;
-    // --- Auto‑Speak state (persisted) ---
-    let autoSpeak = localStorage.getItem('phantom-auto-speak') === 'true';
-    const ttsToggleBtn = getEl('tts-toggle-btn');          // header toggle (if present)
-    const settingsCheckbox = getEl('auto-speak-toggle');  // settings modal checkbox (if present)
+        if (!modal) return;
 
-    function updateAutoSpeakUI() {
-        if (ttsToggleBtn) {
-            ttsToggleBtn.setAttribute('aria-pressed', String(autoSpeak));
-            ttsToggleBtn.classList.toggle('active', autoSpeak);
-            ttsToggleBtn.title = autoSpeak ? 'Auto‑speak (on)' : 'Auto‑speak (off)';
-        }
-        if (settingsCheckbox) settingsCheckbox.checked = autoSpeak;
-    }
-    function setAutoSpeak(value) {
-        autoSpeak = !!value;
-        localStorage.setItem('phantom-auto-speak', String(autoSpeak));
-        updateAutoSpeakUI();
-    }
-    if (ttsToggleBtn) ttsToggleBtn.addEventListener('click', (e) => { e.preventDefault(); setAutoSpeak(!autoSpeak); });
-    if (settingsCheckbox) settingsCheckbox.addEventListener('change', (e) => setAutoSpeak(e.target.checked));
-    updateAutoSpeakUI();
+        const open = () => {
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        };
+        const close = () => {
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        };
 
-    const allPrompts = [
-        { title: "Explain quantum computing", subtitle: "in simple terms" },
-        { title: "Creative birthday ideas", subtitle: "for a 10 year old" },
-        { title: "Write a thank-you note", subtitle: "to my interviewer" },
-        { title: "HTTP requests in Javascript", subtitle: "show me an example" },
-        { title: "Plan a trip to the Alps", subtitle: "on a budget" },
-        { title: "Write a short sci-fi story", subtitle: "about a friendly robot" },
-        { title: "Healthy meal prep ideas", subtitle: "for a busy week" },
-        { title: "How to learn a new language", subtitle: "best methods and tips" }
-    ];
+        if (openBtn) openBtn.addEventListener('click', open);
+        if (closeBtn) closeBtn.addEventListener('click', close);
+        
+        // Also close if clicking the modal background
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                close();
+            }
+        });
+    };
+
+    // Sidebar Controller
+    const setupSidebar = () => {
+        const sidebar = getEl('sidebar');
+        const headerToggleBtn = getEl('sidebar-toggle-btn-header');
+        const sidebarCloseBtn = getEl('sidebar-toggle-btn-sidebar'); // Assuming a close button inside the sidebar
+
+        if (!sidebar) return;
+
+        const toggle = () => {
+            // Toggles visibility for mobile/smaller screens
+            sidebar.classList.toggle('hidden'); 
+            // Toggles collapsed state for larger screens if you implement that
+            // sidebar.classList.toggle('w-20'); 
+        };
+
+        if (headerToggleBtn) headerToggleBtn.addEventListener('click', toggle);
+        if (sidebarCloseBtn) sidebarCloseBtn.addEventListener('click', toggle);
+    };
+
+    // Initialize all UI controllers
+    setupSidebar();
+    setupModal('settings-modal', 'settings-btn', 'close-settings-modal-btn');
+    setupModal('edit-profile-modal', 'edit-profile-btn', 'close-edit-profile-modal-btn');
+    setupModal('profile-modal', 'user-profile-btn', 'close-profile-modal-btn');
+    // Add other modals here if they exist, e.g., setupModal('gemini-modal', 'gemini-toolkit-btn', 'close-gemini-modal-btn');
+
 
     // =====================================================================
-    // --- API FUNCTIONS ---
+    // --- STATE & API ---
     // =====================================================================
     async function fetchApi(endpoint, options = {}) {
         try {
