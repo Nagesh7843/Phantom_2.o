@@ -1,15 +1,17 @@
 import os
-from flask import Flask, request, jsonify, render_template, redirect, url_for, session
-from flask_cors import CORS
-import requests
-from dotenv import load_dotenv
-from authlib.integrations.flask_client import OAuth
-import jwt # For decoding JWTs (like Google's id_token)
-from pymongo import MongoClient # For MongoDB connection
-from werkzeug.security import generate_password_hash, check_password_hash # For password hashing
 from datetime import datetime, timezone
-from bson.objectid import ObjectId # For generating unique MongoDB ObjectIDs
-from flask import Flask, render_template, request, redirect, url_for, flash, session
+
+import jwt  # For decoding JWTs (like Google's id_token)
+import requests
+from authlib.integrations.flask_client import OAuth
+from bson.objectid import ObjectId  # For generating unique MongoDB ObjectIDs
+from dotenv import load_dotenv
+from flask import Flask, render_template, request, redirect, url_for, session
+from flask import jsonify
+from flask_cors import CORS
+from pymongo import MongoClient  # For MongoDB connection
+from werkzeug.security import generate_password_hash, check_password_hash  # For password hashing
+from werkzeug.middleware.proxy_fix import ProxyFix # <-- Import ProxyFix
 
 # Load environment variables from .env file at the very beginning
 load_dotenv()
@@ -17,6 +19,12 @@ load_dotenv()
 app = Flask(__name__,
             template_folder='templates',
             static_folder='static')
+
+# --- Add ProxyFix Middleware ---
+# This is crucial for deployments behind a reverse proxy (like on Render).
+# It ensures that url_for(_external=True) generates the correct https URL.
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+
 
 CORS(app, resources={r"/api/*": {"origins": "*"}}) 
 
@@ -131,7 +139,7 @@ def login():
 # NEW: A dedicated route to simply show the registration page.
 @app.route('/register')
 def register():
-    # You will need to create a 'register.html' file in your templates folder.
+    # You will need to create a 'register.html' file in your templates' folder.
     return render_template('register.html')
 
 
@@ -147,7 +155,7 @@ def dashboard():
         # If no user in session, redirect to the login page
         return redirect(url_for('login')) 
     
-    # If user exists, show the dashboard
+    # If a user exists, show the dashboard
     return render_template('dashboard.html', 
                            user_display_name=session.get('user_display_name', 'Guest'),
                            user_email=session.get('user_email', ''),
@@ -201,9 +209,9 @@ def authorize():
 
 
         return redirect(url_for('dashboard'))
-    except Exception as e:
-        app.logger.error(f"Google Authorization final step failed: {str(e)}", exc_info=True)
-        return render_template('login.html', error_message=f"Login failed: {str(e)}")
+    except Exception as element:
+        app.logger.error(f"Google Authorization final step failed: {str(element)}", exc_info=True)
+        return render_template('login.html', error_message=f"Login failed: {str(element)}")
 
 # --- NEW: API for Traditional User Registration ---
 @app.route('/api/register', methods=['POST'])
@@ -249,8 +257,8 @@ def register_user():
         session['user_voice'] = ''
 
         return jsonify({"message": "Registration successful", "user_id": user_id}), 201
-    except Exception as e:
-        app.logger.error(f"Error during registration: {e}", exc_info=True)
+    except Exception as element:
+        app.logger.error(f"Error during registration: {element}", exc_info=True)
         return jsonify({"error": "Registration failed due to server error."}), 500
 
 # --- NEW: API for Traditional User Login ---
@@ -345,8 +353,8 @@ def update_profile():
                 "voice": session['user_voice']
             }
         }), 200
-    except Exception as e:
-        app.logger.error(f"Error updating profile for user {user_id}: {e}", exc_info=True)
+    except Exception as element:
+        app.logger.error(f"Error updating profile for user {user_id}: {element}", exc_info=True)
         return jsonify({"error": "Failed to update profile."}), 500
 
 # --- NEW: API for getting all chat sessions for a user ---
@@ -359,12 +367,12 @@ def get_all_sessions():
     try:
         sessions_cursor = chat_sessions_collection.find(
             {'user_id': user_id}
-        ).sort('last_updated', -1)  # Sort by most recent update first
+        ).sort('last_updated', -1)  # Sort by the most recent update first
         
         all_sessions = []
         for s in sessions_cursor:
             session_title = s.get('title', 'New Chat Session')
-            # If title is still default, try to get it from the first message
+            # If the title is still default, try to get it from the first message
             if session_title == "New Chat Session": # Original default title
                 first_message = messages_collection.find_one({'session_id': s['_id'], 'role': 'user'})
                 if first_message:
@@ -381,8 +389,8 @@ def get_all_sessions():
             })
         
         return jsonify({"sessions": all_sessions}), 200
-    except Exception as e:
-        app.logger.error(f"Error fetching all sessions for user {user_id}: {e}", exc_info=True)
+    except Exception as element:
+        app.logger.error(f"Error fetching all sessions for user {user_id}: {element}", exc_info=True)
         return jsonify({"error": "Failed to load chat history."}), 500
 
 # --- NEW: API for starting a new chat session ---
@@ -429,7 +437,7 @@ def chat_api():
 
         # Update the session's last_updated time
         chat_sessions_collection.update_one(
-            {'_id': ObjectId(current_session_id)}, # Convert to ObjectId for query
+            {'_id': ObjectId(current_session_id)}, # Convert to ObjectId for a query
             {'$set': {'last_updated': datetime.now(timezone.utc)}},
             upsert=False
         )
@@ -528,19 +536,19 @@ Response Guidelines:
     except requests.exceptions.Timeout:
         app.logger.error("Backend: Gemini API request timed out (20 seconds).")
         return jsonify({"error": {"message": "Backend: Gemini API request timed out."}}), 504
-    except requests.exceptions.HTTPError as e:
-        status_code = e.response.status_code
-        error_message = e.response.text
+    except requests.exceptions.HTTPError as element:
+        status_code = element.response.status_code
+        error_message = element.response.text
         app.logger.error(f"Backend HTTP Error calling Gemini API: Status {status_code}, Message: {error_message}")
         if status_code == 400 and "API key not valid" in error_message:
              return jsonify({"error": {"message": "Backend: API key not valid. Please check your backend's GEMINI_API_KEY configuration."}}), 400
         return jsonify({"error": {"message": f"Backend: Error from Gemini API: Status {status_code}, Details: {error_message}"}}), status_code
-    except requests.exceptions.RequestException as e:
-        app.logger.error(f"Backend: Error connecting to Gemini API: {e}")
-        return jsonify({"error": {"message": f"Backend: Error connecting to Gemini API: {e}"}}), 500
-    except Exception as e:
-        app.logger.error(f"Backend: An unexpected server error occurred: {e}", exc_info=True)
-        return jsonify({"error": {"message": f"Backend: An unexpected error occurred: {str(e)}"}}), 500
+    except requests.exceptions.RequestException as element:
+        app.logger.error(f"Backend: Error connecting to Gemini API: {element}")
+        return jsonify({"error": {"message": f"Backend: Error connecting to Gemini API: {element}"}}), 500
+    except Exception as element:
+        app.logger.error(f"Backend: An unexpected server error occurred: {element}", exc_info=True)
+        return jsonify({"error": {"message": f"Backend: An unexpected error occurred: {str(element)}"}}), 500
 
 # --- NEW: API for loading chat history for a session ---
 @app.route('/api/history/<session_id>', methods=['GET'])
@@ -575,11 +583,12 @@ def get_session_history(session_id):
         else:
             print("DEBUG: messages_collection not available, cannot fetch history.")
             return jsonify({"history": []}), 200
-    except Exception as e:
-        app.logger.error(f"Error fetching chat history for session {session_id}: {e}", exc_info=True)
+    except Exception as element:
+        app.logger.error(f"Error fetching chat history for session {session_id}: {element}", exc_info=True)
         return jsonify({"error": "Failed to load history for this session."}), 500
 
 # --- NEW: API for updating/deleting a chat session ---
+# noinspection PyBroadException
 @app.route('/api/session/<session_id>', methods=['PUT', 'DELETE'])
 def manage_session(session_id):
     if not session.get('user') or mongo_db is None:
@@ -604,8 +613,8 @@ def manage_session(session_id):
             # Delete all messages associated with the session
             messages_collection.delete_many({'session_id': session_id_obj, 'user_id': user_id})
             return jsonify({"message": "Session and associated messages deleted successfully."}), 200
-        except Exception as e:
-            app.logger.error(f"Error deleting session {session_id} for user {user_id}: {e}", exc_info=True)
+        except Exception as element:
+            app.logger.error(f"Error deleting session {session_id} for user {user_id}: {element}", exc_info=True)
             return jsonify({"error": "Failed to delete session."}), 500
 
     # --- HANDLE RENAMING (PUT) ---
@@ -621,8 +630,8 @@ def manage_session(session_id):
                 {'$set': {'title': new_title.strip()}}
             )
             return jsonify({"message": "Session renamed successfully.", "new_title": new_title.strip()}), 200
-        except Exception as e:
-            app.logger.error(f"Error renaming session {session_id} for user {user_id}: {e}", exc_info=True)
+        except Exception as element:
+            app.logger.error(f"Error renaming session {session_id} for user {user_id}: {element}", exc_info=True)
             return jsonify({"error": "Failed to rename session."}), 500
 
     # Fallback for other methods if any were added to the route

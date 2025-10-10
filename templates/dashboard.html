@@ -71,46 +71,6 @@
             background-color: #374151; /* gray-700 */
             color: #f3f4f6; /* gray-100 */
         }
-    </style>
-</head>
-<body class="bg-gray-800 text-gray-200 flex h-screen antialiased overflow-hidden">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/showdown/2.1.0/showdown.min.js"></script>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
-    <style>
-        body { font-family: 'Inter', sans-serif; }
-        ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-track { background: #1f2937; }
-        ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #6b7280; }
-        
-        #chat-body.is-empty { justify-content: center; }
-        #chat-body.is-empty #messages-container { display: none; }
-        #chat-body.is-empty #input-container { background: transparent; border-color: transparent; }
-        #chat-body.is-empty #search-bar-wrapper { background-color: rgba(31, 41, 55, 0.8); backdrop-filter: blur(8px); }
-        #input-container, #search-bar-wrapper { transition: all 0.3s ease-in-out; }
-
-        #virtual-env-modal, #profile-modal, #edit-profile-modal, #settings-modal, #gemini-modal, #camera-modal {
-            transition: transform 0.3s ease-in-out, opacity 0.3s ease-in-out;
-            transform: scale(0.95);
-            opacity: 0;
-            pointer-events: none;
-        }
-        #virtual-env-modal.open, #profile-modal.open, #edit-profile-modal.open, #settings-modal.open, #gemini-modal.open, #camera-modal.open {
-            transform: scale(1);
-            opacity: 1;
-            pointer-events: auto;   
-        }
-        
-        /* Styles from Code Editor */
-        .resizer { background: #4b5563; cursor: col-resize; width: 4px; flex-shrink: 0; }
-        .file-item:hover, .folder-header:hover { background-color: #374151; }
-        .context-menu { display: none; position: absolute; background-color: #1f2937; border: 1px solid #374151; border-radius: 0.5rem; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4); z-index: 1000; width: 150px; }
-        .context-menu-item { padding: 8px 16px; cursor: pointer; }
-        .context-menu-item:hover { background-color: #374151; }
-        .folder-content { padding-left: 1rem; }
-        .folder-arrow { transition: transform 0.2s; }
-        .folder-arrow.collapsed { transform: rotate(-90deg); }
-        .output-tab.active { background-color: #374151; color: #f3f4f6; }
         
         /* ADDED: Styles for AI-generated Markdown content */
         .ai-message-content h1, .ai-message-content h2, .ai-message-content h3 { font-weight: 600; margin-bottom: 0.5rem; margin-top: 1rem; }
@@ -123,6 +83,42 @@
         .ai-message-content code { background-color: rgba(31, 41, 55, 0.8); padding: 0.1rem 0.3rem; border-radius: 0.25rem; font-family: 'Courier New', Courier, monospace; }
         .ai-message-content pre > code { background-color: transparent; padding: 0; }
         .ai-message-content a { color: #2dd4bf; text-decoration: underline; }
+
+        /* Composer bottom toolbar (ChatGPT-like) */
+        #input-container { position: relative; }
+        .composer-toolbar {
+            position: absolute;
+            right: 22px;
+            bottom: 18px;
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            background: rgba(17,24,39,0.6);
+            padding: 6px;
+            border-radius: 999px;
+            backdrop-filter: blur(6px);
+            border: 1px solid rgba(255,255,255,0.04);
+            box-shadow: 0 6px 20px rgba(2,6,23,0.45);
+            z-index: 40;
+        }
+        .composer-toolbar button {
+            width: 36px;
+            height: 36px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+            background: transparent;
+            color: #cdeff3;
+            border: none;
+            cursor: pointer;
+        }
+        .composer-toolbar button:hover { background: rgba(255,255,255,0.03); }
+        .composer-toolbar .active { background: rgba(45,212,191,0.12); color: #2dd4bf; }
+        @media (max-width: 768px) {
+            .composer-toolbar { right: 12px; bottom: 12px; gap: 6px; }
+            .composer-toolbar button { width: 32px; height: 32px; }
+        }
     </style>
 </head>
 <body class="bg-gray-800 text-gray-200 flex h-screen antialiased overflow-hidden">
@@ -148,10 +144,20 @@
         <!-- Main Chat Area -->
         <main id="main-chat-area" class="flex-1 flex flex-col bg-gray-800 overflow-hidden">
             <header id="main-header" class="bg-gray-900/50 backdrop-blur-sm h-16 flex items-center justify-between px-6 border-b border-gray-700 flex-shrink-0">
-                <button id="sidebar-toggle-btn-header" class="p-2 rounded-md hover:bg-gray-700"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" /></svg></button>
-                <h2 id="chat-title" class="text-lg font-semibold">New Chat</h2>
-                <button id="settings-btn" class="p-2 rounded-md hover:bg-gray-700"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><circle cx="12" cy="12" r="3" /></svg></button>
-            </header>
+                <div class="flex items-center gap-3">
+                    <button id="sidebar-toggle-btn-header" class="p-2 rounded-md hover:bg-gray-700" title="Toggle sidebar">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
+                    </button>
+                    <h2 id="chat-title" class="text-lg font-semibold">New Chat</h2>
+                </div>
+                <div class="flex items-center gap-2">
+                    <!-- Auto TTS toggle for AI replies -->
+                    <button id="tts-toggle-btn" class="p-2 rounded-md hover:bg-gray-700 text-sm" aria-pressed="false" title="Auto-speak AI replies (off)">🔈 Auto‑speak</button>
+                    <button id="settings-btn" class="p-2 rounded-md hover:bg-gray-700" title="Settings">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><circle cx="12" cy="12" r="3" /></svg>
+                    </button>
+                </div>
+             </header>
 
             <div id="chat-body" class="flex-1 flex flex-col overflow-hidden">
                 <div id="empty-state-suggestions" class="hidden flex-1 flex items-center justify-center w-full max-w-4xl mx-auto p-6">
@@ -170,13 +176,22 @@
                         </div>
                     </div>
                     <div id="search-bar-wrapper" class="w-full max-w-3xl mx-auto flex items-center gap-2 p-2 rounded-full bg-gray-700 border border-gray-600 shadow-lg focus-within:ring-2 focus-within:ring-teal-500 relative">
-                        <button id="toolkit-btn" class="flex-shrink-0 p-2 rounded-full hover:bg-gray-600 transition-colors"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg></button>
+                        <button id="toolkit-btn" class="flex-shrink-0 p-2 rounded-full hover:bg-gray-600 transition-colors" title="Tools">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+                        </button>
+
                         <textarea id="chat-input" class="flex-grow bg-transparent border-none focus:ring-0 resize-none p-2 h-10 max-h-40" rows="1" placeholder="Message Phantom AI..."></textarea>
+
                         <div class="flex-shrink-0 flex items-center space-x-1">
                             <button id="gemini-toolkit-btn" class="p-2 rounded-full hover:bg-gray-600" title="Phantom Toolkit">✨</button>
-                            <button id="mic-button" class="p-2 rounded-full hover:bg-gray-600"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-14 0m7 10v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg></button>
-                            <button id="send-button" class="bg-teal-500 text-white p-2 rounded-full hover:bg-teal-600"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 -rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg></button>
+                            <button id="mic-button" class="p-2 rounded-full hover:bg-gray-600" title="Voice input">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-14 0m7 10v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg>
+                            </button>
+                            <button id="send-button" class="bg-teal-500 text-white p-2 rounded-full hover:bg-teal-600" title="Send message">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 -rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
+                            </button>
                         </div>
+
                         <div id="toolkit-menu" class="hidden absolute bottom-full mb-2 w-56 bg-gray-700 rounded-lg shadow-lg p-2 z-10">
                             <button id="tool-camera-btn" class="flex items-center w-full text-left p-2 rounded-md hover:bg-gray-600"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg><span>Camera</span></button>
                             <button id="tool-file-btn" class="flex items-center w-full text-left p-2 rounded-md hover:bg-gray-600"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg><span>File Upload</span></button>
@@ -184,6 +199,17 @@
                             <button id="tool-data-btn" class="flex items-center w-full text-left p-2 rounded-md hover:bg-gray-600"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg><span>Data Analyst</span></button>
                             <input type="file" id="file-input" class="hidden" accept="image/*">
                         </div>
+                    </div>
+
+                    <!-- ChatGPT-like composer toolbar anchored to input bottom -->
+                    <div class="composer-toolbar" role="toolbar" aria-label="Composer quick actions">
+                        <button id="composer-edit-btn" title="Edit last message">✎</button>
+                        <button id="composer-speak-ai-btn" title="Speak last AI reply">🔊</button>
+                        <button id="composer-copy-btn" title="Copy last message">📋</button>
+                        <button id="composer-share-btn" title="Share last message">🔗</button>
+                        <button id="composer-like-btn" title="Like last message">👍</button>
+                        <button id="composer-dislike-btn" title="Dislike last message">👎</button>
+                        <button id="composer-more-btn" title="More actions">⋯</button>
                     </div>
                 </div>
             </div>
@@ -193,12 +219,29 @@
     <!-- Modals -->
     <!-- NEW: Settings Modal (Theme, Voice) -->
     <div id="settings-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50">
-        <div class="bg-gray-800 rounded-lg shadow-xl p-8 w-full max-w-md">
-            <div class="flex justify-between items-center mb-6"><h2 class="text-2xl font-bold">Settings</h2><button id="close-settings-modal-btn" class="p-2 rounded-full hover:bg-gray-700 text-2xl leading-none">&times;</button></div>
-            <div class="space-y-6">
-                <div><label for="theme-select" class="block text-sm font-medium text-gray-400 mb-2">Theme</label><select id="theme-select" class="w-full bg-gray-700 rounded-md p-2 focus:ring-2 focus:ring-teal-500 focus:outline-none"><option value="theme-dark">Dark (Default)</option><option value="theme-light">Light</option></select></div>
-                <div><label for="voice-select" class="block text-sm font-medium text-gray-400 mb-2">Voice</label><select id="voice-select" class="w-full bg-gray-700 rounded-md p-2 focus:ring-2 focus:ring-teal-500 focus:outline-none"></select></div>
-                <button id="save-settings-btn" class="w-full bg-teal-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-teal-600">Save Settings</button>
+        <div class="bg-gray-800 text-gray-100 rounded-lg w-full max-w-lg p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold">Settings</h3>
+                <button id="close-settings-modal-btn" class="text-gray-400 hover:text-white">✕</button>
+            </div>
+            <div class="space-y-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <div class="text-sm font-medium">Auto‑speak AI replies</div>
+                        <div class="text-xs text-gray-400">When enabled, AI replies will be spoken aloud automatically.</div>
+                    </div>
+                    <!-- checkbox target used by JS: 'auto-speak-toggle' -->
+                    <div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="auto-speak-toggle" class="sr-only">
+                            <div class="w-12 h-6 bg-gray-600 rounded-full peer-focus:ring-2 peer-focus:ring-teal-400 transition-colors"></div>
+                        </label>
+                    </div>
+                </div>
+                <!-- other settings rows can go here -->
+            </div>
+            <div class="mt-6 flex justify-end">
+                <button id="save-settings-btn" class="bg-teal-500 text-white px-4 py-2 rounded-md hover:bg-teal-600">Save</button>
             </div>
         </div>
     </div>
@@ -222,7 +265,7 @@
             <div class="relative w-24 h-24 mx-auto mb-4">
                 <img id="profile-modal-avatar" class="user-avatar-img w-24 h-24 rounded-full object-cover" src="{{ user_picture_url or 'https://placehold.co/96x96/4A5568/E2E8F0?text=U' }}" alt="User Avatar">
                 <label for="profile-picture-input" class="absolute bottom-0 right-0 bg-teal-500 text-white rounded-full p-2 cursor-pointer hover:bg-teal-600">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
                 </label>
                 <input type="file" id="profile-picture-input" class="hidden" accept="image/png, image/jpeg">
             </div>
@@ -281,23 +324,6 @@
                         <div>
                             <button id="collapse-all-btn" title="Collapse All" class="p-1 hover:bg-gray-700 rounded-md"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="9" x2="15" y1="12" y2="12"/></svg></button>
                             <button id="add-folder-btn" title="New Folder" class="p-1 hover:bg-gray-700 rounded-md"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"></path><line x1="12" y1="10" x2="12" y2="16"></line><line x1="9" y1="13" x2="15" y2="13"></line></svg></button>
-                            <button id="add-file-btn" title="New File" class="p-1 hover:bg-gray-700 rounded-md"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line></svg></button>
-                        </div>
-                    </div>
-                    <div id="virtual-env-files" class="flex-1 overflow-y-auto"></div>
-                </div>
-                <div id="resizer-1" class="resizer"></div>
-                <!-- Panel 2: Editor (Integrated) -->
-                <div class="flex-1 flex flex-col min-w-0">
-                    <div id="editor-panel" class="flex-1 flex flex-col bg-gray-800 min-h-0">
-                        <div id="tabs-container" class="flex bg-gray-900 border-b border-gray-700 overflow-x-auto flex-shrink-0"></div>
-                        <textarea id="virtual-env-input" class="w-full h-full p-4 bg-transparent text-gray-200 font-mono text-sm outline-none resize-none leading-relaxed tracking-wide" spellcheck="false"></textarea>
-                        <div id="editor-placeholder" class="flex flex-col items-center justify-center h-full text-gray-500">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
-                            <p class="mt-4">Select or create a file to start editing</p>
-                        </div>
-                    </div>
-                </div>
                 <div id="resizer-2" class="resizer"></div>
                 <!-- Panel 3: AI Analysis / Output (Integrated) -->
                 <div id="virtual-env-chat-panel" class="w-full md:w-1/3 bg-gray-900 flex flex-col border-t md:border-t-0 md:border-l border-gray-700">
@@ -702,9 +728,9 @@
             };
 
             const getFileIcon = filename => {
-                if (filename === 'folder') return '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"></path></svg>';
+                if (filename === 'folder') return '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"></path>';
                 const ext = filename.split('.').pop();
-                const colors = { html: '#f06529', css: '#2965f1', js: '#f7df1e', py: '#3776ab', java: '#e76f00', json: '#a7a7a7', other: '#94a3b8' };
+                const colors = { html: '#f06529', css: '#2965f1', js: '#f7df1e', py: '#3776ab', java: '#e76f00', json: '#a7a7a7' };
                 const color = colors[ext] || colors.other;
                 return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>`;
             };
@@ -729,20 +755,9 @@
                 modalConfirm.addEventListener('click', confirmHandler);
                 modalCancel.addEventListener('click', cancelHandler);
                 document.addEventListener('keydown', keydownHandler);
-            };
 
-            // --- INITIALIZATION ---
-            renderEditor();
-            switchOutputTab('preview');
-        });
-        // --- END OF INTEGRATED CODE EDITOR SCRIPT ---
-    </script>
-    <script>
-        // --- SCRIPT TO OPEN/CLOSE THE VIRTUAL ENV MODAL ---
-        document.addEventListener('DOMContentLoaded', () => {
-            const canvaCodeBtn = document.getElementById('tool-canva-btn');
-            const virtualEnvModal = document.getElementById('virtual-env-modal');
-            const closeVirtualEnvBtn = document.getElementById('close-virtual-env-btn');
+
+            }
 
             if (canvaCodeBtn && virtualEnvModal) {
                 canvaCodeBtn.addEventListener('click', () => {
@@ -763,6 +778,150 @@
             }
         });
     </script>
+    <script>
+        // Lightweight chat controls: ensure send button label is set safely
+        document.addEventListener('DOMContentLoaded', () => {
+            const sb = document.getElementById('send-button');
+            if (sb && !sb.innerHTML.trim()) sb.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 -rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>';
+        });
+    </script>
+    <script>
+        // Composer quick-actions: edit last user msg, speak last AI reply, copy/share/like/dislike last message
+        document.addEventListener('DOMContentLoaded', () => {
+            const messagesContainer = document.getElementById('messages-container');
+            const chatInput = document.getElementById('chat-input');
+            const sendBtn = document.getElementById('send-button');
+
+            const editBtn = document.getElementById('composer-edit-btn');
+            const speakAiBtn = document.getElementById('composer-speak-ai-btn');
+            const copyBtn = document.getElementById('composer-copy-btn');
+            const shareBtn = document.getElementById('composer-share-btn');
+            const likeBtn = document.getElementById('composer-like-btn');
+            const dislikeBtn = document.getElementById('composer-dislike-btn');
+
+            let editingTarget = null;
+
+            const escapeHtml = s => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+            function getLastBubble() {
+                if (!messagesContainer) return null;
+                // prefer structured message bubbles
+                const bubbles = messagesContainer.querySelectorAll('.message-bubble');
+                if (bubbles.length) return bubbles[bubbles.length - 1];
+                // fallback: any last child text node container
+                return messagesContainer.lastElementChild;
+            }
+
+            function findLastBySender(keyword) {
+                if (!messagesContainer) return null;
+                const bubbles = Array.from(messagesContainer.querySelectorAll('.message-bubble')).reverse();
+                for (const b of bubbles) {
+                    const s = b.querySelector('.message-sender');
+                    if (s && s.textContent.toLowerCase().includes(keyword.toLowerCase())) return b;
+                }
+                return null;
+            }
+
+            function getBubbleText(bubble) {
+                if (!bubble) return '';
+                const content = bubble.querySelector('.message-content');
+                if (content) return content.textContent.trim();
+                return bubble.textContent.trim();
+            }
+
+            function speakText(text) {
+                if (!('speechSynthesis' in window) || !text) return;
+                const u = new SpeechSynthesisUtterance(text);
+                window.speechSynthesis.cancel();
+                window.speechSynthesis.speak(u);
+            }
+
+            // Edit last user message
+            editBtn?.addEventListener('click', () => {
+                const bubble = findLastBySender('you') || findLastBySender('you') || getLastBubble();
+                if (!bubble) return alert('No message found to edit');
+                const txt = getBubbleText(bubble);
+                chatInput.value = txt;
+                chatInput.focus();
+                editingTarget = bubble;
+                // indicate save state
+                sendBtn.dataset.saveMode = 'true';
+                sendBtn.title = 'Save edit';
+                sendBtn.classList.add('opacity-90');
+            });
+
+            // Speak last AI reply
+            speakAiBtn?.addEventListener('click', () => {
+                const aiBubble = findLastBySender('phantom ai') || findLastBySender('ai') || getLastBubble();
+                if (!aiBubble) return alert('No AI reply found');
+                const txt = getBubbleText(aiBubble);
+                speakText(txt);
+            });
+
+            // Copy last message text
+            copyBtn?.addEventListener('click', async () => {
+                const bubble = getLastBubble();
+                const txt = getBubbleText(bubble);
+                if (!txt) return;
+                try { await navigator.clipboard.writeText(txt); /* minimal feedback */ copyBtn.textContent = '✓'; setTimeout(()=>copyBtn.textContent='📋',1000); } catch { alert('Copy failed'); }
+            });
+
+            // Share last message (Web Share fallback to copy)
+            shareBtn?.addEventListener('click', async () => {
+                const bubble = getLastBubble();
+                const txt = getBubbleText(bubble);
+                if (!txt) return;
+                if (navigator.share) {
+                    try { await navigator.share({ text: txt }); } catch (_) {}
+                } else {
+                    try { await navigator.clipboard.writeText(txt); shareBtn.textContent = '✓'; setTimeout(()=>shareBtn.textContent='🔗',1000); } catch { alert('Share failed'); }
+                }
+            });
+
+            // Like / Dislike toggles on last message
+            likeBtn?.addEventListener('click', () => {
+                const bubble = getLastBubble();
+                if (!bubble) return;
+                bubble.classList.toggle('liked');
+                bubble.classList.remove('disliked');
+                likeBtn.classList.toggle('active');
+                dislikeBtn.classList.remove('active');
+            });
+            dislikeBtn?.addEventListener('click', () => {
+                const bubble = getLastBubble();
+                if (!bubble) return;
+                bubble.classList.toggle('disliked');
+                bubble.classList.remove('liked');
+                dislikeBtn.classList.toggle('active');
+                likeBtn.classList.remove('active');
+            });
+
+            // Override send button when in edit mode
+            sendBtn?.addEventListener('click', (e) => {
+                if (sendBtn.dataset.saveMode === 'true' && editingTarget) {
+                    const newText = chatInput.value.trim();
+                    const contentEl = editingTarget.querySelector('.message-content');
+                    if (contentEl) contentEl.innerHTML = escapeHtml(newText).replace(/\n/g,'<br>');
+                    editingTarget = null;
+                    delete sendBtn.dataset.saveMode;
+                    sendBtn.title = 'Send message';
+                    // restore icon (simple)
+                    sendBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 -rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>';
+                    chatInput.value = '';
+                    return;
+                }
+                // otherwise let the normal send flow proceed (if present)
+            });
+
+            // small styles for liked/disliked (adds visual feedback)
+            const style = document.createElement('style');
+            style.textContent = `
+                .message-bubble.liked { box-shadow: 0 8px 30px rgba(6,182,212,0.12); border-color: rgba(16,185,129,0.6); }
+                .message-bubble.disliked { opacity: 0.9; filter: grayscale(30%); border-color: rgba(239,68,68,0.5); }
+                button.active { transform: translateY(-1px); }
+            `;
+            document.head.appendChild(style);
+        });
+    </script>
 </body>
 </html>
-

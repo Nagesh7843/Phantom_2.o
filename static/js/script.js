@@ -60,6 +60,28 @@ document.addEventListener('DOMContentLoaded', () => {
     const imagePreviewContainer = getEl('image-preview-container');
     const imagePreview = getEl('image-preview');
     const removeImageBtn = getEl('remove-image-btn');
+
+    // Remove any floating composer/quick-action toolbar or leftover composer buttons
+    // (handles elements added earlier like composer-toolbar / composer-quick-actions)
+    (function removeComposerToolbarIfPresent() {
+        const ids = [
+            'composer-quick-actions',
+            'composer-toolbar',
+            'composer-more-btn',
+            'composer-edit-btn',
+            'composer-speak-ai-btn',
+            'composer-copy-btn',
+            'composer-share-btn',
+            'composer-like-btn',
+            'composer-dislike-btn'
+        ];
+        ids.forEach(id => {
+            const byId = document.getElementById(id);
+            if (byId) byId.remove();
+            const byClass = document.querySelector(`.${id}`);
+            if (byClass) byClass.remove();
+        });
+    })();
     
     const loadingIndicator = document.createElement('div');
     loadingIndicator.innerHTML = `<div class="text-center p-4 text-gray-400">Thinking...</div>`;
@@ -76,6 +98,28 @@ document.addEventListener('DOMContentLoaded', () => {
     let activeTool = null;
     let attachedFile = null;
     const synth = window.speechSynthesis;
+    // --- Auto‑Speak state (persisted) ---
+    let autoSpeak = localStorage.getItem('phantom-auto-speak') === 'true';
+    const ttsToggleBtn = getEl('tts-toggle-btn');          // header toggle (if present)
+    const settingsCheckbox = getEl('auto-speak-toggle');  // settings modal checkbox (if present)
+
+    function updateAutoSpeakUI() {
+        if (ttsToggleBtn) {
+            ttsToggleBtn.setAttribute('aria-pressed', String(autoSpeak));
+            ttsToggleBtn.classList.toggle('active', autoSpeak);
+            ttsToggleBtn.title = autoSpeak ? 'Auto‑speak (on)' : 'Auto‑speak (off)';
+        }
+        if (settingsCheckbox) settingsCheckbox.checked = autoSpeak;
+    }
+    function setAutoSpeak(value) {
+        autoSpeak = !!value;
+        localStorage.setItem('phantom-auto-speak', String(autoSpeak));
+        updateAutoSpeakUI();
+    }
+    if (ttsToggleBtn) ttsToggleBtn.addEventListener('click', (e) => { e.preventDefault(); setAutoSpeak(!autoSpeak); });
+    if (settingsCheckbox) settingsCheckbox.addEventListener('change', (e) => setAutoSpeak(e.target.checked));
+    updateAutoSpeakUI();
+
     const allPrompts = [
         { title: "Explain quantum computing", subtitle: "in simple terms" },
         { title: "Creative birthday ideas", subtitle: "for a 10 year old" },
@@ -174,18 +218,62 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!messagesContainer) return;
         messagesContainer.innerHTML = '';
         if (!Array.isArray(chatHistory)) return;
-        
-        chatHistory.forEach(msg => {
-            const userAvatarSrc = userProfileBtn?.querySelector('img')?.src || `https://placehold.co/40x40/4A5568/E2E8F0?text=U`;
-            const messageText = msg.parts && msg.parts[0] ? msg.parts[0].text : '[empty message]';
-            const messageHTML = msg.role === 'user'
-                ? `<div class="message-bubble flex items-start gap-3 justify-end"><div class="bg-teal-500 text-white p-4 rounded-lg max-w-lg"><p>${messageText}</p></div><img class="user-avatar-img h-10 w-10 rounded-full object-cover" src="${userAvatarSrc}" alt="User Avatar"></div>`
-                : `<div class="message-bubble flex items-start gap-3"><img class="h-10 w-10 rounded-full object-cover" src="https://placehold.co/40x40/1F2D37/E2E8F0?text=AI" alt="AI Avatar"><div class="bg-gray-700 p-4 rounded-lg max-w-lg">${messageText}</div></div>`;
-            messagesContainer.insertAdjacentHTML('beforeend', messageHTML);
+
+        const escapeHtml = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+        chatHistory.forEach((msg, idx) => {
+            const id = `msg_${Date.now()}_${idx}`;
+            const isUser = msg.role === 'user';
+            const senderLabel = isUser ? 'You' : 'Phantom AI';
+            const avatarSrc = isUser ? (userProfileBtn?.querySelector('img')?.src || 'https://placehold.co/40x40/4A5568/E2E8F0?text=U') : 'https://placehold.co/40x40/1F2D37/E2E8F0?text=AI';
+            const text = msg.parts && msg.parts[0] ? escapeHtml(msg.parts[0].text).replace(/\n/g, '<br>') : '[empty message]';
+            const time = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}) : new Date().toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+
+            const bubbleClasses = `message-bubble flex items-start gap-3 ${isUser ? 'justify-end' : ''}`;
+
+            const actionsHtml = `
+                <div class="message-actions mt-1 flex items-center gap-1 text-sm select-none">
+                    <button class="action-btn action-speak px-2 py-1 rounded" title="Speak">🔊</button>
+                    <button class="action-btn action-copy px-2 py-1 rounded" title="Copy">📋</button>
+                    <button class="action-btn action-share px-2 py-1 rounded" title="Share">🔗</button>
+                    ${isUser ? '<button class="action-btn action-edit px-2 py-1 rounded" title="Edit">✎</button>' : ''}
+                    <button class="action-btn action-like px-2 py-1 rounded" title="Like">👍</button>
+                    <button class="action-btn action-dislike px-2 py-1 rounded" title="Dislike">👎</button>
+                    <button class="action-btn action-more px-2 py-1 rounded" title="More">⋯</button>
+                </div>`;
+
+            const msgHtml = `
+                <div id="${id}" data-msg-id="${id}" class="${bubbleClasses}">
+                    ${isUser ? `
+                        <div class="flex flex-col items-end max-w-full">
+                            <div class="message-meta text-xs text-gray-400 mb-1 flex items-center gap-2">
+                                <span class="message-sender font-semibold">You</span>
+                                <span class="message-time">${time}</span>
+                            </div>
+                            <div class="bg-teal-500 text-white p-4 rounded-lg max-w-lg message-content">${text}</div>
+                            ${actionsHtml}
+                        </div>
+                        <img class="user-avatar-img h-10 w-10 rounded-full object-cover ml-2" src="${avatarSrc}" alt="User Avatar">
+                    ` : `
+                        <img class="h-10 w-10 rounded-full object-cover mr-2" src="${avatarSrc}" alt="AI Avatar">
+                        <div class="flex flex-col max-w-full">
+                            <div class="message-meta text-xs text-gray-400 mb-1">
+                                <span class="message-sender font-semibold">Phantom AI</span>
+                                <span class="message-time ml-2">${time}</span>
+                            </div>
+                            <div class="bg-gray-700 text-gray-200 p-4 rounded-lg max-w-lg message-content">${text}</div>
+                            ${actionsHtml}
+                        </div>
+                    `}
+                </div>`;
+
+            messagesContainer.insertAdjacentHTML('beforeend', msgHtml);
         });
+
+        // Scroll to bottom
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
         checkChatState();
-    }
+     }
     
     function checkChatState() {
         if (!chatBody || !messagesContainer || !chatInput || !emptyStateSuggestions) return;
@@ -222,12 +310,20 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function speakText(text) {
+        // speakText(text, force) — when force === true, speak regardless of autoSpeak
+    }
+    function speakText(text, force = false) {
+        if (!text) return;
+        if (!force && !autoSpeak) return; // respect Auto‑Speak setting
         const utterance = new SpeechSynthesisUtterance(text);
         if (voiceSelect && voiceSelect.value) {
             const selectedVoice = availableVoices.find(voice => voice.name === voiceSelect.value);
             if (selectedVoice) utterance.voice = selectedVoice;
         }
-        synth.speak(utterance);
+        try {
+            synth.cancel(); // stop any queued speech before speaking
+            synth.speak(utterance);
+        } catch (err) { console.warn('speakText error', err); }
     }
     
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -422,7 +518,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         chatHistory.push({ role: "model", parts: [{ text: modelResponseText }] });
         renderMessages();
-        speakText(modelResponseText);
+        if (autoSpeak) speakText(modelResponseText);
         
         const sessions = await api.getAllSessions();
         if (sessions) renderChatHistory(sessions, currentSessionId);
@@ -642,14 +738,38 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     if (removeImageBtn) removeImageBtn.addEventListener('click', removeAttachedFile);
     
-    if (sidebarToggleBtnHeader) sidebarToggleBtnHeader.addEventListener('click', toggleSidebar);
-    if (sidebarToggleBtnSidebar) sidebarToggleBtnSidebar.addEventListener('click', toggleSidebar);
-    
-    if(suggestionGrid) {
-        suggestionGrid.addEventListener('click', (e) => {
-            const btn = e.target.closest('.suggestion-btn');
-            if (btn) {
-                useSuggestion(btn.innerText);
+    // Delegated handler for per-message action buttons (speak/copy/share/edit/like/dislike/more)
+    if (messagesContainer) {
+        messagesContainer.addEventListener('click', async (e) => {
+            const btn = e.target.closest('.action-btn');
+            if (!btn) return;
+            const msgEl = btn.closest('[data-msg-id]');
+            const contentEl = msgEl?.querySelector('.message-content');
+            const text = contentEl ? contentEl.textContent.trim() : '';
+
+            if (btn.classList.contains('action-speak')) {
+                if (text) speakText(text, true); // manual speak should always work (force)
+            } else if (btn.classList.contains('action-copy')) {
+                try { await navigator.clipboard.writeText(text); btn.textContent = '✓'; setTimeout(()=>btn.textContent='📋',1000); } catch { alert('Copy failed'); }
+            } else if (btn.classList.contains('action-share')) {
+                if (navigator.share) { try { await navigator.share({ text }); } catch {} } else { try { await navigator.clipboard.writeText(text); btn.textContent='✓'; setTimeout(()=>btn.textContent='🔗',1000);} catch{ alert('Share failed'); } }
+            } else if (btn.classList.contains('action-edit')) {
+                if (!contentEl) return;
+                chatInput.value = contentEl.textContent.trim();
+                chatInput.focus();
+                // mark send button for save mode
+                sendButton.dataset.saveMode = 'true';
+                sendButton.title = 'Save edit';
+                // store editing target id
+                sendButton.dataset.editingTarget = msgEl.dataset.msgId;
+            } else if (btn.classList.contains('action-like')) {
+                contentEl?.classList.toggle('liked');
+                btn.classList.toggle('active');
+            } else if (btn.classList.contains('action-dislike')) {
+                contentEl?.classList.toggle('disliked');
+                btn.classList.toggle('active');
+            } else if (btn.classList.contains('action-more')) {
+                alert('More actions can be implemented (report, export, pin, etc.)');
             }
         });
     }
