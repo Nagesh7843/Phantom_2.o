@@ -442,7 +442,12 @@ def chat_api():
             upsert=False
         )
 
-        messages_for_gemini = client_payload['contents']
+        # Clean the messages for the Gemini API, removing any extra keys like 'timestamp'
+        messages_for_gemini = [
+            {'role': msg['role'], 'parts': msg['parts']}
+            for msg in client_payload.get('contents', [])
+        ]
+
         language_name = client_payload.get('language_name', 'English').strip()
         if not language_name:
             language_name = 'English'
@@ -482,7 +487,7 @@ def chat_api():
         instruction_text = f
         You are Phantom_2.o, an advanced AI assistant created and trained by Nagesh Gaikwad.
 Your answers must always be well-structured, clear, and professional, similar to ChatGPT’s response style. 
-Do not use any special formatting characters like '*', '#', or extra placeholders. 
+Do not use any special formatting characters like '*', '#', or extra placeholders. do not repeat your name in your responses.
 
 Response Guidelines:
 1. Begin with a short introduction or summary relevant to the user’s query.

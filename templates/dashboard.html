@@ -6,6 +6,7 @@
     <title>Dashboard - Phantom AI</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <style>
         body { font-family: 'Inter', sans-serif; }
         ::-webkit-scrollbar { width: 8px; }
@@ -39,13 +40,13 @@
         
         /* Styles from Code Editor */
         .file-item:hover, .folder-header:hover {
-            background-color: #374151; /* gray-700 */
+            background-color: var(--bg-hover);
         }
         .context-menu {
             display: none;
             position: absolute;
-            background-color: #1f2937; /* gray-800 */
-            border: 1px solid #374151; /* gray-700 */
+            background-color: var(--bg-panel);
+            border: 1px solid var(--border-color);
             border-radius: 0.5rem;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
             z-index: 1000;
@@ -56,7 +57,7 @@
             cursor: pointer;
         }
         .context-menu-item:hover {
-            background-color: #374151; /* gray-700 */
+            background-color: var(--bg-hover);
         }
         .folder-content {
             padding-left: 1rem;
@@ -68,8 +69,8 @@
             transform: rotate(-90deg);
         }
         .output-tab.active {
-            background-color: #374151; /* gray-700 */
-            color: #f3f4f6; /* gray-100 */
+            background-color: var(--bg-hover);
+            color: var(--text-primary);
         }
         
         /* ADDED: Styles for AI-generated Markdown content */
@@ -121,19 +122,79 @@
         }
     </style>
 </head>
-<body class="bg-gray-800 text-gray-200 flex h-screen antialiased overflow-hidden">
+<body class="flex h-screen antialiased overflow-hidden">
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 hidden">
+        <div class="bg-panel rounded-lg shadow-xl p-6 w-full max-w-md border border-color">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-semibold">Settings</h2>
+                <button id="close-settings-modal" class="p-2 rounded-full hover:bg-hover">&times;</button>
+            </div>
+            
+            <!-- Theme Switcher -->
+            <div class="theme-switcher">
+                <h3 class="text-lg font-medium mb-3">Appearance</h3>
+                <p class="text-sm text-muted mb-4">Customize the look and feel of your workspace.</p>
+                <div id="theme-options" class="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                    <!-- Theme options will be dynamically inserted here by script.js -->
+                </div>
+            </div>
+
+            <!-- Add other settings sections here in the future -->
+            <div class="my-6 border-t border-color"></div>
+
+            <!-- Speech Settings -->
+            <div>
+                <h3 class="text-lg font-medium mb-3">Speech & Voice</h3>
+                <div class="space-y-4">
+                    <!-- Auto-speak Toggle -->
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <label for="auto-speak-toggle" class="font-medium cursor-pointer">Auto-speak replies</label>
+                            <p class="text-sm text-muted">Replies will be spoken aloud automatically.</p>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="auto-speak-toggle" class="sr-only peer">
+                            <div class="w-11 h-6 bg-input rounded-full peer peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary-accent peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-accent"></div>
+                        </label>
+                    </div>
+                    <!-- Voice Selection -->
+                    <div>
+                        <label for="voice-select" class="block text-sm font-medium mb-1">Voice</label>
+                        <select id="voice-select" class="w-full bg-input border border-color rounded-md p-2 focus:ring-2 focus:ring-primary-accent focus:outline-none">
+                            <!-- Voices will be populated by script.js -->
+                        </select>
+                    </div>
+                    <!-- Language Selection (Placeholder) -->
+                    <div>
+                        <label for="language-select" class="block text-sm font-medium mb-1">Language</label>
+                        <select id="language-select" class="w-full bg-input border border-color rounded-md p-2 focus:ring-2 focus:ring-primary-accent focus:outline-none">
+                            <option>English (United States)</option>
+                            <option disabled>More languages coming soon</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-6 flex justify-end">
+                <button id="save-settings-btn" class="bg-primary-accent text-white font-semibold py-2 px-4 rounded-lg hover:bg-primary-accent-hover transition-colors">Save</button>
+            </div>
+
+        </div>
+    </div>
 
     <!-- Main App Wrapper -->
     <div class="flex h-full w-full relative">
         <!-- Sidebar -->
-        <aside class="bg-gray-900 text-gray-300 w-64 flex-shrink-0 flex flex-col transition-all duration-300" id="sidebar">
-            <div class="h-16 flex items-center justify-between flex-shrink-0 px-4 border-b border-gray-800"><h1 class="text-xl font-bold">Phantom AI</h1><button id="sidebar-toggle-btn-sidebar" class="p-2 rounded-md hover:bg-gray-700 md:hidden"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg></button></div>
+        <aside class="sidebar w-64 flex-shrink-0 flex flex-col transition-all duration-300" id="sidebar">
+            <div class="h-16 flex items-center justify-between flex-shrink-0 px-4 border-b border-color"><h1 class="text-xl font-bold">Phantom AI</h1><button id="sidebar-toggle-btn-sidebar" class="p-2 rounded-md hover:bg-hover md:hidden"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg></button></div>
             <div id="sidebar-content" class="flex flex-col flex-1 overflow-hidden">
-                <div class="p-4"><button id="new-chat-btn" class="w-full bg-teal-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-teal-600 transition-colors flex items-center justify-center"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>New Chat</button></div>
-                <div class="px-4 pb-2"><div class="relative"><span class="absolute inset-y-0 left-0 flex items-center pl-3"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg></span><input type="search" class="w-full bg-gray-800 text-sm pl-10 pr-4 py-2 rounded-lg border border-gray-700 focus:outline-none focus:ring-1 focus:ring-teal-500" placeholder="Search history..."></div></div>
+                <div class="p-4"><button id="new-chat-btn" class="w-full bg-primary-accent text-white font-semibold py-2 px-4 rounded-lg hover:bg-primary-accent-hover transition-colors flex items-center justify-center"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>New Chat</button></div>
+                <div class="px-4 pb-2"><div class="relative"><span class="absolute inset-y-0 left-0 flex items-center pl-3"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg></span><input type="search" class="w-full bg-input text-sm pl-10 pr-4 py-2 rounded-lg border border-color focus:outline-none focus:ring-1 focus:ring-primary-accent" placeholder="Search history..."></div></div>
                 <nav id="chat-history-list" class="flex-1 overflow-y-auto px-4 space-y-2"></nav>
-                <div class="mt-auto p-4 space-y-2 border-t border-gray-800"><a href="#" class="flex items-center px-3 py-2 text-sm font-medium rounded-md hover:bg-gray-700"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9V3m0 18a9 9 0 009-9m-9 9a9 9 0 00-9-9" /></svg>Explore</a><a href="#" class="flex items-center px-3 py-2 text-sm font-medium rounded-md hover:bg-gray-700"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.196-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.783-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" /></svg>Subscription</a></div>
-                <div id="user-profile-btn" class="p-4 border-t border-gray-800 cursor-pointer hover:bg-gray-700"><div class="flex items-center"><img class="user-avatar-img h-10 w-10 rounded-full object-cover" src="{{ user_picture_url or 'https://placehold.co/40x40/4A5568/E2E8F0?text=U' }}" alt="User Avatar"><div class="ml-3"><p class="user-display-name text-sm font-semibold text-white">{{ user_display_name }}</p><p class="text-xs text-gray-400">View Profile</p></div></div></div>
+                <div class="mt-auto p-4 space-y-2 border-t border-color"><a href="#" class="flex items-center px-3 py-2 text-sm font-medium rounded-md hover:bg-hover"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9V3m0 18a9 9 0 009-9m-9 9a9 9 0 00-9-9" /></svg>Explore</a><a href="#" class="flex items-center px-3 py-2 text-sm font-medium rounded-md hover:bg-hover"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.196-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.783-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" /></svg>Subscription</a></div>
+                <div id="user-profile-btn" class="p-4 border-t border-color cursor-pointer hover:bg-hover"><div class="flex items-center"><img class="user-avatar-img h-10 w-10 rounded-full object-cover" src="{{ user_picture_url or 'https://placehold.co/40x40/4A5568/E2E8F0?text=U' }}" alt="User Avatar"><div class="ml-3"><p class="user-display-name text-sm font-semibold">{{ user_display_name }}</p><p class="text-xs text-muted">View Profile</p></div></div></div>
             </div>
             <div class="nav-item" id="nav-item-code-assistant">
                 <i class="fa-solid fa-code"></i>
@@ -141,28 +202,34 @@
             </div>
         </aside>
 
+
         <!-- Main Chat Area -->
-        <main id="main-chat-area" class="flex-1 flex flex-col bg-gray-800 overflow-hidden">
-            <header id="main-header" class="bg-gray-900/50 backdrop-blur-sm h-16 flex items-center justify-between px-6 border-b border-gray-700 flex-shrink-0">
-                <div class="flex items-center gap-3">
-                    <button id="sidebar-toggle-btn-header" class="p-2 rounded-md hover:bg-gray-700" title="Toggle sidebar">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
-                    </button>
-                    <h2 id="chat-title" class="text-lg font-semibold">New Chat</h2>
-                </div>
-                <div class="flex items-center gap-2">
-                    <!-- Auto TTS toggle for AI replies -->
-                    <button id="tts-toggle-btn" class="p-2 rounded-md hover:bg-gray-700 text-sm" aria-pressed="false" title="Auto-speak AI replies (off)">🔈 Auto‑speak</button>
-                    <button id="settings-btn" class="p-2 rounded-md hover:bg-gray-700" title="Settings">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><circle cx="12" cy="12" r="3" /></svg>
-                    </button>
-                </div>
-             </header>
+        <main id="main-chat-area" class="flex-1 flex flex-col bg-primary overflow-hidden">
+            <header class="flex-shrink-0 bg-secondary shadow-md z-20">
+        <div class="flex items-center justify-between h-16 px-4">
+            <div class="flex items-center">
+                <button id="menu-toggle-btn" class="p-2 rounded-md text-secondary md:hidden">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+                    </svg>
+                </button>
+                <h1 id="chat-title" class="text-lg font-semibold text-primary ml-2">Phantom AI</h1>
+            </div>
+            <div class="flex items-center gap-4">
+                <button id="open-settings-btn" class="p-2 rounded-full bg-hover text-secondary">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </header>
 
             <div id="chat-body" class="flex-1 flex flex-col overflow-hidden">
                 <div id="empty-state-suggestions" class="hidden flex-1 flex items-center justify-center w-full max-w-4xl mx-auto p-6">
                     <div class="text-center">
-                        <h1 class="text-4xl font-bold text-gray-400 mb-4">Phantom AI</h1>
+                        <h1 class="text-4xl font-bold text-muted mb-4">Phantom AI</h1>
                         <div id="suggestion-grid" class="mt-8 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4"></div>
                     </div>
                 </div>
@@ -172,44 +239,33 @@
                     <div id="image-preview-container" class="hidden w-full max-w-3xl mx-auto mb-2">
                         <div class="relative inline-block">
                             <img id="image-preview" src="" class="h-20 w-20 rounded-lg object-cover">
-                            <button id="remove-image-btn" class="absolute top-0 right-0 -mt-2 -mr-2 bg-gray-600 text-white rounded-full p-1 leading-none">&times;</button>
+                            <button id="remove-image-btn" class="absolute top-0 right-0 -mt-2 -mr-2 bg-secondary text-white rounded-full p-1 leading-none">&times;</button>
                         </div>
                     </div>
-                    <div id="search-bar-wrapper" class="w-full max-w-3xl mx-auto flex items-center gap-2 p-2 rounded-full bg-gray-700 border border-gray-600 shadow-lg focus-within:ring-2 focus-within:ring-teal-500 relative">
-                        <button id="toolkit-btn" class="flex-shrink-0 p-2 rounded-full hover:bg-gray-600 transition-colors" title="Tools">
+                    <div id="search-bar-wrapper" class="w-full max-w-3xl mx-auto flex items-center gap-2 p-2 rounded-full bg-input border border-color shadow-lg focus-within:ring-2 focus-within:ring-primary-accent relative">
+                        <button id="toolkit-btn" class="flex-shrink-0 p-2 rounded-full hover:bg-hover transition-colors" title="Tools">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
                         </button>
 
                         <textarea id="chat-input" class="flex-grow bg-transparent border-none focus:ring-0 resize-none p-2 h-10 max-h-40" rows="1" placeholder="Message Phantom AI..."></textarea>
 
                         <div class="flex-shrink-0 flex items-center space-x-1">
-                            <button id="gemini-toolkit-btn" class="p-2 rounded-full hover:bg-gray-600" title="Phantom Toolkit">✨</button>
-                            <button id="mic-button" class="p-2 rounded-full hover:bg-gray-600" title="Voice input">
+                            <button id="gemini-toolkit-btn" class="p-2 rounded-full hover:bg-hover" title="Phantom Toolkit">✨</button>
+                            <button id="mic-button" class="p-2 rounded-full hover:bg-hover" title="Voice input">
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-14 0m7 10v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg>
                             </button>
-                            <button id="send-button" class="bg-teal-500 text-white p-2 rounded-full hover:bg-teal-600" title="Send message">
+                            <button id="send-button" class="bg-primary-accent text-white p-2 rounded-full hover:bg-primary-accent-hover" title="Send message">
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 -rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
                             </button>
                         </div>
 
-                        <div id="toolkit-menu" class="hidden absolute bottom-full mb-2 w-56 bg-gray-700 rounded-lg shadow-lg p-2 z-10">
-                            <button id="tool-camera-btn" class="flex items-center w-full text-left p-2 rounded-md hover:bg-gray-600"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg><span>Camera</span></button>
-                            <button id="tool-file-btn" class="flex items-center w-full text-left p-2 rounded-md hover:bg-gray-600"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg><span>File Upload</span></button>
-                            <button id="tool-canva-btn" class="flex items-center w-full text-left p-2 rounded-md hover:bg-gray-600"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l-4 4-4-4 4-4" /></svg><span>Canva Code</span></button>
-                            <button id="tool-data-btn" class="flex items-center w-full text-left p-2 rounded-md hover:bg-gray-600"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg><span>Data Analyst</span></button>
+                        <div id="toolkit-menu" class="hidden absolute bottom-full mb-2 w-56 bg-panel rounded-lg shadow-lg p-2 z-10">
+                            <button id="tool-camera-btn" class="flex items-center w-full text-left p-2 rounded-md hover:bg-hover"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg><span>Camera</span></button>
+                            <button id="tool-file-btn" class="flex items-center w-full text-left p-2 rounded-md hover:bg-hover"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg><span>File Upload</span></button>
+                            <button id="tool-canva-btn" class="flex items-center w-full text-left p-2 rounded-md hover:bg-hover"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l-4 4-4-4 4-4" /></svg><span>Canva Code</span></button>
+                            <button id="tool-data-btn" class="flex items-center w-full text-left p-2 rounded-md hover:bg-hover"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg><span>Data Analyst</span></button>
                             <input type="file" id="file-input" class="hidden" accept="image/*">
                         </div>
-                    </div>
-
-                    <!-- ChatGPT-like composer toolbar anchored to input bottom -->
-                    <div class="composer-toolbar" role="toolbar" aria-label="Composer quick actions">
-                        <button id="composer-edit-btn" title="Edit last message">✎</button>
-                        <button id="composer-speak-ai-btn" title="Speak last AI reply">🔊</button>
-                        <button id="composer-copy-btn" title="Copy last message">📋</button>
-                        <button id="composer-share-btn" title="Share last message">🔗</button>
-                        <button id="composer-like-btn" title="Like last message">👍</button>
-                        <button id="composer-dislike-btn" title="Dislike last message">👎</button>
-                        <button id="composer-more-btn" title="More actions">⋯</button>
                     </div>
                 </div>
             </div>
@@ -217,70 +273,44 @@
     </div>
     
     <!-- Modals -->
-    <!-- NEW: Settings Modal (Theme, Voice) -->
-    <div id="settings-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50">
-        <div class="bg-gray-800 text-gray-100 rounded-lg w-full max-w-lg p-6">
-            <div class="flex items-center justify-between mb-4">
-                <h3 class="text-lg font-semibold">Settings</h3>
-                <button id="close-settings-modal-btn" class="text-gray-400 hover:text-white">✕</button>
-            </div>
-            <div class="space-y-4">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <div class="text-sm font-medium">Auto‑speak AI replies</div>
-                        <div class="text-xs text-gray-400">When enabled, AI replies will be spoken aloud automatically.</div>
-                    </div>
-                    <!-- checkbox target used by JS: 'auto-speak-toggle' -->
-                    <div>
-                        <label class="relative inline-flex items-center cursor-pointer">
-                            <input type="checkbox" id="auto-speak-toggle" class="sr-only">
-                            <div class="w-12 h-6 bg-gray-600 rounded-full peer-focus:ring-2 peer-focus:ring-teal-400 transition-colors"></div>
-                        </label>
-                    </div>
-                </div>
-                <!-- other settings rows can go here -->
-            </div>
-            <div class="mt-6 flex justify-end">
-                <button id="save-settings-btn" class="bg-teal-500 text-white px-4 py-2 rounded-md hover:bg-teal-600">Save</button>
-            </div>
-        </div>
-    </div>
+    <!-- This empty div is a placeholder. The old modal was removed to fix a bug. -->
+    <div id="placeholder-for-removed-modal"></div>
     
     <!-- NEW: Edit Profile Modal (Name) -->
-    <div id="edit-profile-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50">
-        <div class="bg-gray-800 rounded-lg shadow-xl p-8 w-full max-w-md">
-            <div class="flex justify-between items-center mb-6"><h2 class="text-2xl font-bold">Edit Profile</h2><button id="close-edit-profile-modal-btn" class="p-2 rounded-full hover:bg-gray-700 text-2xl leading-none">&times;</button></div>
+    <div id="edit-profile-modal" class="hidden fixed inset-0 bg-overlay flex items-center justify-center z-50">
+        <div class="bg-panel rounded-lg shadow-xl p-8 w-full max-w-md">
+            <div class="flex justify-between items-center mb-6"><h2 class="text-2xl font-bold">Edit Profile</h2><button id="close-edit-profile-modal-btn" class="p-2 rounded-full hover:bg-hover text-2xl leading-none">&times;</button></div>
             <div class="space-y-6">
-                <div><label for="name-input" class="block text-sm font-medium text-gray-400 mb-2">Display Name</label><input type="text" id="name-input" value="{{ user_display_name }}" class="w-full bg-gray-700 rounded-md p-2 focus:ring-2 focus:ring-teal-500 focus:outline-none"></div>
-                <button id="save-profile-btn" class="w-full bg-teal-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-teal-600">Save Profile</button>
+                <div><label for="name-input" class="block text-sm font-medium text-muted mb-2">Display Name</label><input type="text" id="name-input" value="{{ user_display_name }}" class="w-full bg-input rounded-md p-2 focus:ring-2 focus:ring-primary-accent focus:outline-none"></div>
+                <button id="save-profile-btn" class="w-full bg-primary-accent text-white font-semibold py-2 px-4 rounded-lg hover:bg-primary-accent-hover">Save Profile</button>
             </div>
         </div>
     </div>
 
     <!-- Main Profile Modal -->
-    <div id="profile-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50">
-        <div class="bg-gray-800 rounded-lg shadow-xl p-8 w-full max-w-sm text-center">
-            <div class="flex justify-end"><button id="close-profile-modal-btn" class="p-2 rounded-full hover:bg-gray-700 text-2xl leading-none -mt-4 -mr-4">&times;</button></div>
+    <div id="profile-modal" class="hidden fixed inset-0 bg-overlay flex items-center justify-center z-50">
+        <div class="bg-panel rounded-lg shadow-xl p-8 w-full max-w-sm text-center">
+            <div class="flex justify-end"><button id="close-profile-modal-btn" class="p-2 rounded-full hover:bg-hover text-2xl leading-none -mt-4 -mr-4">&times;</button></div>
             
             <div class="relative w-24 h-24 mx-auto mb-4">
                 <img id="profile-modal-avatar" class="user-avatar-img w-24 h-24 rounded-full object-cover" src="{{ user_picture_url or 'https://placehold.co/96x96/4A5568/E2E8F0?text=U' }}" alt="User Avatar">
-                <label for="profile-picture-input" class="absolute bottom-0 right-0 bg-teal-500 text-white rounded-full p-2 cursor-pointer hover:bg-teal-600">
+                <label for="profile-picture-input" class="absolute bottom-0 right-0 bg-primary-accent text-white rounded-full p-2 cursor-pointer hover:bg-primary-accent-hover">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
                 </label>
                 <input type="file" id="profile-picture-input" class="hidden" accept="image/png, image/jpeg">
             </div>
 
             <h2 id="profile-modal-name" class="user-display-name text-2xl font-bold">{{ user_display_name }}</h2>
-            <p id="profile-modal-email" class="text-gray-400 mb-6">{{ user_email }}</p>
+            <p id="profile-modal-email" class="text-muted mb-6">{{ user_email }}</p>
 
             <div class="space-y-2 text-left">
-                <button id="profile-edit-btn" class="w-full flex items-center gap-3 bg-gray-700 hover:bg-gray-600 text-white font-medium py-3 px-4 rounded-lg transition-colors"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>Edit Profile</button>
-                <button id="profile-memory-btn" class="w-full flex items-center gap-3 bg-gray-700 hover:bg-gray-600 text-white font-medium py-3 px-4 rounded-lg transition-colors"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>My Memory (Coming Soon)</button>
-                <button id="profile-support-btn" class="w-full flex items-center gap-3 bg-gray-700 hover:bg-gray-600 text-white font-medium py-3 px-4 rounded-lg transition-colors"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z" /></svg>Contact Support</button>
+                <button id="profile-edit-btn" class="w-full flex items-center gap-3 bg-input hover:bg-hover font-medium py-3 px-4 rounded-lg transition-colors"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>Edit Profile</button>
+                <button id="profile-memory-btn" class="w-full flex items-center gap-3 bg-input hover:bg-hover font-medium py-3 px-4 rounded-lg transition-colors"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>My Memory (Coming Soon)</button>
+                <button id="profile-support-btn" class="w-full flex items-center gap-3 bg-input hover:bg-hover font-medium py-3 px-4 rounded-lg transition-colors"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z" /></svg>Contact Support</button>
             </div>
 
-            <div class="mt-6 border-t border-gray-700 pt-4">
-                 <a href="{{ url_for('logout') }}" class="w-full flex items-center justify-center gap-3 bg-red-600/20 hover:bg-red-600/30 text-red-400 font-medium py-3 px-4 rounded-lg transition-colors">
+            <div class="mt-6 border-t border-color pt-4">
+                 <a href="{{ url_for('logout') }}" class="w-full flex items-center justify-center gap-3 bg-red-500/20 hover:bg-red-500/30 text-red-400 font-medium py-3 px-4 rounded-lg transition-colors">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
                     Log Out
                 </a>
@@ -288,76 +318,76 @@
         </div>
     </div>
     
-    <div id="gemini-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50">
-        <div class="bg-gray-800 rounded-lg shadow-xl p-8 w-full max-w-md">
-            <div class="flex justify-between items-center mb-6"><h2 class="text-2xl font-bold flex items-center">✨ Phantom Toolkit</h2><button id="close-gemini-modal-btn" class="p-2 rounded-full hover:bg-gray-700 text-2xl leading-none">&times;</button></div>
+    <div id="gemini-modal" class="hidden fixed inset-0 bg-overlay flex items-center justify-center z-50">
+        <div class="bg-panel rounded-lg shadow-xl p-8 w-full max-w-md">
+            <div class="flex justify-between items-center mb-6"><h2 class="text-2xl font-bold flex items-center">✨ Phantom Toolkit</h2><button id="close-gemini-modal-btn" class="p-2 rounded-full hover:bg-hover text-2xl leading-none">&times;</button></div>
             <div class="space-y-4">
-                <button id="summarize-btn" class="w-full bg-gray-700 hover:bg-gray-600 text-left p-4 rounded-lg"><h3 class="font-semibold">Summarize Conversation</h3><p class="text-sm text-gray-400">Get a quick summary of the chat so far.</p></button>
-                <button id="suggest-reply-btn" class="w-full bg-gray-700 hover:bg-gray-600 text-left p-4 rounded-lg"><h3 class="font-semibold">Suggest Replies</h3><p class="text-sm text-gray-400">Get smart reply suggestions for the last message.</p></button>
-                <button id="tone-analyzer-btn" class="w-full bg-gray-700 hover:bg-gray-600 text-left p-4 rounded-lg"><h3 class="font-semibold">Analyze Tone</h3><p class="text-sm text-gray-400">Check the overall tone of the conversation.</p></button>
+                <button id="summarize-btn" class="w-full bg-input hover:bg-hover text-left p-4 rounded-lg"><h3 class="font-semibold">Summarize Conversation</h3><p class="text-sm text-muted">Get a quick summary of the chat so far.</p></button>
+                <button id="suggest-reply-btn" class="w-full bg-input hover:bg-hover text-left p-4 rounded-lg"><h3 class="font-semibold">Suggest Replies</h3><p class="text-sm text-muted">Get smart reply suggestions for the last message.</p></button>
+                <button id="tone-analyzer-btn" class="w-full bg-input hover:bg-hover text-left p-4 rounded-lg"><h3 class="font-semibold">Analyze Tone</h3><p class="text-sm text-muted">Check the overall tone of the conversation.</p></button>
             </div>
-            <div id="gemini-output" class="mt-6 p-4 bg-gray-900 rounded-lg text-sm text-gray-300 min-h-[100px]"></div>
+            <div id="gemini-output" class="mt-6 p-4 bg-secondary rounded-lg text-sm text-secondary min-h-[100px]"></div>
         </div>
     </div>
 
-    <div id="camera-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50">
-        <div class="bg-gray-800 rounded-lg shadow-xl p-8 w-full max-w-2xl">
-            <div class="flex justify-between items-center mb-4"><h2 class="text-2xl font-bold">Camera</h2><button id="close-camera-btn" class="p-2 rounded-full hover:bg-gray-700 text-2xl leading-none">&times;</button></div>
+    <div id="camera-modal" class="hidden fixed inset-0 bg-overlay flex items-center justify-center z-50">
+        <div class="bg-panel rounded-lg shadow-xl p-8 w-full max-w-2xl">
+            <div class="flex justify-between items-center mb-4"><h2 class="text-2xl font-bold">Camera</h2><button id="close-camera-btn" class="p-2 rounded-full hover:bg-hover text-2xl leading-none">&times;</button></div>
             <video id="camera-stream" class="w-full rounded-lg" autoplay playsinline></video>
             <canvas id="camera-capture-canvas" class="hidden"></canvas>
-            <div class="mt-4 flex justify-center"><button id="capture-btn" class="bg-teal-500 text-white font-semibold py-3 px-6 rounded-lg hover:bg-teal-600">Capture Photo</button></div>
+            <div class="mt-4 flex justify-center"><button id="capture-btn" class="bg-primary-accent text-white font-semibold py-3 px-6 rounded-lg hover:bg-primary-accent-hover">Capture Photo</button></div>
         </div>
     </div>
     
     <!-- VIRTUAL ENVIRONMENT MODAL -->
-    <div id="virtual-env-modal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50">
-        <div id="virtual-env-window" class="bg-gray-800 rounded-lg shadow-2xl w-full max-w-6xl h-5/6 flex flex-col">
-            <header id="virtual-env-header" class="bg-gray-900 h-12 flex items-center justify-between px-4 border-b border-gray-700 flex-shrink-0 rounded-t-lg cursor-move">
+    <div id="virtual-env-modal" class="fixed inset-0 bg-overlay flex items-center justify-center z-50">
+        <div id="virtual-env-window" class="bg-panel rounded-lg shadow-2xl w-full max-w-6xl h-5/6 flex flex-col">
+            <header id="virtual-env-header" class="bg-secondary h-12 flex items-center justify-between px-4 border-b border-color flex-shrink-0 rounded-t-lg cursor-move">
                 <h2 id="virtual-env-title-header" class="text-md font-semibold">Analysis Environment</h2>
-                <button id="close-virtual-env-btn" class="p-2 rounded-full hover:bg-gray-700 text-xl leading-none">&times;</button>
+                <button id="close-virtual-env-btn" class="p-2 rounded-full hover:bg-hover text-xl leading-none">&times;</button>
             </header>
             <div class="flex-1 flex flex-col md:flex-row overflow-hidden">
                 <!-- Panel 1: File Explorer (Integrated) -->
-                <div id="virtual-env-explorer" class="w-full md:w-1/4 bg-gray-900 p-4 overflow-y-auto border-r border-gray-700 flex flex-col">
+                <div id="virtual-env-explorer" class="w-full md:w-1/4 bg-secondary p-4 overflow-y-auto border-r border-color flex flex-col">
                     <div class="flex justify-between items-center mb-4 flex-shrink-0">
                         <h3 class="font-semibold">Files</h3>
                         <div>
-                            <button id="collapse-all-btn" title="Collapse All" class="p-1 hover:bg-gray-700 rounded-md"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="9" x2="15" y1="12" y2="12"/></svg></button>
-                            <button id="add-folder-btn" title="New Folder" class="p-1 hover:bg-gray-700 rounded-md"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"></path><line x1="12" y1="10" x2="12" y2="16"></line><line x1="9" y1="13" x2="15" y2="13"></line></svg></button>
+                            <button id="collapse-all-btn" title="Collapse All" class="p-1 hover:bg-hover rounded-md"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="9" x2="15" y1="12" y2="12"/></svg></button>
+                            <button id="add-folder-btn" title="New Folder" class="p-1 hover:bg-hover rounded-md"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"></path><line x1="12" y1="10" x2="12" y2="16"></line><line x1="9" y1="13" x2="15" y2="13"></line></svg></button>
                 <div id="resizer-2" class="resizer"></div>
                 <!-- Panel 3: AI Analysis / Output (Integrated) -->
-                <div id="virtual-env-chat-panel" class="w-full md:w-1/3 bg-gray-900 flex flex-col border-t md:border-t-0 md:border-l border-gray-700">
+                <div id="virtual-env-chat-panel" class="w-full md:w-1/3 bg-secondary flex flex-col border-t md:border-t-0 md:border-l border-color">
                     <div class="p-4 flex-shrink-0">
                         <h3 class="font-semibold mb-4">AI Analysis</h3>
                     </div>
-                    <div id="output-panel" class="flex-1 flex flex-col bg-gray-800 min-h-0">
-                        <div class="flex items-center border-b border-t border-gray-700 flex-shrink-0">
+                    <div id="output-panel" class="flex-1 flex flex-col bg-primary min-h-0">
+                        <div class="flex items-center border-b border-t border-color flex-shrink-0">
                             <button id="output-tab-preview" class="output-tab px-4 py-2 text-sm font-medium">Preview</button>
                             <button id="output-tab-console" class="output-tab px-4 py-2 text-sm font-medium">Console</button>
                             <button id="output-tab-terminal" class="output-tab px-4 py-2 text-sm font-medium">Terminal</button>
                             <div class="ml-auto pr-2">
-                                <button id="clear-output-btn" class="p-1 hover:bg-gray-700 rounded" title="Clear Output"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>
+                                <button id="clear-output-btn" class="p-1 hover:bg-hover rounded" title="Clear Output"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>
                             </div>
                         </div>
                         <div id="output-content" class="flex-1 p-2 overflow-auto">
                             <iframe id="preview-frame" class="w-full h-full bg-white"></iframe>
-                            <div id="console-output" class="hidden h-full p-2 font-mono text-sm text-gray-300 whitespace-pre-wrap"></div>
-                            <div id="terminal-output" class="hidden h-full p-2 font-mono text-sm text-gray-300 whitespace-pre-wrap"></div>
+                            <div id="console-output" class="hidden h-full p-2 font-mono text-sm text-muted whitespace-pre-wrap"></div>
+                            <div id="terminal-output" class="hidden h-full p-2 font-mono text-sm text-muted whitespace-pre-wrap"></div>
                         </div>
                     </div>
                     <div id="virtual-env-output" class="flex-1 rounded-lg p-2 font-mono text-sm overflow-y-auto space-y-4"></div>
                     <div class="mt-4">
-                        <div class="w-full flex items-center gap-2 p-2 rounded-full bg-gray-700 border border-gray-600 shadow-lg focus-within:ring-2 focus-within:ring-teal-500 relative">
-                            <input id="virtual-env-followup" type="text" class="flex-grow bg-transparent border-none focus:ring-0 p-2 text-gray-200" placeholder="Ask about the code...">
+                        <div class="w-full flex items-center gap-2 p-2 rounded-full bg-input border border-color shadow-lg focus-within:ring-2 focus-within:ring-primary-accent relative">
+                            <input id="virtual-env-followup" type="text" class="flex-grow bg-transparent border-none focus:ring-0 p-2" placeholder="Ask about the code...">
                             
                             <div class="flex-shrink-0 flex items-center space-x-1">
-                                <button id="run-code-btn" class="p-2 rounded-full hover:bg-gray-600 transition-colors" title="Run Code in Editor">
+                                <button id="run-code-btn" class="p-2 rounded-full hover:bg-hover transition-colors" title="Run Code in Editor">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path>
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                                     </svg>
                                 </button>
-                                <button id="run-analysis-btn" class="bg-teal-500 text-white p-2 rounded-full hover:bg-teal-600 transition-colors" title="Send to AI">
+                                <button id="run-analysis-btn" class="bg-primary-accent text-white p-2 rounded-full hover:bg-primary-accent-hover transition-colors" title="Send to AI">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 -rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
                                     </svg>
@@ -377,14 +407,14 @@
     </div>
 
     <!-- Modal for prompts -->
-    <div id="modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50">
-        <div class="bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-sm">
-            <h3 id="modal-title" class="text-lg font-bold mb-4 text-white"></h3>
-            <p id="modal-text" class="text-gray-400 mb-4"></p>
-            <input type="text" id="modal-input" class="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-white outline-none focus:ring-2 focus:ring-teal-500">
+    <div id="modal" class="hidden fixed inset-0 bg-overlay flex items-center justify-center z-50">
+        <div class="bg-panel rounded-lg shadow-xl p-6 w-full max-w-sm">
+            <h3 id="modal-title" class="text-lg font-bold mb-4"></h3>
+            <p id="modal-text" class="text-muted mb-4"></p>
+            <input type="text" id="modal-input" class="w-full bg-input border border-color rounded-md px-3 py-2 outline-none focus:ring-2 focus:ring-primary-accent">
             <div class="flex justify-end gap-3 mt-5">
-                <button id="modal-cancel" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-md font-semibold">Cancel</button>
-                <button id="modal-confirm" class="px-4 py-2 bg-teal-500 hover:bg-teal-600 rounded-md font-semibold text-white">Confirm</button>
+                <button id="modal-cancel" class="px-4 py-2 bg-secondary hover:bg-hover rounded-md font-semibold">Cancel</button>
+                <button id="modal-confirm" class="px-4 py-2 bg-primary-accent hover:bg-primary-accent-hover rounded-md font-semibold text-white">Confirm</button>
             </div>
         </div>
     </div>
@@ -487,7 +517,7 @@
                 openFiles.forEach(path => {
                     const filename = path.split('/').pop();
                     const tab = document.createElement('div');
-                    tab.className = `flex-shrink-0 flex items-center gap-2 py-2 px-4 cursor-pointer border-r border-gray-700 text-sm ${path === activeFile ? 'bg-gray-800 text-white' : 'bg-gray-900 text-gray-400 hover:bg-gray-700'}`;
+                    tab.className = `flex-shrink-0 flex items-center gap-2 py-2 px-4 cursor-pointer border-r border-color text-sm ${path === activeFile ? 'bg-primary text-primary' : 'bg-secondary text-secondary hover:bg-hover'}`;
                     tab.dataset.path = path;
                     const name = document.createElement('span'); name.textContent = filename;
                     const closeBtn = document.createElement('button'); closeBtn.innerHTML = '&times;';

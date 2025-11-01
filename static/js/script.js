@@ -3,9 +3,20 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- CONFIGURATION ---
     const BACKEND_API_BASE_URL = "http://127.0.0.1:5000";
 
+    // --- STATE VARIABLES ---
+    let currentSessionId = null;
+    let chatHistory = [];
+    let attachedFile = null;
+    let activeTool = null;
+    let autoSpeak = false;
+    let availableVoices = [];
+    let activeStream = null;
+    const synth = window.speechSynthesis;
+
     // --- DOM Element References ---
     const getEl = (id) => document.getElementById(id);
 
+    // Main Layout
     const mainChatArea = getEl('main-chat-area');
     const chatBody = getEl('chat-body');
     const messagesContainer = getEl('messages-container');
@@ -15,97 +26,175 @@ document.addEventListener('DOMContentLoaded', () => {
     const sendButton = getEl('send-button');
     const sidebar = getEl('sidebar');
     const sidebarContent = getEl('sidebar-content');
-    const toolkitMenu = getEl('toolkit-menu');
-    const toolkitBtn = getEl('toolkit-btn');
     const chatHistoryList = getEl('chat-history-list');
     const chatTitle = getEl('chat-title');
     const newChatBtn = getEl('new-chat-btn');
-    const settingsBtn = getEl('settings-btn'); // Gear icon in header
-    const userProfileBtn = getEl('user-profile-btn'); // Button in sidebar
-    
-    // MODAL IDs
+    const loadingIndicator = getEl('loading-indicator'); // Assuming you have <div id="loading-indicator">...</div>
+    const sidebarToggleBtnHeader = getEl('sidebar-toggle-btn-header');
+    const sidebarToggleBtnSidebar = getEl('sidebar-toggle-btn-sidebar');
+
+    // Toolkits & Inputs
+    const toolkitMenu = getEl('toolkit-menu');
+    const toolkitBtn = getEl('toolkit-btn');
+    const micButton = getEl('mic-button');
+    const fileInput = getEl('file-input');
+    const imagePreviewContainer = getEl('image-preview-container');
+    const imagePreview = getEl('image-preview');
+    const removeImageBtn = getEl('remove-image-btn');
+    const activeToolIndicator = getEl('active-tool-indicator'); // Assuming you have a div for this
+
+    // Modal Main Buttons
+    const settingsBtn = getEl('open-settings-btn');
+    const userProfileBtn = getEl('user-profile-btn');
+    const geminiToolkitBtn = getEl('gemini-toolkit-btn');
+
+    // All Modals & their content
     const settingsModal = getEl('settings-modal');
-    const closeSettingsModalBtn = getEl('close-settings-modal-btn');
+    const closeSettingsModal = getEl('close-settings-modal');
+    const themeOptions = getEl('theme-options');
+    const autoSpeakToggle = getEl('auto-speak-toggle');
+    const voiceSelect = getEl('voice-select');
     const saveSettingsBtn = getEl('save-settings-btn');
+
+    const profileModal = getEl('profile-modal');
+    const closeProfileModalBtn = getEl('close-profile-modal-btn');
+    const profileEditBtn = getEl('profile-edit-btn');
+    const profilePictureInput = getEl('profile-picture-input');
+    const profileMemoryBtn = getEl('profile-memory-btn');
+    const profileSupportBtn = getEl('profile-support-btn');
+
     const editProfileModal = getEl('edit-profile-modal');
     const closeEditProfileModalBtn = getEl('close-edit-profile-modal-btn');
     const saveProfileBtn = getEl('save-profile-btn');
-    const profileModal = getEl('profile-modal');
-    const closeProfileModalBtn = getEl('close-profile-modal-btn');
+    const nameInput = getEl('name-input');
+
+    const cameraModal = getEl('camera-modal');
+    const closeCameraBtn = getEl('close-camera-btn');
+    const captureBtn = getEl('capture-btn');
+    const cameraStreamEl = getEl('camera-stream');
+    const cameraCaptureCanvas = getEl('camera-capture-canvas');
+
+    const geminiModal = getEl('gemini-modal');
+    const closeGeminiModalBtn = getEl('close-gemini-modal-btn');
+    const summarizeBtn = getEl('summarize-btn');
+    const suggestReplyBtn = getEl('suggest-reply-btn');
+    const toneAnalyzerBtn = getEl('tone-analyzer-btn');
+    const geminiOutput = getEl('gemini-output');
 
     // --- UI Interaction Setup ---
-    
-    // Generic Modal Controller
-    const setupModal = (modalId, openBtnId, closeBtnId) => {
-        const modal = getEl(modalId);
-        const openBtn = getEl(openBtnId);
-        const closeBtn = getEl(closeBtnId);
 
+    function openModal(modal) {
         if (!modal) return;
+        modal.classList.remove('hidden');
+        modal.classList.add('flex'); // Use flex for centering
+        setTimeout(() => modal.classList.add('open'), 10); // For transitions
+    }
 
-        const open = () => {
-            modal.classList.remove('hidden');
-            modal.classList.add('flex');
-        };
-        const close = () => {
+    function closeModal(modal) {
+        if (!modal) return;
+        modal.classList.remove('open');
+        // Wait for transition to finish before hiding
+        setTimeout(() => {
             modal.classList.add('hidden');
             modal.classList.remove('flex');
-        };
-
-        if (openBtn) openBtn.addEventListener('click', open);
-        if (closeBtn) closeBtn.addEventListener('click', close);
-        
-        // Also close if clicking the modal background
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) {
-                close();
-            }
-        });
-    };
+        }, 300);
+    }
 
     // Sidebar Controller
     const setupSidebar = () => {
-        const sidebar = getEl('sidebar');
-        const headerToggleBtn = getEl('sidebar-toggle-btn-header');
-        const sidebarCloseBtn = getEl('sidebar-toggle-btn-sidebar'); // Assuming a close button inside the sidebar
-
         if (!sidebar) return;
-
-        const toggle = () => {
-            // Toggles visibility for mobile/smaller screens
-            sidebar.classList.toggle('hidden'); 
-            // Toggles collapsed state for larger screens if you implement that
-            // sidebar.classList.toggle('w-20'); 
-        };
-
-        if (headerToggleBtn) headerToggleBtn.addEventListener('click', toggle);
-        if (sidebarCloseBtn) sidebarCloseBtn.addEventListener('click', toggle);
+        const toggle = () => sidebar.classList.toggle('hidden');
+        if (sidebarToggleBtnHeader) sidebarToggleBtnHeader.addEventListener('click', toggle);
+        if (sidebarToggleBtnSidebar) sidebarToggleBtnSidebar.addEventListener('click', toggle);
     };
 
-    // Initialize all UI controllers
-    setupSidebar();
-    setupModal('settings-modal', 'settings-btn', 'close-settings-modal-btn');
-    setupModal('edit-profile-modal', 'edit-profile-btn', 'close-edit-profile-modal-btn');
-    setupModal('profile-modal', 'user-profile-btn', 'close-profile-modal-btn');
-    // Add other modals here if they exist, e.g., setupModal('gemini-modal', 'gemini-toolkit-btn', 'close-gemini-modal-btn');
+    // =====================================================================
+    // --- THEME MANAGEMENT ---
+    // =====================================================================
+    const themes = [
+        { id: 'theme-default', name: 'Default' },
+        { id: 'theme-dark', name: 'Dark' },
+        { id: 'theme-neon', name: 'Neon' },
+        { id: 'theme-glassmorphism', name: 'Glass' },
+        { id: 'theme-hacker', name: 'Hacker' },
+        { id: 'theme-pastel', name: 'Pastel' }
+    ];
 
+    function renderThemeOptions() {
+        if (!themeOptions) return;
+        themeOptions.innerHTML = '';
+        const currentTheme = localStorage.getItem('phantom-theme') || 'theme-default';
+
+        themes.forEach(theme => {
+            const isChecked = theme.id === currentTheme;
+            const optionHtml = `
+                <label for="${theme.id}" class="theme-option-label cursor-pointer p-3 border-2 ${isChecked ? 'border-primary-accent' : 'border-color'} rounded-lg hover:border-primary-accent-hover transition-colors">
+                    <input type="radio" id="${theme.id}" name="theme" value="${theme.id}" class="sr-only" ${isChecked ? 'checked' : ''}>
+                    <span class="text-sm font-medium">${theme.name}</span>
+                </label>
+            `;
+            themeOptions.insertAdjacentHTML('beforeend', optionHtml);
+        });
+
+        document.querySelectorAll('input[name="theme"]').forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                applyTheme(e.target.value);
+            });
+        });
+    }
+
+    function applyTheme(themeId) {
+        // Remove all other theme classes before adding the new one
+        themes.forEach(theme => {
+            document.body.classList.remove(theme.id);
+        });
+
+        // Add the new theme class
+        document.body.classList.add(themeId);
+        localStorage.setItem('phantom-theme', themeId);
+        
+        // Re-render the options to visually update which one is selected
+        if (themeOptions) {
+            // A bit of a hack to avoid re-rendering everything, just update classes
+            document.querySelectorAll('.theme-option-label').forEach(label => {
+                const input = label.querySelector('input');
+                if (input.value === themeId) {
+                    label.classList.add('border-primary-accent');
+                    label.classList.remove('border-color');
+                } else {
+                    label.classList.remove('border-primary-accent');
+                    label.classList.add('border-color');
+                }
+            });
+        }
+    }
 
     // =====================================================================
     // --- STATE & API ---
     // =====================================================================
     async function fetchApi(endpoint, options = {}) {
         try {
-            const response = await fetch(`${BACKEND_API_BASE_URL}${endpoint}`, options);
+            const defaultOptions = {
+                headers: { 'Content-Type': 'application/json' },
+            };
+            const mergedOptions = { ...defaultOptions, ...options };
+            if (mergedOptions.body && typeof mergedOptions.body !== 'string') {
+                mergedOptions.body = JSON.stringify(mergedOptions.body);
+            }
+
+            const response = await fetch(`${BACKEND_API_BASE_URL}${endpoint}`, mergedOptions);
+            
             if (options.method === 'DELETE' && response.ok) {
-                 return { success: true }; 
+                 return { success: true };
             }
             if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+                const errorData = await response.json().catch(() => ({ error: `HTTP error! Status: ${response.status}` }));
+                throw new Error(errorData.error || `An unknown error occurred.`);
             }
             return response.json();
         } catch (error) {
             console.error(`API Error on ${endpoint}:`, error);
+            // Optionally show an error to the user
             return null;
         }
     }
@@ -114,22 +203,12 @@ document.addEventListener('DOMContentLoaded', () => {
         getAllSessions: () => fetchApi('/api/all_sessions'),
         getSessionHistory: (sessionId) => fetchApi(`/api/history/${sessionId}`),
         startNewChat: () => fetchApi('/api/new_chat_session', { method: 'POST' }),
-        sendMessage: (payload) => fetchApi('/api/chat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        }),
-        renameSession: (sessionId, newTitle) => fetchApi(`/api/session/${sessionId}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ title: newTitle })
-        }),
-        deleteSession: (sessionId) => fetchApi(`/api/session/${sessionId}`, {
-            method: 'DELETE'
-        }),
+        sendMessage: (payload) => fetchApi('/api/chat', { method: 'POST', body: payload }),
+        renameSession: (sessionId, newTitle) => fetchApi(`/api/session/${sessionId}`, { method: 'PUT', body: { title: newTitle } }),
+        deleteSession: (sessionId) => fetchApi(`/api/session/${sessionId}`, { method: 'DELETE' }),
         uploadProfilePicture: (formData) => fetch(`${BACKEND_API_BASE_URL}/api/upload_profile_picture`, {
             method: 'POST',
-            body: formData
+            body: formData // FormData sets its own headers
         })
     };
 
@@ -137,6 +216,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- UI RENDERING & STATE (Main Chat) ---
     // =====================================================================
     function renderSuggestionPrompts() {
+        // FIX: Added the missing `allPrompts` definition.
+        const allPrompts = [
+            { title: "Explain", subtitle: "quantum computing in simple terms." },
+            { title: "Write a poem", subtitle: "about a robot learning to dream." },
+            { title: "Give me ideas", subtitle: "for a 10-day trip to Japan." },
+            { title: "Debug this code", subtitle: "for a Python function." }
+        ];
         if (!suggestionGrid) return;
         suggestionGrid.innerHTML = '';
         const shuffled = allPrompts.sort(() => 0.5 - Math.random());
@@ -179,12 +265,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!Array.isArray(chatHistory)) return;
 
         const escapeHtml = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        const userAvatarEl = document.querySelector('#user-profile-btn .user-avatar-img');
+        const userAvatarSrc = userAvatarEl ? userAvatarEl.src : 'https://placehold.co/40x40/4A5568/E2E8F0?text=U';
 
         chatHistory.forEach((msg, idx) => {
             const id = `msg_${Date.now()}_${idx}`;
             const isUser = msg.role === 'user';
-            const senderLabel = isUser ? 'You' : 'Phantom AI';
-            const avatarSrc = isUser ? (userProfileBtn?.querySelector('img')?.src || 'https://placehold.co/40x40/4A5568/E2E8F0?text=U') : 'https://placehold.co/40x40/1F2D37/E2E8F0?text=AI';
+            const avatarSrc = isUser ? userAvatarSrc : 'https://placehold.co/40x40/1F2D37/E2E8F0?text=AI';
             const text = msg.parts && msg.parts[0] ? escapeHtml(msg.parts[0].text).replace(/\n/g, '<br>') : '[empty message]';
             const time = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}) : new Date().toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
 
@@ -195,20 +282,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     <button class="action-btn action-speak px-2 py-1 rounded" title="Speak">🔊</button>
                     <button class="action-btn action-copy px-2 py-1 rounded" title="Copy">📋</button>
                     <button class="action-btn action-share px-2 py-1 rounded" title="Share">🔗</button>
-                    ${isUser ? '<button class="action-btn action-edit px-2 py-1 rounded" title="Edit">✎</button>' : ''}
-                    <button class="action-btn action-like px-2 py-1 rounded" title="Like">👍</button>
-                    <button class="action-btn action-dislike px-2 py-1 rounded" title="Dislike">👎</button>
-                    <button class="action-btn action-more px-2 py-1 rounded" title="More">⋯</button>
+                    ${isUser ? `<button class="action-btn action-edit px-2 py-1 rounded" title="Edit" data-msg-index="${idx}">✎</button>` : ''}
                 </div>`;
 
             const msgHtml = `
                 <div id="${id}" data-msg-id="${id}" class="${bubbleClasses}">
                     ${isUser ? `
                         <div class="flex flex-col items-end max-w-full">
-                            <div class="message-meta text-xs text-gray-400 mb-1 flex items-center gap-2">
-                                <span class="message-sender font-semibold">You</span>
-                                <span class="message-time">${time}</span>
-                            </div>
+                            <div class="message-meta text-xs text-gray-400 mb-1">You at ${time}</div>
                             <div class="bg-teal-500 text-white p-4 rounded-lg max-w-lg message-content">${text}</div>
                             ${actionsHtml}
                         </div>
@@ -216,10 +297,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     ` : `
                         <img class="h-10 w-10 rounded-full object-cover mr-2" src="${avatarSrc}" alt="AI Avatar">
                         <div class="flex flex-col max-w-full">
-                            <div class="message-meta text-xs text-gray-400 mb-1">
-                                <span class="message-sender font-semibold">Phantom AI</span>
-                                <span class="message-time ml-2">${time}</span>
-                            </div>
+                            <div class="message-meta text-xs text-gray-400 mb-1">Phantom AI at ${time}</div>
                             <div class="bg-gray-700 text-gray-200 p-4 rounded-lg max-w-lg message-content">${text}</div>
                             ${actionsHtml}
                         </div>
@@ -251,7 +329,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- SPEECH & THEME ---
     // =====================================================================
     function populateVoiceList() {
-        if (!voiceSelect) return;
+        if (!voiceSelect || !synth) return;
         availableVoices = synth.getVoices();
         const currentVal = voiceSelect.value;
         voiceSelect.innerHTML = '';
@@ -264,23 +342,21 @@ document.addEventListener('DOMContentLoaded', () => {
         voiceSelect.value = currentVal;
     }
     
-    if (synth.onvoiceschanged !== undefined) {
+    if (synth && synth.onvoiceschanged !== undefined) {
         synth.onvoiceschanged = populateVoiceList;
     }
 
-    function speakText(text) {
-        // speakText(text, force) — when force === true, speak regardless of autoSpeak
-    }
+    // FIX: Consolidated to a single speakText function
     function speakText(text, force = false) {
-        if (!text) return;
-        if (!force && !autoSpeak) return; // respect Auto‑Speak setting
+        if (!text || !synth) return;
+        if (!force && !autoSpeak) return;
         const utterance = new SpeechSynthesisUtterance(text);
         if (voiceSelect && voiceSelect.value) {
             const selectedVoice = availableVoices.find(voice => voice.name === voiceSelect.value);
             if (selectedVoice) utterance.voice = selectedVoice;
         }
         try {
-            synth.cancel(); // stop any queued speech before speaking
+            synth.cancel();
             synth.speak(utterance);
         } catch (err) { console.warn('speakText error', err); }
     }
@@ -293,7 +369,7 @@ document.addEventListener('DOMContentLoaded', () => {
         recognition.onresult = (event) => {
             if(chatInput) {
                 chatInput.value = event.results[0][0].transcript;
-                handleSendMessage();
+                handlePrimaryAction(); // Use the new primary action handler
             }
         };
         recognition.onerror = (event) => console.error("Speech recognition error:", event.error);
@@ -303,88 +379,82 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- SETTINGS & PROFILE FUNCTIONS ---
     // =====================================================================
     function applySettings() {
-        // Apply Theme
-        const selectedTheme = themeSelect.value;
-        document.body.className = "bg-gray-800 text-gray-200 flex h-screen antialiased overflow-hidden"; // Reset to base classes
-        if (selectedTheme === 'theme-light') {
-            // You can define light theme classes here if you create them
-        }
+        const theme = localStorage.getItem('phantom-theme') || 'theme-default';
+        applyTheme(theme);
         
-        // Apply Display Name to all relevant elements
-        const displayName = getEl('name-input').value;
-        document.querySelectorAll('.user-display-name').forEach(el => {
-            el.textContent = displayName;
-        });
+        if (nameInput) {
+            const displayName = nameInput.value;
+            document.querySelectorAll('.user-display-name').forEach(el => {
+                el.textContent = displayName;
+            });
+        }
+        if (autoSpeakToggle) {
+            autoSpeak = autoSpeakToggle.checked;
+        }
     }
 
     async function saveAppSettings() {
-        const theme = themeSelect.value;
-        const voice = voiceSelect.value;
+        const theme = localStorage.getItem('phantom-theme') || 'theme-default';
+        const voice = voiceSelect ? voiceSelect.value : '';
+        const autoSpeakEnabled = autoSpeakToggle ? autoSpeakToggle.checked : false;
 
-        try {
-            const response = await fetch(`${BACKEND_API_BASE_URL}/api/update_profile`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ theme, voice })
-            });
+        // Save to localStorage
+        localStorage.setItem('phantom-voice', voice);
+        localStorage.setItem('phantom-autospeak', autoSpeakEnabled);
+        
+        // Update app state
+        autoSpeak = autoSpeakEnabled;
 
-            const result = await response.json();
-
-            if (response.ok) {
-                localStorage.setItem('phantom-theme', theme);
-                localStorage.setItem('phantom-voice', voice);
-                applySettings();
-                closeModal(settingsModal);
-                alert('Settings saved successfully!');
-            } else {
-                alert('Error saving settings: ' + result.error);
-            }
-        } catch (error) {
-            console.error('Failed to save settings:', error);
-            alert('Could not connect to the server to save settings.');
-        }
+        // Mock backend save
+        console.log('Saving settings:', { theme, voice, autoSpeak });
+        
+        closeModal(settingsModal);
+        // Simple feedback
+        const originalText = saveSettingsBtn.textContent;
+        saveSettingsBtn.textContent = 'Saved!';
+        setTimeout(() => {
+            saveSettingsBtn.textContent = originalText;
+        }, 1500);
     }
 
     async function saveProfileSettings() {
-        const displayName = getEl('name-input').value;
+        const displayName = nameInput ? nameInput.value : '';
 
-        try {
-            const response = await fetch(`${BACKEND_API_BASE_URL}/api/update_profile`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ displayName })
-            });
 
-            const result = await response.json();
+        const result = await fetchApi('/api/update_profile', {
+            method: 'PUT',
+            body: { displayName }
+        });
 
-            if (response.ok) {
-                localStorage.setItem('phantom-display-name', displayName);
-                applySettings();
-                closeModal(editProfileModal);
-                alert('Profile saved successfully!');
-            } else {
-                alert('Error saving profile: ' + result.error);
-            }
-        } catch (error) {
-            console.error('Failed to save profile:', error);
-            alert('Could not connect to the server to save profile.');
+        if (result) {
+            localStorage.setItem('phantom-display-name', displayName);
+            applySettings();
+            closeModal(editProfileModal);
+            alert('Profile saved successfully!');
+        } else {
+            alert('Error saving profile.');
         }
     }
 
-
     function loadSettings() {
-        const theme = localStorage.getItem('phantom-theme') || 'theme-dark';
+        const theme = localStorage.getItem('phantom-theme') || 'theme-default';
         const voice = localStorage.getItem('phantom-voice');
         const name = localStorage.getItem('phantom-display-name');
+        const autoSpeakEnabled = localStorage.getItem('phantom-autospeak') === 'true';
 
-        if(themeSelect) themeSelect.value = theme;
-        if (name && getEl('name-input')) {
-            getEl('name-input').value = name;
+        applyTheme(theme);
+        if (name && nameInput) nameInput.value = name;
+        if (autoSpeakToggle) {
+            autoSpeakToggle.checked = autoSpeakEnabled;
+            autoSpeak = autoSpeakEnabled;
         }
         
         const voiceInterval = setInterval(() => {
             if (availableVoices.length) {
-                if (voice && voiceSelect) voiceSelect.value = voice;
+                populateVoiceList(); // Ensure list is populated before setting value
+                if (voice && voiceSelect) {
+                    voiceSelect.value = voice;
+                }
                 clearInterval(voiceInterval);
             }
         }, 100);
@@ -424,6 +494,39 @@ document.addEventListener('DOMContentLoaded', () => {
     // =====================================================================
     // --- EVENT HANDLERS (Main Chat & History) ---
     // =====================================================================
+    
+    // FIX: New function to handle both sending and saving edits
+    function handlePrimaryAction() {
+        if (!sendButton) return;
+
+        const isSaveMode = sendButton.dataset.saveMode === 'true';
+        const editingIndex = sendButton.dataset.editingIndex;
+
+        if (isSaveMode && editingIndex !== undefined) {
+            handleSaveEdit(parseInt(editingIndex, 10));
+        } else {
+            handleSendMessage();
+        }
+    }
+
+    function handleSaveEdit(index) {
+        const newText = chatInput.value.trim();
+        if (newText && chatHistory[index] && chatHistory[index].role === 'user') {
+            chatHistory[index].parts = [{ text: newText }];
+            renderMessages(); // Re-render to show the change
+            
+            // Optionally, you could re-submit the entire conversation from this point
+            // For now, we just update it visually on the client.
+        }
+
+        // Reset send button state
+        delete sendButton.dataset.saveMode;
+        delete sendButton.dataset.editingIndex;
+        sendButton.title = 'Send message';
+        chatInput.value = '';
+        chatInput.style.height = 'auto';
+    }
+
     async function handleSendMessage(parts) {
         let messageParts = parts;
         if (!messageParts) {
@@ -433,10 +536,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (attachedFile) {
                 const imageBase64 = await convertFileToBase64(attachedFile);
                 messageParts.push({
-                    inlineData: {
-                        mimeType: attachedFile.type,
-                        data: imageBase64.split(',')[1]
-                    }
+                    inlineData: { mimeType: attachedFile.type, data: imageBase64.split(',')[1] }
                 });
             }
             if (messageText) {
@@ -453,7 +553,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        chatHistory.push({ role: "user", parts: messageParts });
+        chatHistory.push({ role: "user", parts: messageParts, timestamp: new Date().toISOString() });
         renderMessages();
         
         if (chatInput) {
@@ -464,9 +564,9 @@ document.addEventListener('DOMContentLoaded', () => {
         selectTool(null);
 
         const payload = { contents: chatHistory, session_id: currentSessionId };
-        loadingIndicator.style.display = 'block';
+        if(loadingIndicator) loadingIndicator.style.display = 'block';
         const result = await api.sendMessage(payload);
-        loadingIndicator.style.display = 'none';
+        if(loadingIndicator) loadingIndicator.style.display = 'none';
         
         let modelResponseText = "Sorry, something went wrong.";
         if (result && result.candidates && result.candidates[0]?.content?.parts[0]?.text) {
@@ -475,7 +575,7 @@ document.addEventListener('DOMContentLoaded', () => {
             modelResponseText = result.error.message;
         }
         
-        chatHistory.push({ role: "model", parts: [{ text: modelResponseText }] });
+        chatHistory.push({ role: "model", parts: [{ text: modelResponseText }], timestamp: new Date().toISOString() });
         renderMessages();
         if (autoSpeak) speakText(modelResponseText);
         
@@ -559,7 +659,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function useSuggestion(text) {
         if(chatInput) {
             chatInput.value = text.replace(/\n/g, ' ').trim();
-            handleSendMessage();
+            handlePrimaryAction();
         }
     }
     
@@ -663,9 +763,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- Attaching Event Listeners Safely ---
-    if (sendButton) sendButton.addEventListener('click', () => handleSendMessage());
+    if (sendButton) sendButton.addEventListener('click', handlePrimaryAction);
     if (chatInput) {
-        chatInput.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } });
+        chatInput.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handlePrimaryAction(); } });
         chatInput.addEventListener('input', () => { chatInput.style.height = 'auto'; chatInput.style.height = (chatInput.scrollHeight) + 'px'; checkChatState(); });
     }
     if (newChatBtn) newChatBtn.addEventListener('click', handleNewChat);
@@ -676,16 +776,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const renameBtn = e.target.closest('button[data-rename-id]');
             const deleteBtn = e.target.closest('button[data-delete-id]');
 
-            if (link) {
-                e.preventDefault();
-                loadChat(link.dataset.chatId);
-            } else if (renameBtn) {
-                e.preventDefault();
-                handleRenameSession(renameBtn.dataset.renameId, renameBtn.dataset.currentTitle);
-            } else if (deleteBtn) {
-                e.preventDefault();
-                handleDeleteSession(deleteBtn.dataset.deleteId);
-            }
+            if (link) { e.preventDefault(); loadChat(link.dataset.chatId); } 
+            else if (renameBtn) { e.preventDefault(); handleRenameSession(renameBtn.dataset.renameId, renameBtn.dataset.currentTitle); } 
+            else if (deleteBtn) { e.preventDefault(); handleDeleteSession(deleteBtn.dataset.deleteId); }
         });
     }
 
@@ -697,68 +790,44 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     if (removeImageBtn) removeImageBtn.addEventListener('click', removeAttachedFile);
     
-    // Delegated handler for per-message action buttons (speak/copy/share/edit/like/dislike/more)
     if (messagesContainer) {
         messagesContainer.addEventListener('click', async (e) => {
             const btn = e.target.closest('.action-btn');
             if (!btn) return;
-            const msgEl = btn.closest('[data-msg-id]');
-            const contentEl = msgEl?.querySelector('.message-content');
+            const contentEl = btn.closest('.message-bubble')?.querySelector('.message-content');
             const text = contentEl ? contentEl.textContent.trim() : '';
 
             if (btn.classList.contains('action-speak')) {
-                if (text) speakText(text, true); // manual speak should always work (force)
+                if (text) speakText(text, true);
             } else if (btn.classList.contains('action-copy')) {
                 try { await navigator.clipboard.writeText(text); btn.textContent = '✓'; setTimeout(()=>btn.textContent='📋',1000); } catch { alert('Copy failed'); }
             } else if (btn.classList.contains('action-share')) {
                 if (navigator.share) { try { await navigator.share({ text }); } catch {} } else { try { await navigator.clipboard.writeText(text); btn.textContent='✓'; setTimeout(()=>btn.textContent='🔗',1000);} catch{ alert('Share failed'); } }
             } else if (btn.classList.contains('action-edit')) {
-                if (!contentEl) return;
-                chatInput.value = contentEl.textContent.trim();
-                chatInput.focus();
-                // mark send button for save mode
-                sendButton.dataset.saveMode = 'true';
-                sendButton.title = 'Save edit';
-                // store editing target id
-                sendButton.dataset.editingTarget = msgEl.dataset.msgId;
-            } else if (btn.classList.contains('action-like')) {
-                contentEl?.classList.toggle('liked');
-                btn.classList.toggle('active');
-            } else if (btn.classList.contains('action-dislike')) {
-                contentEl?.classList.toggle('disliked');
-                btn.classList.toggle('active');
-            } else if (btn.classList.contains('action-more')) {
-                alert('More actions can be implemented (report, export, pin, etc.)');
+                // FIX: Correctly set up edit mode
+                const msgIndex = btn.dataset.msgIndex;
+                if (chatInput && chatHistory[msgIndex]) {
+                    chatInput.value = chatHistory[msgIndex].parts[0].text;
+                    chatInput.focus();
+                    sendButton.dataset.saveMode = 'true';
+                    sendButton.dataset.editingIndex = msgIndex;
+                    sendButton.title = 'Save edit';
+                }
             }
         });
     }
 
-    function openModal(modal) {
-        if (!modal) return;
-        modal.classList.remove('hidden');
-        setTimeout(() => modal.classList.add('open'), 10);
-    }
-
-    function closeModal(modal) {
-        if (!modal) return;
-        modal.classList.remove('open');
-        setTimeout(() => modal.classList.add('hidden'), 300);
-    }
-
     // Event Listeners for Modals
     if (settingsBtn) settingsBtn.addEventListener('click', () => openModal(settingsModal));
-    if (closeSettingsModalBtn) closeSettingsModalBtn.addEventListener('click', () => closeModal(settingsModal));
+    if (closeSettingsModal) closeSettingsModal.addEventListener('click', () => closeModal(settingsModal));
     if (settingsModal) settingsModal.addEventListener('click', (e) => { if (e.target === settingsModal) closeModal(settingsModal); });
-    if(saveSettingsBtn) saveSettingsBtn.addEventListener('click', saveAppSettings);
-
+    if (saveSettingsBtn) saveSettingsBtn.addEventListener('click', saveAppSettings);
+    
     if (userProfileBtn) userProfileBtn.addEventListener('click', () => openModal(profileModal));
     if (closeProfileModalBtn) closeProfileModalBtn.addEventListener('click', () => closeModal(profileModal));
     if (profileModal) profileModal.addEventListener('click', (e) => { if (e.target === profileModal) closeModal(profileModal); });
     
-    if (profileEditBtn) profileEditBtn.addEventListener('click', () => {
-        closeModal(profileModal);
-        openModal(editProfileModal);
-    });
+    if (profileEditBtn) profileEditBtn.addEventListener('click', () => { closeModal(profileModal); openModal(editProfileModal); });
     if (closeEditProfileModalBtn) closeEditProfileModalBtn.addEventListener('click', () => closeModal(editProfileModal));
     if (editProfileModal) editProfileModal.addEventListener('click', (e) => { if (e.target === editProfileModal) closeModal(editProfileModal); });
     if(saveProfileBtn) saveProfileBtn.addEventListener('click', saveProfileSettings);
@@ -782,8 +851,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- INITIALIZATION ---
     async function initializeApp() {
+        setupSidebar();
         loadSettings(); 
         populateVoiceList();
+        renderThemeOptions();
         const sessionsData = await api.getAllSessions();
         renderChatHistory(sessionsData, null);
         renderSuggestionPrompts();
@@ -793,7 +864,6 @@ document.addEventListener('DOMContentLoaded', () => {
             await handleNewChat();
         }
         checkChatState();
-        
         setupVirtualEnvironment();
     }
     
