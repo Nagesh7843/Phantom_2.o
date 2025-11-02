@@ -1,5 +1,7 @@
 import os
 from datetime import datetime, timezone
+import sys
+import subprocess
 
 import jwt  # For decoding JWTs (like Google's id_token)
 import requests
@@ -431,7 +433,7 @@ def chat_api():
     try:
         client_payload = request.json
         # Ensure session_id is always provided by the client for existing sessions
-        current_session_id = client_payload.get('session_id') 
+        current_session_id = client_payload.get('session_id')
         if not current_session_id:
             return jsonify({"error": {"message": "session_id is required in the payload."}}), 400
 
@@ -484,8 +486,7 @@ def chat_api():
             print("DEBUG: messages_collection not available, user message not saved to DB.")
 
         instruction_text = f"""
-        instruction_text = f
-        You are Phantom_2.o, an advanced AI assistant created and trained by Nagesh Gaikwad.
+You are Phantom_2.o, an advanced AI assistant created and trained by Nagesh Gaikwad.
 Your answers must always be well-structured, clear, and professional, similar to ChatGPT’s response style. 
 Do not use any special formatting characters like '*', '#', or extra placeholders. do not repeat your name in your responses.
 
@@ -493,8 +494,7 @@ Response Guidelines:
 1. Begin with a short introduction or summary relevant to the user’s query.
 2. Present explanations in clean paragraphs with clear flow.
 3. When listing items or steps, use plain numbering (1, 2, 3...) or dashes (-) without symbols like '*' or '#'.
-4. If you provide code, always put it inside proper Markdown code blocks. Example:
-- Ensure your response is in {language_name} language.
+
 """
         
         final_contents = [{"role": "user", "parts": [{"text": instruction_text}]}]
@@ -676,6 +676,37 @@ def stripe_webhook():
     #     users_collection.update_one({'_id': ObjectId(user_id)}, {'$set': {'plan': 'Premium'}})
     return jsonify({"status": "success"}), 200
 
+# region: Gemini API Integration
+@app.route('/api/run_code', methods=['POST'])
+def run_code():
+    """
+    Executes Python code in a sandboxed environment.
+    """
+    data = request.get_json()
+    code = data.get('code')
+
+    if not code:
+        return jsonify({'error': 'No code provided'}), 400
+
+    try:
+        # Execute the code using a Python subprocess
+        # This is safer than exec() as it runs in a separate process
+        process = subprocess.run(
+            [sys.executable, '-c', code],
+            capture_output=True,
+            text=True,
+            timeout=10  # 10-second timeout for safety
+        )
+        
+        stdout = process.stdout
+        stderr = process.stderr
+
+        return jsonify({'stdout': stdout, 'stderr': stderr})
+
+    except subprocess.TimeoutExpired:
+        return jsonify({'error': 'Execution timed out after 10 seconds.'}), 408
+    except Exception as e:
+        return jsonify({'error': f'An unexpected error occurred: {str(e)}'}), 500
 
 # --- Start the Flask server ---
 if __name__ == '__main__':

@@ -839,6 +839,15 @@ document.addEventListener('DOMContentLoaded', () => {
     if (toolkitBtn) toolkitBtn.addEventListener('click', (e) => { e.stopPropagation(); toolkitMenu.classList.toggle('hidden'); });
     if (getEl('tool-file-btn')) getEl('tool-file-btn').addEventListener('click', () => { fileInput.click(); toolkitMenu.classList.add('hidden'); });
     if (getEl('tool-camera-btn')) getEl('tool-camera-btn').addEventListener('click', () => { openCamera(); toolkitMenu.classList.add('hidden'); });
+    if (getEl('tool-canva-btn')) {
+        getEl('tool-canva-btn').addEventListener('click', () => {
+            const virtualEnvModal = getEl('virtual-env-modal');
+            if (virtualEnvModal) {
+                openModal(virtualEnvModal);
+            }
+            toolkitMenu.classList.add('hidden');
+        });
+    }
     if (captureBtn) captureBtn.addEventListener('click', capturePhoto);
     if (closeCameraBtn) closeCameraBtn.addEventListener('click', closeCamera);
     
@@ -868,5 +877,36 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     initializeApp();
+
+    // New global function to allow other scripts to send messages
+    window.sendMessageToPhantom = async (promptText) => {
+        if (!promptText) return;
+
+        const payload = {
+            session_id: currentSessionId,
+            contents: {
+                role: "user",
+                parts: [{ text: promptText }]
+            }
+        };
+
+        addMessageToUI(payload.contents);
+        setLoading(true);
+
+        try {
+            const response = await api.sendMessage(payload);
+            if (response && response.response) {
+                addMessageToUI(response.response, true); // isAI = true
+                speakText(response.response.parts[0].text);
+            } else {
+                throw new Error("Invalid response structure from backend.");
+            }
+        } catch (error) {
+            console.error("Error sending message via sendMessageToPhantom:", error);
+            addMessageToUI({ role: 'model', parts: [{ text: `Sorry, an error occurred: ${error.message}` }] }, true);
+        } finally {
+            setLoading(false);
+        }
+    };
 });
 
