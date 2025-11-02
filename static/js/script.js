@@ -216,8 +216,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- UI RENDERING & STATE (Main Chat) ---
     // =====================================================================
     function renderSuggestionPrompts() {
-        // FIX: Added the missing `allPrompts` definition.
-        const allPrompts = [
+        // FIX: Changed to `let` to allow for dynamic prompts in the future.
+        let allPrompts = [
             { title: "Explain", subtitle: "quantum computing in simple terms." },
             { title: "Write a poem", subtitle: "about a robot learning to dream." },
             { title: "Give me ideas", subtitle: "for a 10-day trip to Japan." },
