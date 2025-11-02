@@ -603,18 +603,58 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    async function handleNewChat() {
-        const data = await api.startNewChat();
-        if (data && data.session_id) {
-            currentSessionId = data.session_id;
-            chatHistory = [];
-            renderMessages();
-            renderSuggestionPrompts();
-            if (chatTitle) chatTitle.textContent = "New Chat";
-            const sessions = await api.getAllSessions();
-            if (sessions) renderChatHistory(sessions, currentSessionId);
+    async function switchChatSession(sessionId) {
+        if (!sessionId) {
+            console.error("switchChatSession called with no sessionId");
+            return;
         }
+        console.log(`Switching to session: ${sessionId}`);
+        currentSessionId = sessionId;
+        chatHistory = []; // Clear old messages
+        renderMessages(); // Clear the UI
+        renderSuggestionPrompts(); // Show suggestions for the new chat
+        if (chatTitle) chatTitle.textContent = "New Chat";
+    
+        // Visually update the history list
+        const sessions = await api.getAllSessions();
+        if (sessions) {
+            renderChatHistory(sessions, currentSessionId);
+            // Find the new session's title and update the header
+            const newSessionDetails = sessions.sessions.find(s => s.session_id === sessionId);
+            if (newSessionDetails && chatTitle) {
+                chatTitle.textContent = newSessionDetails.title;
+            }
+        }
+    
+        // Now load the actual history for the session
+        await loadChat(sessionId);
     }
+
+    async function handleNewChat() {
+        console.log('handleNewChat called');
+        try {
+            const response = await fetch('/api/new_chat_session', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+            });
+            console.log('New chat session response:', response);
+            if (response.ok) {
+                const newSession = await response.json();
+                console.log('New session created:', newSession);
+                await loadChatHistory();
+                await switchChatSession(newSession.session_id);
+                // No need to manually add to chatHistory, loadChatHistory will get it
+            } else {
+                console.error('Failed to create new chat session, status:', response.status);
+                const errorData = await response.text();
+                console.error('Error data:', errorData);
+                showToast('Error creating new chat. Please try again.');
+            }
+        } catch (error) {
+            console.error('Error in handleNewChat:', error);
+            showToast('An unexpected error occurred. Please check your connection and try again.');
+        }
+    };
 
     async function handleRenameSession(sessionId, currentTitle) {
         const newTitle = prompt("Enter a new name for the chat:", currentTitle);
@@ -627,286 +667,1297 @@ document.addEventListener('DOMContentLoaded', () => {
                     chatTitle.textContent = newTitle.trim();
                 }
             } else {
-                alert('Failed to rename session.');
+                showToast('Failed to rename session.');
             }
         }
     }
 
     async function handleDeleteSession(sessionId) {
-        if (confirm("Are you sure you want to delete this chat? This action cannot be undone.")) {
-            const result = await api.deleteSession(sessionId);
-            if (result) {
-                if (sessionId === currentSessionId) {
-                    await handleNewChat();
+        showModal(getEl('modal'), {
+            title: 'Delete Chat?',
+            message: 'Are you sure you want to delete this chat? This action cannot be undone.',
+            confirmText: 'Delete',
+            onConfirm: async () => {
+                const result = await api.deleteSession(sessionId);
+                if (result) {
+                    if (sessionId === currentSessionId) {
+                        // If we deleted the active chat, start a new one
+                        await handleNewChat();
+                    } else {
+                        // Otherwise, just refresh the list
+                        const sessions = await api.getAllSessions();
+                        renderChatHistory(sessions, currentSessionId);
+                    }
+                    showToast('Chat deleted successfully.');
                 } else {
-                    const sessions = await api.getAllSessions();
-                    renderChatHistory(sessions, currentSessionId);
+                    showToast('Failed to delete session.');
                 }
-            } else {
-                alert('Failed to delete session.');
             }
-        }
-    }
-    
-    function toggleSidebar() {
-        if(sidebar && sidebarContent) {
-            sidebar.classList.toggle('w-64');
-            sidebar.classList.toggle('w-0');
-            sidebarContent.classList.toggle('hidden');
-        }
-    }
-
-    function useSuggestion(text) {
-        if(chatInput) {
-            chatInput.value = text.replace(/\n/g, ' ').trim();
-            handlePrimaryAction();
-        }
+        });
     }
     
     // =====================================================================
-    // --- GEMINI & CAMERA & TOOLKIT FUNCTIONS ---
+    // --- SPEECH & THEME ---
     // =====================================================================
-    async function handleSummarize() {
-        if (!geminiOutput) return;
-        geminiOutput.textContent = 'Summarizing...';
-        const conversationText = chatHistory.map(msg => `${msg.role}: ${msg.parts[0].text}`).join('\n');
-        const prompt = `Please summarize the following conversation:\n\n${conversationText}`;
-        const payload = { contents: [{ role: "user", parts: [{ text: prompt }] }], session_id: currentSessionId };
-        const result = await api.sendMessage(payload);
-        if (result && result.candidates && result.candidates[0]?.content?.parts[0]?.text) {
-            geminiOutput.textContent = result.candidates[0].content.parts[0].text;
-        } else {
-            geminiOutput.textContent = 'Could not generate a summary.';
-        }
+    function populateVoiceList() {
+        if (!voiceSelect || !synth) return;
+        availableVoices = synth.getVoices();
+        const currentVal = voiceSelect.value;
+        voiceSelect.innerHTML = '';
+        availableVoices.forEach(voice => {
+            const option = document.createElement('option');
+            option.textContent = `${voice.name} (${voice.lang})`;
+            option.value = voice.name;
+            voiceSelect.appendChild(option);
+        });
+        voiceSelect.value = currentVal;
+    }
+    
+    if (synth && synth.onvoiceschanged !== undefined) {
+        synth.onvoiceschanged = populateVoiceList;
     }
 
-    async function openCamera() {
-        if (!cameraModal) return;
+    // FIX: Consolidated to a single speakText function
+    function speakText(text, force = false) {
+        if (!text || !synth) return;
+        if (!force && !autoSpeak) return;
+        const utterance = new SpeechSynthesisUtterance(text);
+        if (voiceSelect && voiceSelect.value) {
+            const selectedVoice = availableVoices.find(voice => voice.name === voiceSelect.value);
+            if (selectedVoice) utterance.voice = selectedVoice;
+        }
         try {
-            activeStream = await navigator.mediaDevices.getUserMedia({ video: true });
-            if(cameraStreamEl) cameraStreamEl.srcObject = activeStream;
-            openModal(cameraModal);
-        } catch (err) {
-            console.error("Error accessing camera:", err);
-            alert("Could not access camera. Please ensure you have a webcam and have granted permission.");
-        }
-    }
-
-    function closeCamera() {
-        if (activeStream) {
-            activeStream.getTracks().forEach(track => track.stop());
-        }
-        if(cameraModal) closeModal(cameraModal);
-    }
-
-    function capturePhoto() {
-        if (!cameraCaptureCanvas || !cameraStreamEl) return;
-        const context = cameraCaptureCanvas.getContext('2d');
-        cameraCaptureCanvas.width = cameraStreamEl.videoWidth;
-        cameraCaptureCanvas.height = cameraStreamEl.videoHeight;
-        context.drawImage(cameraStreamEl, 0, 0, cameraStreamEl.videoWidth, cameraStreamEl.videoHeight);
-        cameraCaptureCanvas.toBlob(blob => {
-            attachedFile = new File([blob], "capture.jpg", { type: "image/jpeg" });
-            showImagePreview(attachedFile);
-        }, 'image/jpeg');
-        closeCamera();
-    }
-
-    function selectTool(toolName) {
-        activeTool = toolName;
-        if (activeToolIndicator) {
-            if (toolName) {
-                activeToolIndicator.innerHTML = `<span class="bg-teal-500/20 text-teal-300 text-xs font-medium px-2.5 py-0.5 rounded-full inline-flex items-center">Mode: ${toolName}<button class="ml-1.5 font-bold text-teal-200 hover:text-white" onclick="selectTool(null)">&times;</button></span>`;
-                if (chatInput) chatInput.placeholder = `Ask a question in ${toolName} mode...`;
-            } else {
-                activeToolIndicator.innerHTML = '';
-                if (chatInput) chatInput.placeholder = 'Message Phantom AI...';
-            }
-        }
-    }
-    window.selectTool = selectTool;
-
-    function showImagePreview(file) {
-        if (file && imagePreviewContainer && imagePreview) {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                imagePreview.src = e.target.result;
-                imagePreviewContainer.classList.remove('hidden');
-            };
-            reader.readAsDataURL(file);
-            checkChatState();
-        }
-    }
-
-    function removeAttachedFile() {
-        attachedFile = null;
-        if (fileInput) fileInput.value = '';
-        if (imagePreviewContainer) imagePreviewContainer.classList.add('hidden');
-        if (imagePreview) imagePreview.src = '';
-        checkChatState();
+            synth.cancel();
+            synth.speak(utterance);
+        } catch (err) { console.warn('speakText error', err); }
     }
     
-    function convertFileToBase64(file) {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result);
-            reader.onerror = reject;
-            reader.readAsDataURL(file);
-        });
-    }
-
-    // =====================================================================
-    // --- VIRTUAL ENVIRONMENT FUNCTIONS ---
-    // =====================================================================
-    function setupVirtualEnvironment() {
-        // ... (existing virtual env code remains here, unchanged)
-    }
-
-    // --- Attaching Event Listeners Safely ---
-    if (sendButton) sendButton.addEventListener('click', handlePrimaryAction);
-    if (chatInput) {
-        chatInput.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handlePrimaryAction(); } });
-        chatInput.addEventListener('input', () => { chatInput.style.height = 'auto'; chatInput.style.height = (chatInput.scrollHeight) + 'px'; checkChatState(); });
-    }
-    if (newChatBtn) newChatBtn.addEventListener('click', handleNewChat);
-    
-    if (chatHistoryList) {
-        chatHistoryList.addEventListener('click', (e) => {
-            const link = e.target.closest('a[data-chat-id]');
-            const renameBtn = e.target.closest('button[data-rename-id]');
-            const deleteBtn = e.target.closest('button[data-delete-id]');
-
-            if (link) { e.preventDefault(); loadChat(link.dataset.chatId); } 
-            else if (renameBtn) { e.preventDefault(); handleRenameSession(renameBtn.dataset.renameId, renameBtn.dataset.currentTitle); } 
-            else if (deleteBtn) { e.preventDefault(); handleDeleteSession(deleteBtn.dataset.deleteId); }
-        });
-    }
-
-    if (fileInput) fileInput.addEventListener('change', (e) => { 
-        if (e.target.files.length > 0) {
-            attachedFile = e.target.files[0];
-            showImagePreview(attachedFile);
-        }
-    });
-    if (removeImageBtn) removeImageBtn.addEventListener('click', removeAttachedFile);
-    
-    if (messagesContainer) {
-        messagesContainer.addEventListener('click', async (e) => {
-            const btn = e.target.closest('.action-btn');
-            if (!btn) return;
-            const contentEl = btn.closest('.message-bubble')?.querySelector('.message-content');
-            const text = contentEl ? contentEl.textContent.trim() : '';
-
-            if (btn.classList.contains('action-speak')) {
-                if (text) speakText(text, true);
-            } else if (btn.classList.contains('action-copy')) {
-                try { await navigator.clipboard.writeText(text); btn.textContent = '✓'; setTimeout(()=>btn.textContent='📋',1000); } catch { alert('Copy failed'); }
-            } else if (btn.classList.contains('action-share')) {
-                if (navigator.share) { try { await navigator.share({ text }); } catch {} } else { try { await navigator.clipboard.writeText(text); btn.textContent='✓'; setTimeout(()=>btn.textContent='🔗',1000);} catch{ alert('Share failed'); } }
-            } else if (btn.classList.contains('action-edit')) {
-                // FIX: Correctly set up edit mode
-                const msgIndex = btn.dataset.msgIndex;
-                if (chatInput && chatHistory[msgIndex]) {
-                    chatInput.value = chatHistory[msgIndex].parts[0].text;
-                    chatInput.focus();
-                    sendButton.dataset.saveMode = 'true';
-                    sendButton.dataset.editingIndex = msgIndex;
-                    sendButton.title = 'Save edit';
-                }
-            }
-        });
-    }
-
-    // Event Listeners for Modals
-    if (settingsBtn) settingsBtn.addEventListener('click', () => openModal(settingsModal));
-    if (closeSettingsModal) closeSettingsModal.addEventListener('click', () => closeModal(settingsModal));
-    if (settingsModal) settingsModal.addEventListener('click', (e) => { if (e.target === settingsModal) closeModal(settingsModal); });
-    if (saveSettingsBtn) saveSettingsBtn.addEventListener('click', saveAppSettings);
-    
-    if (userProfileBtn) userProfileBtn.addEventListener('click', () => openModal(profileModal));
-    if (closeProfileModalBtn) closeProfileModalBtn.addEventListener('click', () => closeModal(profileModal));
-    if (profileModal) profileModal.addEventListener('click', (e) => { if (e.target === profileModal) closeModal(profileModal); });
-    
-    if (profileEditBtn) profileEditBtn.addEventListener('click', () => { closeModal(profileModal); openModal(editProfileModal); });
-    if (closeEditProfileModalBtn) closeEditProfileModalBtn.addEventListener('click', () => closeModal(editProfileModal));
-    if (editProfileModal) editProfileModal.addEventListener('click', (e) => { if (e.target === editProfileModal) closeModal(editProfileModal); });
-    if(saveProfileBtn) saveProfileBtn.addEventListener('click', saveProfileSettings);
-    
-    if (profilePictureInput) profilePictureInput.addEventListener('change', handleProfilePictureUpload);
-    if (profileMemoryBtn) profileMemoryBtn.addEventListener('click', () => alert("User Memory feature coming soon!"));
-    if (profileSupportBtn) profileSupportBtn.addEventListener('click', () => alert("Contact support at support@phantomai.com"));
-    
-    if (toolkitBtn) toolkitBtn.addEventListener('click', (e) => { e.stopPropagation(); toolkitMenu.classList.toggle('hidden'); });
-    if (getEl('tool-file-btn')) getEl('tool-file-btn').addEventListener('click', () => { fileInput.click(); toolkitMenu.classList.add('hidden'); });
-    if (getEl('tool-camera-btn')) getEl('tool-camera-btn').addEventListener('click', () => { openCamera(); toolkitMenu.classList.add('hidden'); });
-    if (getEl('tool-canva-btn')) {
-        getEl('tool-canva-btn').addEventListener('click', () => {
-            const virtualEnvModal = getEl('virtual-env-modal');
-            if (virtualEnvModal) {
-                openModal(virtualEnvModal);
-            }
-            toolkitMenu.classList.add('hidden');
-        });
-    }
-    if (captureBtn) captureBtn.addEventListener('click', capturePhoto);
-    if (closeCameraBtn) closeCameraBtn.addEventListener('click', closeCamera);
-    
-    if (geminiToolkitBtn) geminiToolkitBtn.addEventListener('click', () => openModal(geminiModal));
-    if (closeGeminiModalBtn) closeGeminiModalBtn.addEventListener('click', () => closeModal(geminiModal));
-    if (geminiModal) geminiModal.addEventListener('click', (e) => { if (e.target === geminiModal) closeModal(geminiModal); });
-    if (summarizeBtn) summarizeBtn.addEventListener('click', handleSummarize);
-    if (suggestReplyBtn) suggestReplyBtn.addEventListener('click', () => alert('Suggest Replies feature coming soon!'));
-    if (toneAnalyzerBtn) toneAnalyzerBtn.addEventListener('click', () => alert('Tone Analyzer feature coming soon!'));
-
-    // --- INITIALIZATION ---
-    async function initializeApp() {
-        setupSidebar();
-        loadSettings(); 
-        populateVoiceList();
-        renderThemeOptions();
-        const sessionsData = await api.getAllSessions();
-        renderChatHistory(sessionsData, null);
-        renderSuggestionPrompts();
-        if (sessionsData && sessionsData.sessions && sessionsData.sessions.length > 0) {
-            await loadChat(sessionsData.sessions[0].session_id);
-        } else {
-            await handleNewChat();
-        }
-        checkChatState();
-        setupVirtualEnvironment();
-    }
-    
-    initializeApp();
-
-    // New global function to allow other scripts to send messages
-    window.sendMessageToPhantom = async (promptText) => {
-        if (!promptText) return;
-
-        const payload = {
-            session_id: currentSessionId,
-            contents: {
-                role: "user",
-                parts: [{ text: promptText }]
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition && micButton) {
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'en-US';
+        micButton.addEventListener('click', () => recognition.start());
+        recognition.onresult = (event) => {
+            if(chatInput) {
+                chatInput.value = event.results[0][0].transcript;
+                handlePrimaryAction(); // Use the new primary action handler
             }
         };
+        recognition.onerror = (event) => console.error("Speech recognition error:", event.error);
+    }
 
-        addMessageToUI(payload.contents);
-        setLoading(true);
+    // =====================================================================
+    // --- SETTINGS & PROFILE FUNCTIONS ---
+    // =====================================================================
+    function applySettings() {
+        const theme = localStorage.getItem('phantom-theme') || 'theme-default';
+        applyTheme(theme);
+        
+        if (nameInput) {
+            const displayName = nameInput.value;
+            document.querySelectorAll('.user-display-name').forEach(el => {
+                el.textContent = displayName;
+            });
+        }
+        if (autoSpeakToggle) {
+            autoSpeak = autoSpeakToggle.checked;
+        }
+    }
+
+    async function saveAppSettings() {
+        const theme = localStorage.getItem('phantom-theme') || 'theme-default';
+        const voice = voiceSelect ? voiceSelect.value : '';
+        const autoSpeakEnabled = autoSpeakToggle ? autoSpeakToggle.checked : false;
+
+        // Save to localStorage
+        localStorage.setItem('phantom-voice', voice);
+        localStorage.setItem('phantom-autospeak', autoSpeakEnabled);
+        
+        // Update app state
+        autoSpeak = autoSpeakEnabled;
+
+        // Mock backend save
+        console.log('Saving settings:', { theme, voice, autoSpeak });
+        
+        closeModal(settingsModal);
+        // Simple feedback
+        const originalText = saveSettingsBtn.textContent;
+        saveSettingsBtn.textContent = 'Saved!';
+        setTimeout(() => {
+            saveSettingsBtn.textContent = originalText;
+        }, 1500);
+    }
+
+    async function saveProfileSettings() {
+        const displayName = nameInput ? nameInput.value : '';
+
+
+        const result = await fetchApi('/api/update_profile', {
+            method: 'PUT',
+            body: { displayName }
+        });
+
+        if (result) {
+            localStorage.setItem('phantom-display-name', displayName);
+            applySettings();
+            closeModal(editProfileModal);
+            alert('Profile saved successfully!');
+        } else {
+            alert('Error saving profile.');
+        }
+    }
+
+    function loadSettings() {
+        const theme = localStorage.getItem('phantom-theme') || 'theme-default';
+        const voice = localStorage.getItem('phantom-voice');
+        const name = localStorage.getItem('phantom-display-name');
+        const autoSpeakEnabled = localStorage.getItem('phantom-autospeak') === 'true';
+
+        applyTheme(theme);
+        if (name && nameInput) nameInput.value = name;
+        if (autoSpeakToggle) {
+            autoSpeakToggle.checked = autoSpeakEnabled;
+            autoSpeak = autoSpeakEnabled;
+        }
+        
+        const voiceInterval = setInterval(() => {
+            if (availableVoices.length) {
+                populateVoiceList(); // Ensure list is populated before setting value
+                if (voice && voiceSelect) {
+                    voiceSelect.value = voice;
+                }
+                clearInterval(voiceInterval);
+            }
+        }, 100);
+
+        applySettings();
+    }
+    
+    async function handleProfilePictureUpload(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const formData = new FormData();
+        formData.append('profile_picture', file);
 
         try {
-            const response = await api.sendMessage(payload);
-            if (response && response.response) {
-                addMessageToUI(response.response, true); // isAI = true
-                speakText(response.response.parts[0].text);
+            const response = await api.uploadProfilePicture(formData);
+            const result = await response.json();
+
+            if (response.ok) {
+                updateAllUserAvatars(result.picture_url);
+                alert('Profile picture updated!');
             } else {
-                throw new Error("Invalid response structure from backend.");
+                alert(`Error: ${result.error}`);
             }
         } catch (error) {
-            console.error("Error sending message via sendMessageToPhantom:", error);
-            addMessageToUI({ role: 'model', parts: [{ text: `Sorry, an error occurred: ${error.message}` }] }, true);
-        } finally {
-            setLoading(false);
+            console.error('Failed to upload profile picture:', error);
+            alert('Could not connect to the server to upload the image.');
+        }
+    }
+
+    function updateAllUserAvatars(newUrl) {
+        document.querySelectorAll('.user-avatar-img').forEach(img => {
+            img.src = newUrl;
+        });
+    }
+
+    // =====================================================================
+    // --- EVENT HANDLERS (Main Chat & History) ---
+    // =====================================================================
+    
+    // FIX: New function to handle both sending and saving edits
+    function handlePrimaryAction() {
+        if (!sendButton) return;
+
+        const isSaveMode = sendButton.dataset.saveMode === 'true';
+        const editingIndex = sendButton.dataset.editingIndex;
+
+        if (isSaveMode && editingIndex !== undefined) {
+            handleSaveEdit(parseInt(editingIndex, 10));
+        } else {
+            handleSendMessage();
+        }
+    }
+
+    function handleSaveEdit(index) {
+        const newText = chatInput.value.trim();
+        if (newText && chatHistory[index] && chatHistory[index].role === 'user') {
+            chatHistory[index].parts = [{ text: newText }];
+            renderMessages(); // Re-render to show the change
+            
+            // Optionally, you could re-submit the entire conversation from this point
+            // For now, we just update it visually on the client.
+        }
+
+        // Reset send button state
+        delete sendButton.dataset.saveMode;
+        delete sendButton.dataset.editingIndex;
+        sendButton.title = 'Send message';
+        chatInput.value = '';
+        chatInput.style.height = 'auto';
+    }
+
+    async function handleSendMessage(parts) {
+        let messageParts = parts;
+        if (!messageParts) {
+            const messageText = chatInput.value.trim();
+            if (messageText === '' && !attachedFile) return;
+            messageParts = [];
+            if (attachedFile) {
+                const imageBase64 = await convertFileToBase64(attachedFile);
+                messageParts.push({
+                    inlineData: { mimeType: attachedFile.type, data: imageBase64.split(',')[1] }
+                });
+            }
+            if (messageText) {
+                messageParts.push({ text: messageText });
+            }
+        }
+        
+        if (activeTool) {
+            const textPart = messageParts.find(p => p.text);
+            if (textPart) {
+                textPart.text = `Act as a ${activeTool}. ${textPart.text}`;
+            } else {
+                messageParts.push({ text: `Act as a ${activeTool}.` });
+            }
+        }
+
+        chatHistory.push({ role: "user", parts: messageParts, timestamp: new Date().toISOString() });
+        renderMessages();
+        
+        if (chatInput) {
+            chatInput.value = '';
+            chatInput.style.height = 'auto';
+        }
+        removeAttachedFile();
+        selectTool(null);
+
+        const payload = { contents: chatHistory, session_id: currentSessionId };
+        if(loadingIndicator) loadingIndicator.style.display = 'block';
+        const result = await api.sendMessage(payload);
+        if(loadingIndicator) loadingIndicator.style.display = 'none';
+        
+        let modelResponseText = "Sorry, something went wrong.";
+        if (result && result.candidates && result.candidates[0]?.content?.parts[0]?.text) {
+            modelResponseText = result.candidates[0].content.parts[0].text;
+        } else if (result && result.error?.message) {
+            modelResponseText = result.error.message;
+        }
+        
+        chatHistory.push({ role: "model", parts: [{ text: modelResponseText }], timestamp: new Date().toISOString() });
+        renderMessages();
+        if (autoSpeak) speakText(modelResponseText);
+        
+        const sessions = await api.getAllSessions();
+        if (sessions) renderChatHistory(sessions, currentSessionId);
+    }
+
+    async function loadChat(sessionId) {
+        if (!messagesContainer || !loadingIndicator) return;
+        messagesContainer.innerHTML = '';
+        loadingIndicator.style.display = 'block';
+        
+        const data = await api.getSessionHistory(sessionId);
+        chatHistory = data ? data.history : [];
+        currentSessionId = sessionId;
+
+        loadingIndicator.style.display = 'none';
+        renderMessages();
+        
+        const sessionsData = await api.getAllSessions();
+        if (sessionsData) {
+            renderChatHistory(sessionsData, currentSessionId);
+            const selectedSession = sessionsData.sessions.find(s => s.session_id === sessionId);
+            if (chatTitle && selectedSession) chatTitle.textContent = selectedSession.title;
+        }
+    }
+
+    async function switchChatSession(sessionId) {
+        if (!sessionId) {
+            console.error("switchChatSession called with no sessionId");
+            return;
+        }
+        console.log(`Switching to session: ${sessionId}`);
+        currentSessionId = sessionId;
+        chatHistory = []; // Clear old messages
+        renderMessages(); // Clear the UI
+        renderSuggestionPrompts(); // Show suggestions for the new chat
+        if (chatTitle) chatTitle.textContent = "New Chat";
+    
+        // Visually update the history list
+        const sessions = await api.getAllSessions();
+        if (sessions) {
+            renderChatHistory(sessions, currentSessionId);
+            // Find the new session's title and update the header
+            const newSessionDetails = sessions.sessions.find(s => s.session_id === sessionId);
+            if (newSessionDetails && chatTitle) {
+                chatTitle.textContent = newSessionDetails.title;
+            }
+        }
+    
+        // Now load the actual history for the session
+        await loadChat(sessionId);
+    }
+
+    async function handleNewChat() {
+        console.log('handleNewChat called');
+        try {
+            const response = await fetch('/api/new_chat_session', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+            });
+            console.log('New chat session response:', response);
+            if (response.ok) {
+                const newSession = await response.json();
+                console.log('New session created:', newSession);
+                await loadChatHistory();
+                await switchChatSession(newSession.session_id);
+                // No need to manually add to chatHistory, loadChatHistory will get it
+            } else {
+                console.error('Failed to create new chat session, status:', response.status);
+                const errorData = await response.text();
+                console.error('Error data:', errorData);
+                showToast('Error creating new chat. Please try again.');
+            }
+        } catch (error) {
+            console.error('Error in handleNewChat:', error);
+            showToast('An unexpected error occurred. Please check your connection and try again.');
         }
     };
-});
 
+    async function handleRenameSession(sessionId, currentTitle) {
+        const newTitle = prompt("Enter a new name for the chat:", currentTitle);
+        if (newTitle && newTitle.trim() !== '' && newTitle !== currentTitle) {
+            const result = await api.renameSession(sessionId, newTitle.trim());
+            if (result) {
+                const sessions = await api.getAllSessions();
+                renderChatHistory(sessions, currentSessionId);
+                if (sessionId === currentSessionId && chatTitle) {
+                    chatTitle.textContent = newTitle.trim();
+                }
+            } else {
+                showToast('Failed to rename session.');
+            }
+        }
+    }
+
+    async function handleDeleteSession(sessionId) {
+        showModal(getEl('modal'), {
+            title: 'Delete Chat?',
+            message: 'Are you sure you want to delete this chat? This action cannot be undone.',
+            confirmText: 'Delete',
+            onConfirm: async () => {
+                const result = await api.deleteSession(sessionId);
+                if (result) {
+                    if (sessionId === currentSessionId) {
+                        // If we deleted the active chat, start a new one
+                        await handleNewChat();
+                    } else {
+                        // Otherwise, just refresh the list
+                        const sessions = await api.getAllSessions();
+                        renderChatHistory(sessions, currentSessionId);
+                    }
+                    showToast('Chat deleted successfully.');
+                } else {
+                    showToast('Failed to delete session.');
+                }
+            }
+        });
+    }
+    
+    // =====================================================================
+    // --- SPEECH & THEME ---
+    // =====================================================================
+    function populateVoiceList() {
+        if (!voiceSelect || !synth) return;
+        availableVoices = synth.getVoices();
+        const currentVal = voiceSelect.value;
+        voiceSelect.innerHTML = '';
+        availableVoices.forEach(voice => {
+            const option = document.createElement('option');
+            option.textContent = `${voice.name} (${voice.lang})`;
+            option.value = voice.name;
+            voiceSelect.appendChild(option);
+        });
+        voiceSelect.value = currentVal;
+    }
+    
+    if (synth && synth.onvoiceschanged !== undefined) {
+        synth.onvoiceschanged = populateVoiceList;
+    }
+
+    // FIX: Consolidated to a single speakText function
+    function speakText(text, force = false) {
+        if (!text || !synth) return;
+        if (!force && !autoSpeak) return;
+        const utterance = new SpeechSynthesisUtterance(text);
+        if (voiceSelect && voiceSelect.value) {
+            const selectedVoice = availableVoices.find(voice => voice.name === voiceSelect.value);
+            if (selectedVoice) utterance.voice = selectedVoice;
+        }
+        try {
+            synth.cancel();
+            synth.speak(utterance);
+        } catch (err) { console.warn('speakText error', err); }
+    }
+    
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition && micButton) {
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'en-US';
+        micButton.addEventListener('click', () => recognition.start());
+        recognition.onresult = (event) => {
+            if(chatInput) {
+                chatInput.value = event.results[0][0].transcript;
+                handlePrimaryAction(); // Use the new primary action handler
+            }
+        };
+        recognition.onerror = (event) => console.error("Speech recognition error:", event.error);
+    }
+
+    // =====================================================================
+    // --- SETTINGS & PROFILE FUNCTIONS ---
+    // =====================================================================
+    function applySettings() {
+        const theme = localStorage.getItem('phantom-theme') || 'theme-default';
+        applyTheme(theme);
+        
+        if (nameInput) {
+            const displayName = nameInput.value;
+            document.querySelectorAll('.user-display-name').forEach(el => {
+                el.textContent = displayName;
+            });
+        }
+        if (autoSpeakToggle) {
+            autoSpeak = autoSpeakToggle.checked;
+        }
+    }
+
+    async function saveAppSettings() {
+        const theme = localStorage.getItem('phantom-theme') || 'theme-default';
+        const voice = voiceSelect ? voiceSelect.value : '';
+        const autoSpeakEnabled = autoSpeakToggle ? autoSpeakToggle.checked : false;
+
+        // Save to localStorage
+        localStorage.setItem('phantom-voice', voice);
+        localStorage.setItem('phantom-autospeak', autoSpeakEnabled);
+        
+        // Update app state
+        autoSpeak = autoSpeakEnabled;
+
+        // Mock backend save
+        console.log('Saving settings:', { theme, voice, autoSpeak });
+        
+        closeModal(settingsModal);
+        // Simple feedback
+        const originalText = saveSettingsBtn.textContent;
+        saveSettingsBtn.textContent = 'Saved!';
+        setTimeout(() => {
+            saveSettingsBtn.textContent = originalText;
+        }, 1500);
+    }
+
+    async function saveProfileSettings() {
+        const displayName = nameInput ? nameInput.value : '';
+
+
+        const result = await fetchApi('/api/update_profile', {
+            method: 'PUT',
+            body: { displayName }
+        });
+
+        if (result) {
+            localStorage.setItem('phantom-display-name', displayName);
+            applySettings();
+            closeModal(editProfileModal);
+            alert('Profile saved successfully!');
+        } else {
+            alert('Error saving profile.');
+        }
+    }
+
+    function loadSettings() {
+        const theme = localStorage.getItem('phantom-theme') || 'theme-default';
+        const voice = localStorage.getItem('phantom-voice');
+        const name = localStorage.getItem('phantom-display-name');
+        const autoSpeakEnabled = localStorage.getItem('phantom-autospeak') === 'true';
+
+        applyTheme(theme);
+        if (name && nameInput) nameInput.value = name;
+        if (autoSpeakToggle) {
+            autoSpeakToggle.checked = autoSpeakEnabled;
+            autoSpeak = autoSpeakEnabled;
+        }
+        
+        const voiceInterval = setInterval(() => {
+            if (availableVoices.length) {
+                populateVoiceList(); // Ensure list is populated before setting value
+                if (voice && voiceSelect) {
+                    voiceSelect.value = voice;
+                }
+                clearInterval(voiceInterval);
+            }
+        }, 100);
+
+        applySettings();
+    }
+    
+    async function handleProfilePictureUpload(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const formData = new FormData();
+        formData.append('profile_picture', file);
+
+        try {
+            const response = await api.uploadProfilePicture(formData);
+            const result = await response.json();
+
+            if (response.ok) {
+                updateAllUserAvatars(result.picture_url);
+                alert('Profile picture updated!');
+            } else {
+                alert(`Error: ${result.error}`);
+            }
+        } catch (error) {
+            console.error('Failed to upload profile picture:', error);
+            alert('Could not connect to the server to upload the image.');
+        }
+    }
+
+    function updateAllUserAvatars(newUrl) {
+        document.querySelectorAll('.user-avatar-img').forEach(img => {
+            img.src = newUrl;
+        });
+    }
+
+    // =====================================================================
+    // --- EVENT HANDLERS (Main Chat & History) ---
+    // =====================================================================
+    
+    // FIX: New function to handle both sending and saving edits
+    function handlePrimaryAction() {
+        if (!sendButton) return;
+
+        const isSaveMode = sendButton.dataset.saveMode === 'true';
+        const editingIndex = sendButton.dataset.editingIndex;
+
+        if (isSaveMode && editingIndex !== undefined) {
+            handleSaveEdit(parseInt(editingIndex, 10));
+        } else {
+            handleSendMessage();
+        }
+    }
+
+    function handleSaveEdit(index) {
+        const newText = chatInput.value.trim();
+        if (newText && chatHistory[index] && chatHistory[index].role === 'user') {
+            chatHistory[index].parts = [{ text: newText }];
+            renderMessages(); // Re-render to show the change
+            
+            // Optionally, you could re-submit the entire conversation from this point
+            // For now, we just update it visually on the client.
+        }
+
+        // Reset send button state
+        delete sendButton.dataset.saveMode;
+        delete sendButton.dataset.editingIndex;
+        sendButton.title = 'Send message';
+        chatInput.value = '';
+        chatInput.style.height = 'auto';
+    }
+
+    async function handleSendMessage(parts) {
+        let messageParts = parts;
+        if (!messageParts) {
+            const messageText = chatInput.value.trim();
+            if (messageText === '' && !attachedFile) return;
+            messageParts = [];
+            if (attachedFile) {
+                const imageBase64 = await convertFileToBase64(attachedFile);
+                messageParts.push({
+                    inlineData: { mimeType: attachedFile.type, data: imageBase64.split(',')[1] }
+                });
+            }
+            if (messageText) {
+                messageParts.push({ text: messageText });
+            }
+        }
+        
+        if (activeTool) {
+            const textPart = messageParts.find(p => p.text);
+            if (textPart) {
+                textPart.text = `Act as a ${activeTool}. ${textPart.text}`;
+            } else {
+                messageParts.push({ text: `Act as a ${activeTool}.` });
+            }
+        }
+
+        chatHistory.push({ role: "user", parts: messageParts, timestamp: new Date().toISOString() });
+        renderMessages();
+        
+        if (chatInput) {
+            chatInput.value = '';
+            chatInput.style.height = 'auto';
+        }
+        removeAttachedFile();
+        selectTool(null);
+
+        const payload = { contents: chatHistory, session_id: currentSessionId };
+        if(loadingIndicator) loadingIndicator.style.display = 'block';
+        const result = await api.sendMessage(payload);
+        if(loadingIndicator) loadingIndicator.style.display = 'none';
+        
+        let modelResponseText = "Sorry, something went wrong.";
+        if (result && result.candidates && result.candidates[0]?.content?.parts[0]?.text) {
+            modelResponseText = result.candidates[0].content.parts[0].text;
+        } else if (result && result.error?.message) {
+            modelResponseText = result.error.message;
+        }
+        
+        chatHistory.push({ role: "model", parts: [{ text: modelResponseText }], timestamp: new Date().toISOString() });
+        renderMessages();
+        if (autoSpeak) speakText(modelResponseText);
+        
+        const sessions = await api.getAllSessions();
+        if (sessions) renderChatHistory(sessions, currentSessionId);
+    }
+
+    async function loadChat(sessionId) {
+        if (!messagesContainer || !loadingIndicator) return;
+        messagesContainer.innerHTML = '';
+        loadingIndicator.style.display = 'block';
+        
+        const data = await api.getSessionHistory(sessionId);
+        chatHistory = data ? data.history : [];
+        currentSessionId = sessionId;
+
+        loadingIndicator.style.display = 'none';
+        renderMessages();
+        
+        const sessionsData = await api.getAllSessions();
+        if (sessionsData) {
+            renderChatHistory(sessionsData, currentSessionId);
+            const selectedSession = sessionsData.sessions.find(s => s.session_id === sessionId);
+            if (chatTitle && selectedSession) chatTitle.textContent = selectedSession.title;
+        }
+    }
+
+    async function switchChatSession(sessionId) {
+        if (!sessionId) {
+            console.error("switchChatSession called with no sessionId");
+            return;
+        }
+        console.log(`Switching to session: ${sessionId}`);
+        currentSessionId = sessionId;
+        chatHistory = []; // Clear old messages
+        renderMessages(); // Clear the UI
+        renderSuggestionPrompts(); // Show suggestions for the new chat
+        if (chatTitle) chatTitle.textContent = "New Chat";
+    
+        // Visually update the history list
+        const sessions = await api.getAllSessions();
+        if (sessions) {
+            renderChatHistory(sessions, currentSessionId);
+            // Find the new session's title and update the header
+            const newSessionDetails = sessions.sessions.find(s => s.session_id === sessionId);
+            if (newSessionDetails && chatTitle) {
+                chatTitle.textContent = newSessionDetails.title;
+            }
+        }
+    
+        // Now load the actual history for the session
+        await loadChat(sessionId);
+    }
+
+    async function handleNewChat() {
+        console.log('handleNewChat called');
+        try {
+            const response = await fetch('/api/new_chat_session', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+            });
+            console.log('New chat session response:', response);
+            if (response.ok) {
+                const newSession = await response.json();
+                console.log('New session created:', newSession);
+                await loadChatHistory();
+                await switchChatSession(newSession.session_id);
+                // No need to manually add to chatHistory, loadChatHistory will get it
+            } else {
+                console.error('Failed to create new chat session, status:', response.status);
+                const errorData = await response.text();
+                console.error('Error data:', errorData);
+                showToast('Error creating new chat. Please try again.');
+            }
+        } catch (error) {
+            console.error('Error in handleNewChat:', error);
+            showToast('An unexpected error occurred. Please check your connection and try again.');
+        }
+    };
+
+    async function handleRenameSession(sessionId, currentTitle) {
+        const newTitle = prompt("Enter a new name for the chat:", currentTitle);
+        if (newTitle && newTitle.trim() !== '' && newTitle !== currentTitle) {
+            const result = await api.renameSession(sessionId, newTitle.trim());
+            if (result) {
+                const sessions = await api.getAllSessions();
+                renderChatHistory(sessions, currentSessionId);
+                if (sessionId === currentSessionId && chatTitle) {
+                    chatTitle.textContent = newTitle.trim();
+                }
+            } else {
+                showToast('Failed to rename session.');
+            }
+        }
+    }
+
+    async function handleDeleteSession(sessionId) {
+        showModal(getEl('modal'), {
+            title: 'Delete Chat?',
+            message: 'Are you sure you want to delete this chat? This action cannot be undone.',
+            confirmText: 'Delete',
+            onConfirm: async () => {
+                const result = await api.deleteSession(sessionId);
+                if (result) {
+                    if (sessionId === currentSessionId) {
+                        // If we deleted the active chat, start a new one
+                        await handleNewChat();
+                    } else {
+                        // Otherwise, just refresh the list
+                        const sessions = await api.getAllSessions();
+                        renderChatHistory(sessions, currentSessionId);
+                    }
+                    showToast('Chat deleted successfully.');
+                } else {
+                    showToast('Failed to delete session.');
+                }
+            }
+        });
+    }
+    
+    // =====================================================================
+    // --- SPEECH & THEME ---
+    // =====================================================================
+    function populateVoiceList() {
+        if (!voiceSelect || !synth) return;
+        availableVoices = synth.getVoices();
+        const currentVal = voiceSelect.value;
+        voiceSelect.innerHTML = '';
+        availableVoices.forEach(voice => {
+            const option = document.createElement('option');
+            option.textContent = `${voice.name} (${voice.lang})`;
+            option.value = voice.name;
+            voiceSelect.appendChild(option);
+        });
+        voiceSelect.value = currentVal;
+    }
+    
+    if (synth && synth.onvoiceschanged !== undefined) {
+        synth.onvoiceschanged = populateVoiceList;
+    }
+
+    // FIX: Consolidated to a single speakText function
+    function speakText(text, force = false) {
+        if (!text || !synth) return;
+        if (!force && !autoSpeak) return;
+        const utterance = new SpeechSynthesisUtterance(text);
+        if (voiceSelect && voiceSelect.value) {
+            const selectedVoice = availableVoices.find(voice => voice.name === voiceSelect.value);
+            if (selectedVoice) utterance.voice = selectedVoice;
+        }
+        try {
+            synth.cancel();
+            synth.speak(utterance);
+        } catch (err) { console.warn('speakText error', err); }
+    }
+    
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition && micButton) {
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'en-US';
+        micButton.addEventListener('click', () => recognition.start());
+        recognition.onresult = (event) => {
+            if(chatInput) {
+                chatInput.value = event.results[0][0].transcript;
+                handlePrimaryAction(); // Use the new primary action handler
+            }
+        };
+        recognition.onerror = (event) => console.error("Speech recognition error:", event.error);
+    }
+
+    // =====================================================================
+    // --- SETTINGS & PROFILE FUNCTIONS ---
+    // =====================================================================
+    function applySettings() {
+        const theme = localStorage.getItem('phantom-theme') || 'theme-default';
+        applyTheme(theme);
+        
+        if (nameInput) {
+            const displayName = nameInput.value;
+            document.querySelectorAll('.user-display-name').forEach(el => {
+                el.textContent = displayName;
+            });
+        }
+        if (autoSpeakToggle) {
+            autoSpeak = autoSpeakToggle.checked;
+        }
+    }
+
+    async function saveAppSettings() {
+        const theme = localStorage.getItem('phantom-theme') || 'theme-default';
+        const voice = voiceSelect ? voiceSelect.value : '';
+        const autoSpeakEnabled = autoSpeakToggle ? autoSpeakToggle.checked : false;
+
+        // Save to localStorage
+        localStorage.setItem('phantom-voice', voice);
+        localStorage.setItem('phantom-autospeak', autoSpeakEnabled);
+        
+        // Update app state
+        autoSpeak = autoSpeakEnabled;
+
+        // Mock backend save
+        console.log('Saving settings:', { theme, voice, autoSpeak });
+        
+        closeModal(settingsModal);
+        // Simple feedback
+        const originalText = saveSettingsBtn.textContent;
+        saveSettingsBtn.textContent = 'Saved!';
+        setTimeout(() => {
+            saveSettingsBtn.textContent = originalText;
+        }, 1500);
+    }
+
+    async function saveProfileSettings() {
+        const displayName = nameInput ? nameInput.value : '';
+
+
+        const result = await fetchApi('/api/update_profile', {
+            method: 'PUT',
+            body: { displayName }
+        });
+
+        if (result) {
+            localStorage.setItem('phantom-display-name', displayName);
+            applySettings();
+            closeModal(editProfileModal);
+            alert('Profile saved successfully!');
+        } else {
+            alert('Error saving profile.');
+        }
+    }
+
+    function loadSettings() {
+        const theme = localStorage.getItem('phantom-theme') || 'theme-default';
+        const voice = localStorage.getItem('phantom-voice');
+        const name = localStorage.getItem('phantom-display-name');
+        const autoSpeakEnabled = localStorage.getItem('phantom-autospeak') === 'true';
+
+        applyTheme(theme);
+        if (name && nameInput) nameInput.value = name;
+        if (autoSpeakToggle) {
+            autoSpeakToggle.checked = autoSpeakEnabled;
+            autoSpeak = autoSpeakEnabled;
+        }
+        
+        const voiceInterval = setInterval(() => {
+            if (availableVoices.length) {
+                populateVoiceList(); // Ensure list is populated before setting value
+                if (voice && voiceSelect) {
+                    voiceSelect.value = voice;
+                }
+                clearInterval(voiceInterval);
+            }
+        }, 100);
+
+        applySettings();
+    }
+    
+    async function handleProfilePictureUpload(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const formData = new FormData();
+        formData.append('profile_picture', file);
+
+        try {
+            const response = await api.uploadProfilePicture(formData);
+            const result = await response.json();
+
+            if (response.ok) {
+                updateAllUserAvatars(result.picture_url);
+                alert('Profile picture updated!');
+            } else {
+                alert(`Error: ${result.error}`);
+            }
+        } catch (error) {
+            console.error('Failed to upload profile picture:', error);
+            alert('Could not connect to the server to upload the image.');
+        }
+    }
+
+    function updateAllUserAvatars(newUrl) {
+        document.querySelectorAll('.user-avatar-img').forEach(img => {
+            img.src = newUrl;
+        });
+    }
+
+    // =====================================================================
+    // --- EVENT HANDLERS (Main Chat & History) ---
+    // =====================================================================
+    
+    // FIX: New function to handle both sending and saving edits
+    function handlePrimaryAction() {
+        if (!sendButton) return;
+
+        const isSaveMode = sendButton.dataset.saveMode === 'true';
+        const editingIndex = sendButton.dataset.editingIndex;
+
+        if (isSaveMode && editingIndex !== undefined) {
+            handleSaveEdit(parseInt(editingIndex, 10));
+        } else {
+            handleSendMessage();
+        }
+    }
+
+    function handleSaveEdit(index) {
+        const newText = chatInput.value.trim();
+        if (newText && chatHistory[index] && chatHistory[index].role === 'user') {
+            chatHistory[index].parts = [{ text: newText }];
+            renderMessages(); // Re-render to show the change
+            
+            // Optionally, you could re-submit the entire conversation from this point
+            // For now, we just update it visually on the client.
+        }
+
+        // Reset send button state
+        delete sendButton.dataset.saveMode;
+        delete sendButton.dataset.editingIndex;
+        sendButton.title = 'Send message';
+        chatInput.value = '';
+        chatInput.style.height = 'auto';
+    }
+
+    async function handleSendMessage(parts) {
+        let messageParts = parts;
+        if (!messageParts) {
+            const messageText = chatInput.value.trim();
+            if (messageText === '' && !attachedFile) return;
+            messageParts = [];
+            if (attachedFile) {
+                const imageBase64 = await convertFileToBase64(attachedFile);
+                messageParts.push({
+                    inlineData: { mimeType: attachedFile.type, data: imageBase64.split(',')[1] }
+                });
+            }
+            if (messageText) {
+                messageParts.push({ text: messageText });
+            }
+        }
+        
+        if (activeTool) {
+            const textPart = messageParts.find(p => p.text);
+            if (textPart) {
+                textPart.text = `Act as a ${activeTool}. ${textPart.text}`;
+            } else {
+                messageParts.push({ text: `Act as a ${activeTool}.` });
+            }
+        }
+
+        chatHistory.push({ role: "user", parts: messageParts, timestamp: new Date().toISOString() });
+        renderMessages();
+        
+        if (chatInput) {
+            chatInput.value = '';
+            chatInput.style.height = 'auto';
+        }
+        removeAttachedFile();
+        selectTool(null);
+
+        const payload = { contents: chatHistory, session_id: currentSessionId };
+        if(loadingIndicator) loadingIndicator.style.display = 'block';
+        const result = await api.sendMessage(payload);
+        if(loadingIndicator) loadingIndicator.style.display = 'none';
+        
+        let modelResponseText = "Sorry, something went wrong.";
+        if (result && result.candidates && result.candidates[0]?.content?.parts[0]?.text) {
+            modelResponseText = result.candidates[0].content.parts[0].text;
+        } else if (result && result.error?.message) {
+            modelResponseText = result.error.message;
+        }
+        
+        chatHistory.push({ role: "model", parts: [{ text: modelResponseText }], timestamp: new Date().toISOString() });
+        renderMessages();
+        if (autoSpeak) speakText(modelResponseText);
+        
+        const sessions = await api.getAllSessions();
+        if (sessions) renderChatHistory(sessions, currentSessionId);
+    }
+
+    async function loadChat(sessionId) {
+        if (!messagesContainer || !loadingIndicator) return;
+        messagesContainer.innerHTML = '';
+        loadingIndicator.style.display = 'block';
+        
+        const data = await api.getSessionHistory(sessionId);
+        chatHistory = data ? data.history : [];
+        currentSessionId = sessionId;
+
+        loadingIndicator.style.display = 'none';
+        renderMessages();
+        
+        const sessionsData = await api.getAllSessions();
+        if (sessionsData) {
+            renderChatHistory(sessionsData, currentSessionId);
+            const selectedSession = sessionsData.sessions.find(s => s.session_id === sessionId);
+            if (chatTitle && selectedSession) chatTitle.textContent = selectedSession.title;
+        }
+    }
+
+    async function switchChatSession(sessionId) {
+        if (!sessionId) {
+            console.error("switchChatSession called with no sessionId");
+            return;
+        }
+        console.log(`Switching to session: ${sessionId}`);
+        currentSessionId = sessionId;
+        chatHistory = []; // Clear old messages
+        renderMessages(); // Clear the UI
+        renderSuggestionPrompts(); // Show suggestions for the new chat
+        if (chatTitle) chatTitle.textContent = "New Chat";
+    
+        // Visually update the history list
+        const sessions = await api.getAllSessions();
+        if (sessions) {
+            renderChatHistory(sessions, currentSessionId);
+            // Find the new session's title and update the header
+            const newSessionDetails = sessions.sessions.find(s => s.session_id === sessionId);
+            if (newSessionDetails && chatTitle) {
+                chatTitle.textContent = newSessionDetails.title;
+            }
+        }
+    
+        // Now load the actual history for the session
+        await loadChat(sessionId);
+    }
+
+    async function handleNewChat() {
+        console.log('handleNewChat called');
+        try {
+            const response = await fetch('/api/new_chat_session', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+            });
+            console.log('New chat session response:', response);
+            if (response.ok) {
+                const newSession = await response.json();
+                console.log('New session created:', newSession);
+                await loadChatHistory();
+                await switchChatSession(newSession.session_id);
+                // No need to manually add to chatHistory, loadChatHistory will get it
+            } else {
+                console.error('Failed to create new chat session, status:', response.status);
+                const errorData = await response.text();
+                console.error('Error data:', errorData);
+                showToast('Error creating new chat. Please try again.');
+            }
+        } catch (error) {
+            console.error('Error in handleNewChat:', error);
+            showToast('An unexpected error occurred. Please check your connection and try again.');
+        }
+    };
+
+    async function handleRenameSession(sessionId, currentTitle) {
+        const newTitle = prompt("Enter a new name for the chat:", currentTitle);
+        if (newTitle && newTitle.trim() !== '' && newTitle !== currentTitle) {
+            const result = await api.renameSession(sessionId, newTitle.trim());
+            if (result) {
+                const sessions = await api.getAllSessions();
+                renderChatHistory(sessions, currentSessionId);
+                if (sessionId === currentSessionId && chatTitle) {
+                    chatTitle.textContent = newTitle.trim();
+                }
+            } else {
+                showToast('Failed to rename session.');
+            }
+        }
+    }
+
+    async function handleDeleteSession(sessionId) {
+        showModal(getEl('modal'), {
+            title: 'Delete Chat?',
+            message: 'Are you sure you want to delete this chat? This action cannot be undone.',
+            confirmText: 'Delete',
+            onConfirm: async () => {
+                const result = await api.deleteSession(sessionId);
+                if (result) {
+                    if (sessionId === currentSessionId) {
+                        // If we deleted the active chat, start a new one
+                        await handleNewChat();
+                    } else {
+                        // Otherwise, just refresh the list
+                        const sessions = await api.getAllSessions();
+                        renderChatHistory(sessions, currentSessionId);
+                    }
+                    showToast('Chat deleted successfully.');
+                } else {
+                    showToast('Failed to delete session.');
+                }
+            }
+        });
+    }
+    
+    // =====================================================================
+    // --- SPEECH & THEME ---
+    // =====================================================================
+    function populateVoiceList() {
+        if (!voiceSelect || !synth) return;
+        availableVoices = synth.getVoices();
+        const currentVal = voiceSelect.value;
+        voiceSelect.innerHTML = '';
+        availableVoices.forEach(voice => {
+            const option = document.createElement('option');
+            option.textContent = `${voice.name} (${voice.lang})`;
+            option.value = voice.name;
+            voiceSelect.appendChild(option);
+        });
+        voiceSelect.value = currentVal;
+    }
+    
+    if (synth && synth.onvoiceschanged !== undefined) {
+        synth.onvoiceschanged = populateVoiceList;
+    }
+
+    // FIX: Consolidated to a single speakText function
+    function speakText(text, force = false) {
+        if (!text || !synth) return;
+        if (!force && !autoSpeak) return;
+        const utterance = new SpeechSynthesisUtterance(text);
+        if (voiceSelect && voiceSelect.value) {
+            const selectedVoice = availableVoices.find(voice => voice.name === voiceSelect.value);
+            if (selectedVoice) utterance.voice = selectedVoice;
+        }
+        try {
+            synth.cancel();
+            synth.speak(utterance);
+        } catch (err) { console.warn('speakText error', err); }
+    }
+    
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition && micButton) {
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'en-US';
+        micButton.addEventListener('click', () => recognition.start());
+        recognition.onresult = (event) => {
+            if(chatInput) {
+                chatInput.value = event.results[0][0].transcript;
+                handlePrimaryAction(); // Use the new primary action handler
+            }
+        };
+        recognition.onerror = (event) => console.error("Speech recognition error:", event.error);
+    }
+
+    // =====================================================================
+    // --- SETTINGS & PROFILE FUNCTIONS ---
+    // =====================================================================
+    function applySettings() {
+        const theme = localStorage.getItem('phantom-theme') || 'theme-default';
+        applyTheme(theme);
+        
+        if (nameInput) {
+            const displayName = nameInput.value;
+            document.querySelectorAll('.user-display-name').forEach(el => {
+                el.textContent = displayName;
+            });
+        }
+        if (autoSpeakToggle) {
+            autoSpeak = autoSpeakToggle.checked;
+        }
+    }
+
+    async function saveAppSettings() {
+        const theme = localStorage.getItem('phantom-theme') || 'theme-default';
+        const voice = voiceSelect ? voiceSelect.value : '';
+        const autoSpeakEnabled = autoSpeakToggle ? autoSpeakToggle.checked : false;
+
+        // Save to localStorage
+        localStorage.setItem('phantom-voice', voice);
+        localStorage.setItem('phantom-autospeak', autoSpeakEnabled);
+        
+        // Update app state
+        autoSpeak = autoSpeakEnabled;
+
+        // Mock backend save
+        console.log('Saving settings:', { theme, voice, autoSpeak });
+        
+        closeModal(settingsModal);
+        // Simple feedback
+        const originalText = saveSettingsBtn.textContent;
+        saveSettingsBtn.textContent = 'Saved!';
+        setTimeout(() => {
+            saveSettingsBtn.textContent = originalText;
+        }, 1500);
+    }
+
+    async function saveProfileSettings() {
+        const displayName = nameInput ? nameInput.value : '';
+
+
+        const result = await fetchApi('/api/update_profile', {
+            method: 'PUT',
+            body: { displayName }
+        });
+
+        if (result) {
+            localStorage.setItem('phantom-display-name', displayName);
+            applySettings();
+            closeModal(editProfileModal);
+            alert('Profile saved successfully!');
+        } else {
+            alert('Error saving profile.');
+        }
+    }
+
+    function loadSettings() {
+        const theme = localStorage.getItem('phantom-theme') || 'theme-default';
+        const voice = localStorage.getItem('phantom-voice');
+        const name = localStorage.getItem('phantom-display-name');
+        const autoSpeakEnabled = localStorage.getItem('phantom-autospeak') === 'true';
+
+        applyTheme(theme);
+        if (name && nameInput) nameInput.value = name;
+        if (autoSpeakToggle) {
+            autoSpeakToggle.checked = autoSpeakEnabled;
+            autoSpeak = autoSpeakEnabled;
+        }
+        
+        const voiceInterval = setInterval(() => {
+            if (availableVoices.length) {
+                populateVoiceList(); // Ensure list is populated before setting value
+                if (voice && voiceSelect) {
+                    voiceSelect.value = voice;
+                }
+                clearInterval(voiceInterval);
+            }
+        }, 100);
+
+        applySettings();
+    }
+    
+    async function handleProfilePictureUpload(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const formData = new FormData();
+        formData.append('profile_picture', file);
+
+        try {
+            const response = await api.uploadProfilePicture(formData);
+            const result = await response.json();
+
+            if (response.ok) {
+                updateAllUserAvatars(result.picture_url);
+                alert('Profile picture updated!');
+           
