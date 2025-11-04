@@ -188,7 +188,13 @@
     <div class="flex h-full w-full relative">
         <!-- Sidebar -->
         <aside class="sidebar w-64 flex-shrink-0 flex flex-col transition-all duration-300" id="sidebar">
-            <div class="h-16 flex items-center justify-between flex-shrink-0 px-4 border-b border-color"><h1 class="text-xl font-bold">Phantom</h1><button id="sidebar-toggle-btn-sidebar" class="p-2 rounded-md hover:bg-hover md:hidden"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg></button></div>
+            <div class="h-16 flex items-center justify-between flex-shrink-0 px-4 border-b border-color">
+                <a href="{{ url_for('dashboard') }}" class="flex items-center gap-3">
+                    <img src="{{ url_for('static', filename='img/final phantom logo.png') }}" alt="Phantom Logo" class="h-8 w-auto">
+                    <h1 class="text-xl font-bold">Phantom</h1>
+                </a>
+                <button id="sidebar-toggle-btn-sidebar" class="p-2 rounded-md hover:bg-hover md:hidden"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg></button>
+            </div>
             <div class="p-4"><button id="new-chat-btn" class="w-full bg-primary-accent text-white font-semibold py-2 px-4 rounded-lg hover:bg-primary-accent-hover transition-colors flex items-center justify-center"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>New Chat</button></div>
             <div id="sidebar-content" class="flex flex-col flex-1 overflow-hidden">
                 <div class="px-4 pb-2"><div class="relative"><span class="absolute inset-y-0 left-0 flex items-center pl-3"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg></span><input type="search" class="w-full bg-input text-sm pl-10 pr-4 py-2 rounded-lg border border-color focus:outline-none focus:ring-1 focus:ring-primary-accent" placeholder="Search history..."></div></div>

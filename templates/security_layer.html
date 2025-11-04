@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phantom Security Layer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white antialiased">
+    <div class="max-w-4xl mx-auto px-4 py-12">
+        <a href="{{ url_for('index') }}" class="text-teal-400 hover:text-teal-300 transition-colors mb-8 inline-block">&larr; Back to Home</a>
+        <h1 class="text-4xl md:text-5xl font-extrabold leading-tight mb-6 text-teal-400">Phantom Security Layer</h1>
+        <p class="text-xl text-gray-400 mb-12">Goal: Protect code, projects, and user data with automated defense.</p>
+        
+        <div class="space-y-6 text-gray-300">
+            <a href="#" class="block bg-gray-800 p-8 rounded-lg border border-gray-700/50 shadow-lg transform hover:-translate-y-1 transition-transform duration-300">
+                <h2 class="text-2xl font-bold mb-2 text-teal-400">AI-Driven Vulnerability Scanner</h2>
+                <p class="text-gray-400">Our scanner continuously analyzes your dependencies and code for known vulnerabilities, providing automated fix suggestions and security patches.</p>
+            </a>
+            <a href="#" class="block bg-gray-800 p-8 rounded-lg border border-gray-700/50 shadow-lg transform hover:-translate-y-1 transition-transform duration-300">
+                <h2 class="text-2xl font-bold mb-2 text-teal-400">Real-Time Threat Monitoring</h2>
+                <p class="text-gray-400">Phantom actively monitors your running applications for suspicious activity, automatically blocking threats and alerting you to potential security breaches.</p>
+            </a>
+            <a href="#" class="block bg-gray-800 p-8 rounded-lg border border-gray-700/50 shadow-lg transform hover:-translate-y-1 transition-transform duration-300">
+                <h2 class="text-2xl font-bold mb-2 text-teal-400">API Access Control & Token Security</h2>
+                <p class="text-gray-400">Secure your endpoints with granular access controls, automated token management, and anomaly detection for API requests.</p>
+            </a>
+            <a href="#" class="block bg-gray-800 p-8 rounded-lg border border-gray-700/50 shadow-lg transform hover:-translate-y-1 transition-transform duration-300">
+                <h2 class="text-2xl font-bold mb-2 text-teal-400">Privacy-Preserving AI Analytics</h2>
+                <p class="text-gray-400">Leverage the power of AI analytics without compromising user privacy. Our system uses advanced techniques to ensure data remains anonymous and secure.</p>
+            </a>
+        </div>
+
+        <div class="mt-12 text-center">
+            <a href="#" class="bg-teal-500 text-gray-900 font-bold py-3 px-8 rounded-xl inline-block hover:bg-teal-400 transition-transform transform hover:-translate-y-1">
+                View Security Docs
+            </a>
+        </div>
+    </div>
+</body>
+</html>

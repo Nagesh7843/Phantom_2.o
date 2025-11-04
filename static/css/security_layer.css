@@ -1,0 +1,50 @@
+/* CSS for the Security Layer page demo */
+.security-scan-container {
+    background-color: #1a1a1a;
+    border-radius: 8px;
+    padding: 20px;
+    font-family: 'Courier New', Courier, monospace;
+    color: #f8f8f2;
+    position: relative;
+    overflow: hidden;
+    min-height: 300px;
+    box-shadow: 0 10px 20px rgba(0,0,0,0.19), 0 6px 6px rgba(0,0,0,0.23);
+}
+
+.scan-header {
+    display: flex;
+    align-items: center;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #333;
+    margin-bottom: 15px;
+    color: #888;
+}
+
+.scan-area {
+    overflow: auto;
+}
+
+.scan-line {
+    white-space: pre;
+    margin-bottom: 4px;
+}
+
+.scan-line.info { color: #8be9fd; }
+.scan-line.scanning { color: #f1fa8c; }
+.scan-line.vulnerability { color: #ff5555; }
+.scan-line.fix { color: #50fa7b; }
+.scan-line.summary { color: #ff79c6; }
+
+.typing-cursor {
+    display: inline-block;
+    width: 8px;
+    height: 1.2em;
+    background-color: #f8f8f2;
+    animation: blink 1s infinite;
+    vertical-align: middle;
+}
+
+@keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+}

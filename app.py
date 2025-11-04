@@ -708,6 +708,26 @@ def run_code():
     except Exception as e:
         return jsonify({'error': f'An unexpected error occurred: {str(e)}'}), 500
 
+@app.route('/dev_intelligence')
+def dev_intelligence():
+    return render_template('dev_intelligence.html')
+
+@app.route('/cloud')
+def cloud():
+    return render_template('cloud.html')
+
+@app.route('/dev_hub')
+def dev_hub():
+    return render_template('dev_hub.html')
+
+@app.route('/security_layer')
+def security_layer():
+    return render_template('security_layer.html')
+
+@app.route('/dev_os')
+def dev_os():
+    return render_template('dev_os.html')
+
 # --- Start the Flask server ---
 if __name__ == '__main__':
     print("\n--- Starting Flask Backend Server ---")

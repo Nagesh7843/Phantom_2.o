@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phantom Cloud</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white antialiased">
+    <div class="max-w-4xl mx-auto px-4 py-12">
+        <a href="{{ url_for('index') }}" class="text-teal-400 hover:text-teal-300 transition-colors mb-8 inline-block">&larr; Back to Home</a>
+        <h1 class="text-4xl md:text-5xl font-extrabold leading-tight mb-6 text-teal-400">Phantom Cloud</h1>
+        <p class="text-xl text-gray-400 mb-12">Goal: Provide one-click scalable deployment & hosting.</p>
+        
+        <div class="space-y-6 text-gray-300">
+            <a href="#" class="block bg-gray-800 p-8 rounded-lg border border-gray-700/50 shadow-lg transform hover:-translate-y-1 transition-transform duration-300">
+                <h2 class="text-2xl font-bold mb-2 text-teal-400">Auto-Deploy Web Apps, APIs, and Databases</h2>
+                <p class="text-gray-400">Connect your repository and let Phantom Cloud handle the rest. We automatically build, deploy, and manage your applications, so you can focus on coding.</p>
+            </a>
+            <a href="#" class="block bg-gray-800 p-8 rounded-lg border border-gray-700/50 shadow-lg transform hover:-translate-y-1 transition-transform duration-300">
+                <h2 class="text-2xl font-bold mb-2 text-teal-400">Container & Microservice Orchestration</h2>
+                <p class="text-gray-400">Natively supports Docker and Kubernetes configurations, providing a seamless orchestration experience similar to Render, Vercel, and Docker Hub combined.</p>
+            </a>
+            <a href="#" class="block bg-gray-800 p-8 rounded-lg border border-gray-700/50 shadow-lg transform hover:-translate-y-1 transition-transform duration-300">
+                <h2 class="text-2xl font-bold mb-2 text-teal-400">AI-Optimized Resource Scaling</h2>
+                <p class="text-gray-400">Our AI monitors your application's traffic and resource usage, automatically scaling your infrastructure up or down to meet demand, ensuring performance and cost-efficiency.</p>
+            </a>
+            <a href="#" class="block bg-gray-800 p-8 rounded-lg border border-gray-700/50 shadow-lg transform hover:-translate-y-1 transition-transform duration-300">
+                <h2 class="text-2xl font-bold mb-2 text-teal-400">Built-in Monitoring, Logging, and Analytics</h2>
+                <p class="text-gray-400">Gain complete visibility into your application's health and performance with integrated dashboards, real-time logging, and intelligent analytics.</p>
+            </a>
+            <a href="#" class="block bg-gray-800 p-8 rounded-lg border border-gray-700/50 shadow-lg transform hover:-translate-y-1 transition-transform duration-300">
+                <h2 class="text-2xl font-bold mb-2 text-teal-400">Phantom Compute Credits</h2>
+                <p class="text-gray-400">A flexible, developer-friendly credit system that simplifies billing and allows you to allocate resources across your projects with ease.</p>
+            </a>
+        </div>
+        
+        <p class="mt-12 text-center text-lg italic text-gray-500">Built on top of existing cloud infrastructure (AWS/GCP), branded as the Phantom Cloud Interface.</p>
+
+        <div class="mt-12 text-center">
+            <a href="#" class="bg-teal-500 text-gray-900 font-bold py-3 px-8 rounded-xl inline-block hover:bg-teal-400 transition-transform transform hover:-translate-y-1">
+                Explore Pricing
+            </a>
+        </div>
+    </div>
+</body>
+</html>

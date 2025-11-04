@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phantom Dev Intelligence</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/dev_intelligence.css') }}">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white antialiased">
+    <div class="max-w-4xl mx-auto px-4 py-12">
+        <a href="{{ url_for('index') }}" class="text-teal-400 hover:text-teal-300 transition-colors mb-8 inline-block">&larr; Back to Home</a>
+        <h1 class="text-4xl md:text-5xl font-extrabold leading-tight mb-6 text-teal-400">Phantom Dev Intelligence</h1>
+        <p class="text-xl text-gray-400 mb-12">Goal: AI that understands your codebase, project context, and goals.</p>
+
+        <!-- Interactive Demo Section -->
+        <div class="mb-16">
+            <h2 class="text-3xl font-bold text-center mb-6 text-gray-200">See It in Action</h2>
+            <div class="code-editor-container">
+                <div class="code-editor-header">
+                    <div class="traffic-lights">
+                        <span class="light red"></span>
+                        <span class="light yellow"></span>
+                        <span class="light green"></span>
+                    </div>
+                    <div class="file-title">app.py</div>
+                </div>
+                <div class="line-numbers">1</div>
+                <div class="code-area">
+                    <div class="code-line" id="code-line-1"></div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="space-y-6 text-gray-300">
+            <a href="#" class="block bg-gray-800 p-8 rounded-lg border border-gray-700/50 shadow-lg transform hover:-translate-y-1 transition-transform duration-300">
+                <h2 class="text-2xl font-bold mb-2 text-teal-400">Real-time Code Understanding & Intent Prediction</h2>
+                <p class="text-gray-400">Our AI analyzes your code as you type, predicting your next move and offering intelligent, context-aware completions that adapt to your coding style.</p>
+            </a>
+            <a href="#" class="block bg-gray-800 p-8 rounded-lg border border-gray-700/50 shadow-lg transform hover:-translate-y-1 transition-transform duration-300">
+                <h2 class="text-2xl font-bold mb-2 text-teal-400">Autonomous Debugging & Test-Case Generation</h2>
+                <p class="text-gray-400">Phantom can identify bugs, suggest fixes with explanations, and even write comprehensive unit tests for your functions automatically, saving you hours of manual work.</p>
+            </a>
+            <a href="#" class="block bg-gray-800 p-8 rounded-lg border border-gray-700/50 shadow-lg transform hover:-translate-y-1 transition-transform duration-300">
+                <h2 class="text-2xl font-bold mb-2 text-teal-400">AI Code Reviewer for Optimization & Security</h2>
+                <p class="text-gray-400">Get instant feedback on your code's performance, style, and security. Our AI reviewer acts as a second pair of eyes, catching potential issues before they become problems.</p>
+            </a>
+            <a href="#" class="block bg-gray-800 p-8 rounded-lg border border-gray-700/50 shadow-lg transform hover:-translate-y-1 transition-transform duration-300">
+                <h2 class="text-2xl font-bold mb-2 text-teal-400">Seamless IDE & Editor Integration</h2>
+                <p class="text-gray-400">Works where you do. Phantom integrates directly into VS Code, JetBrains, and other popular editors, bringing AI intelligence directly into your existing workflow.</p>
+            </a>
+            <a href="#" class="block bg-gray-800 p-8 rounded-lg border border-gray-700/50 shadow-lg transform hover:-translate-y-1 transition-transform duration-300">
+                <h2 class="text-2xl font-bold mb-2 text-teal-400">Voice-Command & Natural Language Coding</h2>
+                <p class="text-gray-400">Code hands-free. Use voice commands to write, edit, and navigate code, or simply describe what you want to build in plain English and watch Phantom bring it to life.</p>
+            </a>
+        </div>
+        
+        <p class="mt-12 text-center text-lg italic text-gray-500">Think of it as “your personal AI developer pair.”</p>
+
+        <div class="mt-12 text-center">
+            <a href="#" class="bg-teal-500 text-gray-900 font-bold py-3 px-8 rounded-xl inline-block hover:bg-teal-400 transition-transform transform hover:-translate-y-1">
+                Request a Demo
+            </a>
+        </div>
+    </div>
+    <script src="{{ url_for('static', filename='js/dev_intelligence.js') }}"></script>
+</body>
+</html>

@@ -1,0 +1,65 @@
+/* CSS for the Dev OS page demo */
+.dev-os-container {
+    background-color: #1a1a1a;
+    border-radius: 8px;
+    padding: 20px;
+    font-family: 'Inter', sans-serif;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 350px;
+    box-shadow: 0 10px 20px rgba(0,0,0,0.19), 0 6px 6px rgba(0,0,0,0.23);
+    overflow: hidden;
+}
+
+.dev-os-core {
+    width: 120px;
+    height: 120px;
+    background-color: #fb923c; /* orange-400 */
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    color: #1e293b;
+    font-weight: bold;
+    z-index: 10;
+    box-shadow: 0 0 20px #fb923c, 0 0 40px #fb923c;
+}
+
+.dev-os-core span {
+    display: block;
+    font-size: 14px;
+}
+
+.dev-os-component {
+    position: absolute;
+    width: 60px;
+    height: 60px;
+    background-color: #475569;
+    color: white;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    transition: transform 1s ease-in-out;
+}
+
+/* Initial positions */
+.icon-code { top: 20px; left: 45%; transform: translate(-50%, 0); animation: float 4s ease-in-out infinite; }
+.icon-terminal { right: 20px; top: 45%; transform: translate(0, -50%); animation: float 4s 1s ease-in-out infinite; }
+.icon-db { bottom: 20px; left: 45%; transform: translate(-50%, 0); animation: float 4s 2s ease-in-out infinite; }
+.icon-collab { left: 20px; top: 45%; transform: translate(0, -50%); animation: float 4s 3s ease-in-out infinite; }
+
+/* Final positions (centered) */
+.dev-os-container.assembled .dev-os-component {
+    transform: translate(calc(50vw - 50% - 20px), calc(175px - 50%)); /* Adjust based on container size */
+    opacity: 0;
+}
+
+@keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-15px); }
+}
