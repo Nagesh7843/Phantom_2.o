@@ -88,7 +88,10 @@
     </div>
     
     <script>
-        const BACKEND_API_BASE_URL = "https://phantom-2-o.onrender.com";
+        // Use a relative base URL so the browser uses the same origin as the page.
+        // If you want to call a remote backend, you must enable CORS with credentials
+        // on the server and change this to the remote origin, AND use `credentials: 'include'`.
+        const BACKEND_API_BASE_URL = ""; // same-origin
 
         document.getElementById('login-form').addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -107,6 +110,7 @@
                 const result = await response.json();
 
                 if (response.ok) {
+                    // Redirect to the dashboard on the same origin so cookies/sessions apply.
                     window.location.href = `${BACKEND_API_BASE_URL}/dashboard`;
                 } else {
                     errorMessageEl.textContent = result.error || 'Login failed.';
