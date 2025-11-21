@@ -73,7 +73,8 @@ if not MONGO_URI or not MONGO_DB_NAME:
     print("CRITICAL WARNING: MongoDB URI or DB Name not set in .env! MongoDB features will be disabled.")
 else:
     try:
-        mongo_client = MongoClient(MONGO_URI)
+        # Use a short server selection timeout so startup doesn't hang if Mongo is unreachable
+        mongo_client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
         mongo_db = mongo_client[MONGO_DB_NAME]
         print(f"DEBUG: Successfully connected to MongoDB database: {MONGO_DB_NAME}")
         users_collection = mongo_db['users']
