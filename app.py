@@ -14,7 +14,10 @@ from flask_cors import CORS
 from pymongo import MongoClient  # For MongoDB connection
 from werkzeug.security import generate_password_hash, check_password_hash  # For password hashing
 from werkzeug.middleware.proxy_fix import ProxyFix # <-- Import ProxyFix
+import re
 
+def remove_stars_and_hashes(text: str) -> str:
+    return re.sub(r"[\*\#]", "", text)
 # Load environment variables from .env file at the very beginning
 load_dotenv()
 
@@ -170,12 +173,80 @@ def dashboard():
 
 @app.route('/login/google')
 def login_google():
-    redirect_uri = url_for('authorize', _external=True) # This line is key
-    return google.authorize_redirect(redirect_uri)
+    try:
+        # Allow an explicit redirect URI override via environment for cases
+        # where the app is accessed through a different host (ngrok, custom domain, etc.).
+        # If not provided, use the app's external URL for the `authorize` route.
+        redirect_uri = os.getenv('GOOGLE_REDIRECT_URI') or url_for('authorize', _external=True)
+        
+        # Log the redirect URI being used for debugging
+        app.logger.info(f"Google OAuth: Using redirect_uri: {redirect_uri}")
+        print(f"DEBUG: Google OAuth redirect_uri: {redirect_uri}")
+        print(f"DEBUG: Make sure this exact URI is added to Google Cloud Console -> APIs & Services -> Credentials -> OAuth 2.0 Client -> Authorized redirect URIs")
+        
+        # Check if Google OAuth is properly configured
+        if not os.getenv('GOOGLE_CLIENT_ID') or not os.getenv('GOOGLE_CLIENT_SECRET'):
+            error_msg = "Google OAuth is not properly configured. Please check your GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables."
+            app.logger.error(error_msg)
+            return render_template('login.html', error_message=error_msg)
+        
+        return google.authorize_redirect(redirect_uri)
+    except Exception as e:
+        error_msg = f"Failed to initiate Google login: {str(e)}"
+        app.logger.error(f"Google OAuth initiation failed: {str(e)}", exc_info=True)
+        return render_template('login.html', error_message=error_msg)
+
+
+@app.route('/debug/redirect_uri')
+def debug_redirect_uri():
+    """Debug helper: returns the exact redirect URI the app uses for Google OAuth.
+
+    Use this value to add to your OAuth client's "Authorized redirect URIs"
+    in the Google Cloud Console so you don't get redirect_uri_mismatch errors.
+    """
+    try:
+        # The actual URI used by the app (may be overridden by env var)
+        actual = os.getenv('GOOGLE_REDIRECT_URI') or url_for('authorize', _external=True)
+        # Helpful suggestions to register in Google Cloud Console
+        suggestions = [
+            url_for('authorize', _external=True),
+            url_for('authorize', _external=True).replace('127.0.0.1', 'localhost')
+        ]
+        info = {
+            'redirect_uri_in_use': actual,
+            'suggested_to_register': suggestions,
+            'google_client_id_present': bool(os.getenv('GOOGLE_CLIENT_ID'))
+        }
+        return jsonify(info), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/authorize')
 def authorize():
     try:
+        # Check for OAuth errors in the request parameters
+        error = request.args.get('error')
+        error_description = request.args.get('error_description')
+        
+        if error:
+            error_msg = f"Google OAuth Error: {error}"
+            if error_description:
+                error_msg += f" - {error_description}"
+            
+            # Special handling for redirect_uri_mismatch
+            if error == 'redirect_uri_mismatch':
+                redirect_uri_used = os.getenv('GOOGLE_REDIRECT_URI') or url_for('authorize', _external=True)
+                error_msg += f"\n\nRedirect URI used: {redirect_uri_used}"
+                error_msg += "\n\nTo fix this:"
+                error_msg += "\n1. Go to Google Cloud Console -> APIs & Services -> Credentials"
+                error_msg += "\n2. Click on your OAuth 2.0 Client ID"
+                error_msg += "\n3. Add the redirect URI above to 'Authorized redirect URIs'"
+                error_msg += "\n4. Also add: " + redirect_uri_used.replace('127.0.0.1', 'localhost')
+                error_msg += "\n5. Save and wait a few minutes for changes to propagate"
+            
+            app.logger.error(error_msg)
+            return render_template('login.html', error_message=error_msg.replace('\n', '<br>'))
+        
         token = google.authorize_access_token()
         
         if not token or 'id_token' not in token:
@@ -267,40 +338,51 @@ def register_user():
 # --- NEW: API for Traditional User Login ---
 @app.route('/api/login', methods=['GET','POST'])
 def login_user():
-    if users_collection is None:
-        return jsonify({"error": "MongoDB not connected. Login unavailable."}), 500
+    try:
+        if users_collection is None:
+            return jsonify({"error": "MongoDB not connected. Login unavailable."}), 500
 
-    data = request.json
-    username = data.get('username')
-    password = data.get('password')
+        # Handle both GET and POST requests
+        if request.method == 'GET':
+            return jsonify({"error": "GET method not allowed. Use POST."}), 405
 
-    if not username or not password:
-        return jsonify({"error": "Missing username or password."}), 400
+        if not request.json:
+            return jsonify({"error": "Request body must be JSON."}), 400
 
-    user = users_collection.find_one({'email': username})
+        data = request.json
+        username = data.get('username')
+        password = data.get('password')
 
-    if user and check_password_hash(user['password_hash'], password):
-        # Determine the user_id to use in session (ObjectId for traditional, google_id for Google)
-        session_user_id = str(user['_id']) if '_id' in user else user.get('google_id')
+        if not username or not password:
+            return jsonify({"error": "Missing username or password."}), 400
 
-        # Update last login time
-        users_collection.update_one(
-            {'$or': [{'_id': user.get('_id')}, {'google_id': user.get('google_id')}]},
-            {'$set': {'last_login': datetime.now(timezone.utc)}}
-        )
-        # Set session variables
-        session['user'] = {'email': user['email'], 'name': user['display_name'], 'sub': session_user_id}
-        session['user_email'] = user['email']
-        session['user_display_name'] = user['display_name']
-        session['google_id'] = session_user_id # Use this for consistency
-        session['user_picture'] = user.get('picture_url')
-        session['user_theme'] = user.get('theme', 'theme-dark')
-        session['user_language'] = user.get('language', 'en-US')
-        session['user_voice'] = user.get('voice', '')
+        user = users_collection.find_one({'email': username})
 
-        return jsonify({"message": "Login successful"}), 200
-    else:
-        return jsonify({"error": "Invalid username or password."}), 401
+        if user and check_password_hash(user['password_hash'], password):
+            # Determine the user_id to use in session (ObjectId for traditional, google_id for Google)
+            session_user_id = str(user['_id']) if '_id' in user else user.get('google_id')
+
+            # Update last login time
+            users_collection.update_one(
+                {'$or': [{'_id': user.get('_id')}, {'google_id': user.get('google_id')}]},
+                {'$set': {'last_login': datetime.now(timezone.utc)}}
+            )
+            # Set session variables
+            session['user'] = {'email': user['email'], 'name': user['display_name'], 'sub': session_user_id}
+            session['user_email'] = user['email']
+            session['user_display_name'] = user['display_name']
+            session['google_id'] = session_user_id # Use this for consistency
+            session['user_picture'] = user.get('picture_url')
+            session['user_theme'] = user.get('theme', 'theme-dark')
+            session['user_language'] = user.get('language', 'en-US')
+            session['user_voice'] = user.get('voice', '')
+
+            return jsonify({"message": "Login successful"}), 200
+        else:
+            return jsonify({"error": "Invalid username or password."}), 401
+    except Exception as e:
+        app.logger.error(f"Error during login: {str(e)}", exc_info=True)
+        return jsonify({"error": f"Login failed: {str(e)}"}), 500
 
 # --- NEW: API for updating user profile and settings ---
 @app.route('/api/update_profile', methods=['PUT'])
@@ -421,6 +503,8 @@ def new_chat_session_api():
     return jsonify({"message": "New chat session created", "session_id": new_session_id}), 200
 
 # --- MODIFIED: Backend API Endpoint for Chat Proxy ---
+
+
 @app.route('/api/chat', methods=['POST'])
 def chat_api():
     if not session.get('user') or mongo_db is None:
@@ -460,7 +544,9 @@ def chat_api():
         if messages_for_gemini and messages_for_gemini[-1]['role'] == 'user':
             for part in messages_for_gemini[-1]['parts']:
                 if 'text' in part:
-                    new_user_message_content += part['text'] + " "
+                    cleaned = remove_stars_and_hashes(part['text'])
+                    new_user_message_content += cleaned + " "
+
                 elif 'inlineData' in part and 'data' in part['inlineData']:
                     mime_type = part['inlineData']['mimeType']
                     data = part['inlineData']['data']
