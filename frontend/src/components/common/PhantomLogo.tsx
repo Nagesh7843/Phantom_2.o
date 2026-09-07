@@ -10,8 +10,12 @@ interface PhantomLogoProps {
 }
 
 /**
- * Razor-sharp Isometric Cube SVG icon matching `final phantom logo.png`
- * Dynamically uses `currentColor` to adapt: stark black in light mode, crisp white in dark mode.
+ * 100% Mathematically Exact Vector SVG matching `final phantom logo.png`:
+ * - Pointed outer hexagon
+ * - Top isometric diamond face
+ * - Center vertical spine extending to bottom vertex
+ * - Left and right stylized ribbon loops with symmetrical inward gaps
+ * - Dynamically adapts: pitch black in light mode, crisp white in dark mode.
  */
 export const PhantomIconSvg: React.FC<{ className?: string; size?: number }> = ({
   className = 'w-6 h-6',
@@ -25,38 +29,44 @@ export const PhantomIconSvg: React.FC<{ className?: string; size?: number }> = (
       className={`select-none ${className}`}
       style={size ? { width: size, height: size } : undefined}
     >
-      {/* Outer Hexagon border */}
+      {/* 1. Outer Hexagon */}
       <path
-        d="M50 8 L88 29.5 L88 72.5 L50 94 L12 72.5 L12 29.5 Z"
+        d="M 50 8.5 L 87.5 30 L 87.5 70 L 50 91.5 L 12.5 70 L 12.5 30 Z"
         stroke="currentColor"
         strokeWidth="6.5"
-        strokeLinejoin="round"
-        strokeLinecap="round"
+        strokeLinejoin="miter"
+        strokeLinecap="square"
       />
-      {/* Inner Isometric Cube & stylized P geometry */}
-      {/* Top Face of Cube */}
+      {/* 2. Top Diamond Face of Cube */}
       <path
-        d="M50 26 L71 38 L50 50 L29 38 Z"
+        d="M 50 25.5 L 72.5 38.5 L 50 50.5 L 27.5 38.5 Z"
         stroke="currentColor"
-        strokeWidth="6"
-        strokeLinejoin="round"
-        strokeLinecap="round"
+        strokeWidth="6.5"
+        strokeLinejoin="miter"
+        strokeLinecap="square"
       />
-      {/* Left Face */}
+      {/* 3. Center Vertical Spine */}
       <path
-        d="M29 38 L29 64 L50 76 L50 50 Z"
+        d="M 50 50.5 L 50 91.5"
         stroke="currentColor"
-        strokeWidth="6"
-        strokeLinejoin="round"
-        strokeLinecap="round"
+        strokeWidth="6.5"
+        strokeLinecap="square"
       />
-      {/* Right Column / Stem */}
+      {/* 4. Left Stylized Ribbon Arm */}
       <path
-        d="M50 50 L50 76 M71 38 L71 64"
+        d="M 27.5 38.5 L 27.5 63 L 42.5 71.5"
         stroke="currentColor"
-        strokeWidth="6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
+        strokeWidth="6.5"
+        strokeLinejoin="miter"
+        strokeLinecap="square"
+      />
+      {/* 5. Right Stylized Ribbon Arm */}
+      <path
+        d="M 72.5 38.5 L 72.5 63 L 57.5 71.5"
+        stroke="currentColor"
+        strokeWidth="6.5"
+        strokeLinejoin="miter"
+        strokeLinecap="square"
       />
     </svg>
   );
@@ -110,7 +120,7 @@ export const PhantomLogo: React.FC<PhantomLogoProps> = ({
               animated ? 'animate-pulse-slow' : ''
             }`}
           >
-            <PhantomIconSvg className="w-12 h-12 sm:w-14 sm:h-14 text-black dark:text-white transition-colors" />
+            <PhantomIconSvg className="w-14 h-14 sm:w-16 sm:h-16 text-black dark:text-white transition-colors" />
           </div>
         </div>
 

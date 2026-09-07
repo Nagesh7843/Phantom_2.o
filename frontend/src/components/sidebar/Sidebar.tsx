@@ -14,7 +14,6 @@ import {
   Moon,
   User,
   PanelLeftClose,
-  PanelLeftOpen,
   Pin,
   Sparkles,
   Boxes,
@@ -98,9 +97,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
   };
 
-  const userInitial = userProfile?.authenticated && userProfile.user.displayName
-    ? userProfile.user.displayName[0].toUpperCase()
-    : 'N';
+  const userInitial = userProfile?.authenticated && (userProfile.user.displayName || userProfile.user.email)
+    ? (userProfile.user.displayName || userProfile.user.email)![0].toUpperCase()
+    : null;
 
   return (
     <React.Fragment>
@@ -113,7 +112,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       )}
 
       {/* ----------------------------------------------------------------------- */}
-      {/* COLLAPSED ICON RAIL (MATCHING CHATGPT REFERENCE IMAGE 3)                 */}
+      {/* COLLAPSED ICON RAIL (MATCHING CHATGPT REFERENCE SPEC)                   */}
       {/* ----------------------------------------------------------------------- */}
       {!isOpen && (
         <aside className="hidden md:flex flex-col items-center justify-between w-14 bg-zinc-950 border-r border-zinc-850 py-3 select-none flex-shrink-0 z-20">
@@ -181,25 +180,35 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </button>
           </div>
 
-          {/* Bottom: User Avatar */}
+          {/* Bottom: Real User Profile Avatar (or Sign In if guest) */}
           <div className="flex flex-col items-center gap-2">
-            <button
-              onClick={userProfile?.authenticated ? onOpenProfile : onOpenAuth}
-              className="p-0.5 rounded-full hover:ring-2 hover:ring-zinc-700 transition-all"
-              title={userProfile?.authenticated ? userProfile.user.displayName || 'Account' : 'Sign In'}
-            >
-              {userProfile?.authenticated && userProfile.user.pictureUrl ? (
-                <img
-                  src={userProfile.user.pictureUrl}
-                  alt="Avatar"
-                  className="w-8 h-8 rounded-full border border-zinc-700 object-cover"
-                />
-              ) : (
-                <div className="w-8 h-8 rounded-full bg-purple-600 text-white font-bold text-xs flex items-center justify-center shadow-sm">
-                  {userInitial}
-                </div>
-              )}
-            </button>
+            {userProfile?.authenticated ? (
+              <button
+                onClick={onOpenProfile}
+                className="p-0.5 rounded-full hover:ring-2 hover:ring-zinc-700 transition-all"
+                title={userProfile.user.displayName || userProfile.user.email || 'User Profile'}
+              >
+                {userProfile.user.pictureUrl ? (
+                  <img
+                    src={userProfile.user.pictureUrl}
+                    alt="User Avatar"
+                    className="w-8 h-8 rounded-full border border-zinc-700 object-cover"
+                  />
+                ) : (
+                  <div className="w-8 h-8 rounded-full bg-zinc-800 border border-zinc-700 text-zinc-100 font-bold text-xs flex items-center justify-center shadow-sm">
+                    {userInitial}
+                  </div>
+                )}
+              </button>
+            ) : (
+              <button
+                onClick={onOpenAuth}
+                className="w-8 h-8 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-400 hover:text-white flex items-center justify-center transition-colors"
+                title="Sign in / Register"
+              >
+                <LogIn className="w-4 h-4" />
+              </button>
+            )}
           </div>
         </aside>
       )}
@@ -384,7 +393,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           )}
         </div>
 
-        {/* Footer Actions: Theme Toggle, Settings, Account */}
+        {/* Footer Actions: Theme Toggle, Settings, Real User Account */}
         <div className="border-t border-zinc-850 p-3 space-y-2">
           <div className="grid grid-cols-2 gap-2">
             <button
@@ -417,12 +426,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   className="h-7 w-7 rounded-full border border-zinc-700 object-cover"
                 />
               ) : (
-                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-purple-600 text-xs font-bold text-white">
+                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-zinc-800 border border-zinc-700 text-xs font-bold text-zinc-100">
                   {userInitial}
                 </div>
               )}
               <span className="min-w-0 flex-1 truncate text-xs font-medium text-zinc-200">
-                {userProfile.user.displayName || 'Account'}
+                {userProfile.user.displayName || userProfile.user.email || 'Account'}
               </span>
               <User className="h-3.5 w-3.5 text-zinc-500" />
             </button>
