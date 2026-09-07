@@ -1,0 +1,489 @@
+/* ================================= */
+/* THEME DEFINITIONS & COLOR PALETTES */
+/* ================================= */
+
+/* This is the base template. All color properties should be defined here. */
+body {
+    --bg-primary: #ffffff;
+    --bg-secondary: #f3f4f6;
+    --bg-panel: #ffffff;
+    --bg-input: #e5e7eb;
+    --bg-hover: #e5e7eb;
+    --bg-overlay: rgba(0, 0, 0, 0.5);
+
+    --text-primary: #1f2937;
+    --text-secondary: #4b5563;
+    --text-muted: #6b7280;
+    --text-inverted: #ffffff;
+
+    --border-color: #d1d5db;
+    --border-color-heavy: #9ca3af;
+
+    --primary-accent: #4f46e5;
+    --primary-accent-hover: #4338ca;
+    
+    --danger-accent: #ef4444;
+    --danger-accent-hover: #dc2626;
+
+    --scrollbar-track: var(--bg-secondary);
+    --scrollbar-thumb: #a0a0a0;
+    --scrollbar-thumb-hover: #808080;
+
+    /* For Glassmorphism */
+    --bg-glass: rgba(255, 255, 255, 0.1);
+    --border-glass: rgba(255, 255, 255, 0.2);
+    --backdrop-blur: 10px;
+
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* 1. Default Theme (Based on original dark mode) */
+body.theme-default {
+    --bg-primary: #343541;
+    --bg-secondary: #202123;
+    --bg-panel: #40414F;
+    --bg-input: #53545e;
+    --bg-hover: #4d4e5a;
+    --bg-overlay: rgba(0, 0, 0, 0.7);
+
+    --text-primary: #ffffff;
+    --text-secondary: #d1d5db;
+    --text-muted: #9ca3af;
+    --text-inverted: #1f2937;
+
+    --border-color: #53545e;
+    --border-color-heavy: #6b7280;
+
+    --primary-accent: #19c37d;
+    --primary-accent-hover: #149c63;
+
+    --scrollbar-track: var(--bg-secondary);
+    --scrollbar-thumb: #53545e;
+    --scrollbar-thumb-hover: #6b7280;
+}
+
+/* 2. Dark Theme (High-contrast dark) */
+body.theme-dark {
+    --bg-primary: #111827;
+    --bg-secondary: #0d1117;
+    --bg-panel: #1f2937;
+    --bg-input: #374151;
+    --bg-hover: #374151;
+    --bg-overlay: rgba(0, 0, 0, 0.7);
+
+    --text-primary: #f9fafb;
+    --text-secondary: #d1d5db;
+    --text-muted: #9ca3af;
+    --text-inverted: #1f2937;
+
+    --border-color: #374151;
+    --border-color-heavy: #4b5563;
+
+    --primary-accent: #38bdf8; /* Sky Blue */
+    --primary-accent-hover: #0ea5e9;
+
+    --scrollbar-track: var(--bg-secondary);
+    --scrollbar-thumb: #374151;
+    --scrollbar-thumb-hover: #4b5563;
+}
+
+/* 3. Neon Theme */
+body.theme-neon {
+    --bg-primary: #0f0f1e;
+    --bg-secondary: #050510;
+    --bg-panel: #1a1a33;
+    --bg-input: #2a2a4d;
+    --bg-hover: #393962;
+    --bg-overlay: rgba(10, 10, 20, 0.7);
+
+    --text-primary: #e0e0ff;
+    --text-secondary: #c0c0ff;
+    --text-muted: #a0a0ff;
+    --text-inverted: #0f0f1e;
+
+    --border-color: #2a2a4d;
+    --border-color-heavy: #393962;
+
+    --primary-accent: #ff00ff; /* Magenta */
+    --primary-accent-hover: #cc00cc;
+
+    --scrollbar-track: var(--bg-secondary);
+    --scrollbar-thumb: #2a2a4d;
+    --scrollbar-thumb-hover: #393962;
+}
+
+/* 4. Glassmorphism Theme */
+body.theme-glassmorphism {
+    /* This theme requires a background image on the body to look good */
+    background-image: url('https://images.unsplash.com/photo-1553095066-5014bc7b7f2d?q=80&w=2787&auto=format&fit=crop');
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+
+    --bg-primary: transparent; /* Main background is the image */
+    --bg-secondary: var(--bg-glass);
+    --bg-panel: var(--bg-glass);
+    --bg-input: rgba(255, 255, 255, 0.15);
+    --bg-hover: rgba(255, 255, 255, 0.25);
+    --bg-overlay: rgba(0, 0, 0, 0.6);
+
+    --text-primary: #ffffff;
+    --text-secondary: #e5e5e5;
+    --text-muted: #cccccc;
+    --text-inverted: #1f2937;
+
+    --border-color: var(--border-glass);
+    --border-color-heavy: rgba(255, 255, 255, 0.3);
+
+    --primary-accent: #818cf8; /* Indigo-400 */
+    --primary-accent-hover: #6366f1;
+
+    --scrollbar-track: transparent;
+    --scrollbar-thumb: rgba(255, 255, 255, 0.3);
+    --scrollbar-thumb-hover: rgba(255, 255, 255, 0.5);
+}
+
+/* 5. Hacker Theme */
+body.theme-hacker {
+    --bg-primary: #020c05;
+    --bg-secondary: #000000;
+    --bg-panel: #031a0a;
+    --bg-input: #052e10;
+    --bg-hover: #064719;
+    --bg-overlay: rgba(0, 20, 5, 0.7);
+
+    --text-primary: #34d399; /* Emerald-400 */
+    --text-secondary: #6ee7b7;
+    --text-muted: #a7f3d0;
+    --text-inverted: #000000;
+
+    --border-color: #052e10;
+    --border-color-heavy: #064719;
+
+    --primary-accent: #34d399;
+    --primary-accent-hover: #6ee7b7;
+
+    --scrollbar-track: var(--bg-secondary);
+    --scrollbar-thumb: #052e10;
+    --scrollbar-thumb-hover: #064719;
+}
+
+/* 6. Pastel Theme */
+body.theme-pastel {
+    --bg-primary: #fdf6f0;
+    --bg-secondary: #f8e9dd;
+    --bg-panel: #fff;
+    --bg-input: #fceee2;
+    --bg-hover: #fbe5d5;
+    --bg-overlay: rgba(100, 80, 70, 0.5);
+
+    --text-primary: #57453a;
+    --text-secondary: #7a6355;
+    --text-muted: #9c8273;
+    --text-inverted: #ffffff;
+
+    --border-color: #f7e2d1;
+    --border-color-heavy: #e8d1c0;
+
+    --primary-accent: #f5a684; /* Pastel Orange/Peach */
+    --primary-accent-hover: #f3956f;
+
+    --scrollbar-track: var(--bg-secondary);
+    --scrollbar-thumb: #e8d1c0;
+    --scrollbar-thumb-hover: #d9bfae;
+}
+
+/* ================================= */
+/* COMPONENT STYLES USING VARIABLES  */
+/* ================================= */
+
+.hidden {
+    display: none !important;
+}
+
+/* --- Layout & Core Components --- */
+.sidebar, .chat-header, .bg-secondary {
+    background-color: var(--bg-secondary);
+    color: var(--text-secondary);
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Glassmorphism specific styles */
+.theme-glassmorphism .sidebar,
+.theme-glassmorphism .chat-header,
+.theme-glassmorphism .bg-secondary,
+.theme-glassmorphism .bg-panel,
+.theme-glassmorphism .bg-input,
+.theme-glassmorphism #context-menu,
+.theme-glassmorphism .composer-toolbar {
+    backdrop-filter: blur(var(--backdrop-blur));
+    -webkit-backdrop-filter: blur(var(--backdrop-blur));
+}
+
+.bg-primary { background-color: var(--bg-primary); }
+.bg-panel { background-color: var(--bg-panel); }
+.bg-input { background-color: var(--bg-input); }
+.bg-hover:hover { background-color: var(--bg-hover); }
+.bg-overlay { background-color: var(--bg-overlay); }
+
+.text-primary { color: var(--text-primary); }
+.text-secondary { color: var(--text-secondary); }
+.text-muted { color: var(--text-muted); }
+.text-inverted { color: var(--text-inverted); }
+
+.border-color { border-color: var(--border-color); }
+.border-color-heavy { border-color: var(--border-color-heavy); }
+
+.bg-primary-accent { background-color: var(--primary-accent); }
+.bg-primary-accent-hover:hover { background-color: var(--primary-accent-hover); }
+.text-primary-accent { color: var(--primary-accent); }
+.ring-primary-accent:focus, .focus-within\:ring-primary-accent:focus-within {
+    --tw-ring-color: var(--primary-accent) !important;
+}
+.focus\:ring-primary-accent:focus {
+     --tw-ring-color: var(--primary-accent) !important;
+}
+
+
+/* --- Specific Component Adjustments --- */
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: var(--scrollbar-track); }
+::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); }
+
+/* Message Bubbles */
+.message-bubble .bg-teal-500 {
+    background-color: var(--primary-accent);
+    color: var(--text-inverted);
+    transition: background-color 0.3s ease;
+}
+.message-bubble .bg-gray-700 {
+    background-color: var(--bg-panel);
+    color: var(--text-primary);
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Buttons & Inputs */
+#new-chat-btn, #send-button, #capture-btn, #save-profile-btn, #save-settings-btn, #modal-confirm {
+    background-color: var(--primary-accent);
+    color: var(--text-inverted);
+    transition: background-color 0.3s ease;
+}
+#new-chat-btn:hover, #send-button:hover, #capture-btn:hover, #save-profile-btn:hover, #save-settings-btn:hover, #modal-confirm:hover {
+    background-color: var(--primary-accent-hover);
+}
+
+/* Profile Logout Button */
+.bg-red-500\/20 {
+    background-color: color-mix(in srgb, var(--danger-accent) 20%, transparent);
+    color: var(--danger-accent);
+    transition: background-color 0.3s ease;
+}
+.hover\:bg-red-500\/30:hover {
+    background-color: color-mix(in srgb, var(--danger-accent) 30%, transparent);
+}
+
+/* AI Message Content */
+.ai-message-content pre { background-color: var(--bg-secondary); transition: background-color 0.3s ease; }
+.ai-message-content code { background-color: var(--bg-input); transition: background-color 0.3s ease; }
+.ai-message-content pre > code { background-color: transparent; }
+.ai-message-content a { color: var(--primary-accent); }
+
+/* Poem Block Styling */
+.poem {
+    background: rgba(255,255,255,0.03);
+    padding: 0.75rem;
+    border-radius: 0.5rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, 'Courier New', monospace;
+    white-space: pre-wrap;
+    overflow-x: auto;
+    color: #E6EDF3;
+}
+
+/* Larger AI response box and structured content like ChatGPT */
+.message-content.ai-message-content {
+    max-width: 900px; /* allow wider messages */
+    width: min(88%, 900px);
+    font-size: 16px;
+    line-height: 1.7;
+    padding: 18px;
+}
+.ai-message-content h1, .ai-message-content h2, .ai-message-content h3 { color: var(--text-primary); }
+.ai-message-content p { margin-bottom: 0.9rem; }
+.ai-message-content ul, .ai-message-content ol { margin-left: 1.2rem; margin-bottom: 0.8rem; }
+
+/* Hide/disable composer while assistant is typing */
+.composer-hidden {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(8px);
+    transition: opacity 160ms ease, transform 160ms ease;
+}
+
+/* Slightly more prominent message bubble for AI */
+.message-bubble .bg-gray-700.message-content {
+    box-shadow: 0 6px 18px rgba(2,6,23,0.45);
+}
+
+/* Virtual Environment & Modals */
+.output-tab.active {
+    background-color: var(--bg-hover);
+    color: var(--text-primary);
+}
+#preview-frame {
+    background-color: white; /* Keep preview frame white for accurate website rendering */
+}
+#console-output, #terminal-output {
+    color: var(--text-secondary);
+}
+#context-menu {
+    background-color: var(--bg-panel);
+    border: 1px solid var(--border-color);
+    transition: background-color 0.3s ease;
+}
+#context-menu .context-menu-item:hover {
+    background-color: var(--bg-hover);
+}
+#context-menu .text-red-400 {
+    color: var(--danger-accent);
+}
+#context-menu .text-red-400:hover {
+    color: var(--text-inverted);
+    background-color: var(--danger-accent);
+}
+.file-item.bg-teal-500\/20 {
+    background-color: color-mix(in srgb, var(--primary-accent) 20%, transparent);
+    color: var(--primary-accent);
+}
+.text-teal-300 {
+    color: var(--primary-accent);
+}
+.folder-arrow {
+    stroke: var(--text-muted);
+}
+.file-icon {
+    stroke: var(--primary-accent);
+}
+.folder-icon {
+    stroke: var(--text-muted);
+}
+.composer-toolbar {
+    background: color-mix(in srgb, var(--bg-panel) 60%, transparent);
+    border: 1px solid color-mix(in srgb, var(--border-color) 50%, transparent);
+    transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+.composer-toolbar button {
+    color: var(--text-secondary);
+}
+.composer-toolbar button:hover {
+    background: var(--bg-hover);
+}
+.composer-toolbar .active {
+    background: color-mix(in srgb, var(--primary-accent) 12%, transparent);
+    color: var(--primary-accent);
+}
+#settings-modal .border-teal-500 {
+    border-color: var(--primary-accent);
+}
+#settings-modal .hover\:border-teal-400:hover {
+    border-color: var(--primary-accent-hover);
+}
+#profile-modal .bg-teal-500 {
+    background-color: var(--primary-accent);
+}
+#profile-modal .hover\:bg-teal-600:hover {
+    background-color: var(--primary-accent-hover);
+}
+.message-bubble.liked {
+    border-color: var(--primary-accent);
+}
+.message-bubble.disliked {
+    border-color: var(--danger-accent);
+}
+#virtual-env-modal .resizer {
+    background: var(--border-color-heavy);
+}
+#virtual-env-modal .bg-gray-900 { background-color: var(--bg-secondary); }
+#virtual-env-modal .bg-gray-800 { background-color: var(--bg-panel); }
+#virtual-env-modal .bg-gray-700 { background-color: var(--bg-input); }
+#virtual-env-modal .border-gray-700 { border-color: var(--border-color); }
+#virtual-env-modal .hover\:bg-gray-700:hover { background-color: var(--bg-hover); }
+#virtual-env-modal .text-gray-200 { color: var(--text-primary); }
+#virtual-env-modal .text-gray-300 { color: var(--text-secondary); }
+#virtual-env-modal .text-gray-400 { color: var(--text-muted); }
+#virtual-env-modal .text-gray-500 { color: var(--text-muted); }
+#virtual-env-modal .bg-teal-500 { background-color: var(--primary-accent); }
+#virtual-env-modal .hover\:bg-teal-600:hover { background-color: var(--primary-accent-hover); }
+#virtual-env-modal .text-white { color: var(--text-inverted); }
+#virtual-env-modal .focus\:ring-teal-500:focus { --tw-ring-color: var(--primary-accent); }
+#virtual-env-modal .focus-within\:ring-teal-500:focus-within { --tw-ring-color: var(--primary-accent); }
+#virtual-env-modal .output-tab { color: var(--text-muted); }
+#virtual-env-modal .output-tab.active { color: var(--text-primary); background-color: var(--bg-hover); }
+#virtual-env-modal #tabs-container .bg-gray-800 { background-color: var(--bg-panel); }
+#virtual-env-modal #tabs-container .bg-gray-900 { background-color: var(--bg-secondary); }
+#virtual-env-modal #tabs-container .text-white { color: var(--text-primary); }
+#virtual-env-modal #tabs-container .text-gray-400 { color: var(--text-muted); }
+#virtual-env-modal #tabs-container .hover\:bg-gray-700:hover { background-color: var(--bg-hover); }
+#virtual-env-modal #tabs-container .border-gray-700 { border-color: var(--border-color); }
+#virtual-env-modal #editor-placeholder { color: var(--text-muted); }
+#virtual-env-modal .file-item.active {
+    background-color: color-mix(in srgb, var(--primary-accent) 20%, transparent);
+    color: var(--primary-accent);
+}
+
+/* Message appear animation */
+.message-appear {
+    opacity: 0;
+    transform: translateY(8px) scale(0.995);
+    animation: slideUpFade 320ms cubic-bezier(.2,.9,.2,1) forwards;
+}
+
+@keyframes slideUpFade {
+    from { opacity: 0; transform: translateY(8px) scale(0.995); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.message-appear[data-animated="true"] { /* marker for completed animation (no-op) */ }
+
+/* Typing dots indicator (ChatGPT-like) */
+.typing-dots {
+    display: inline-block;
+    vertical-align: middle;
+    width: 48px;
+    text-align: center;
+}
+.typing-dots span {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    margin: 0 3px;
+    background: rgba(255,255,255,0.15);
+    border-radius: 50%;
+    opacity: 0.6;
+    transform: translateY(0);
+    animation: typingDot 1s infinite ease-in-out;
+}
+.typing-dots span:nth-child(2) { animation-delay: 0.15s; }
+.typing-dots span:nth-child(3) { animation-delay: 0.3s; }
+
+@keyframes typingDot {
+    0% { transform: translateY(0); opacity: 0.3; }
+    50% { transform: translateY(-6px); opacity: 1; }
+    100% { transform: translateY(0); opacity: 0.3; }
+}
+#modal { background-color: var(--bg-overlay); }
+#modal .bg-gray-800 { background-color: var(--bg-panel); }
+#modal .text-white { color: var(--text-primary); }
+#modal .text-gray-400 { color: var(--text-muted); }
+#modal .bg-gray-700 { background-color: var(--bg-input); }
+#modal .border-gray-600 { border-color: var(--border-color); }
+#modal .focus\:ring-teal-500:focus { --tw-ring-color: var(--primary-accent); }
+#modal .bg-gray-600 { background-color: var(--bg-hover); }
+#modal .hover\:bg-gray-500:hover { background-color: var(--bg-hover); }
+#modal .bg-teal-500 { background-color: var(--primary-accent); }
+#modal .hover\:bg-teal-600:hover { background-color: var(--primary-accent-hover); }
+#modal .text-white { color: var(--text-inverted); }

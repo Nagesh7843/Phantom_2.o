@@ -1,0 +1,82 @@
+/* CSS for the Dev Intelligence page demo */
+.code-editor-container {
+    background-color: #1a1a1a;
+    border-radius: 8px;
+    padding: 20px;
+    font-family: 'Courier New', Courier, monospace;
+    color: #f8f8f2;
+    position: relative;
+    overflow: hidden;
+    min-height: 300px;
+    box-shadow: 0 10px 20px rgba(0,0,0,0.19), 0 6px 6px rgba(0,0,0,0.23);
+}
+
+.code-editor-header {
+    display: flex;
+    align-items: center;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #333;
+    margin-bottom: 15px;
+}
+
+.traffic-lights {
+    display: flex;
+}
+
+.light {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    margin-right: 8px;
+}
+
+.light.red { background-color: #ff5f56; }
+.light.yellow { background-color: #ffbd2e; }
+.light.green { background-color: #27c93f; }
+
+.file-title {
+    color: #888;
+    margin-left: 20px;
+}
+
+.line-numbers {
+    float: left;
+    text-align: right;
+    color: #888;
+    padding-right: 10px;
+    user-select: none;
+}
+
+.code-area {
+    margin-left: 40px;
+    overflow: auto;
+}
+
+.code-line {
+    white-space: pre;
+}
+
+.keyword { color: #ff79c6; }
+.function { color: #50fa7b; }
+.string { color: #f1fa8c; }
+.comment { color: #6272a4; }
+.variable { color: #8be9fd; }
+.suggestion {
+    color: #6272a4;
+    opacity: 0.7;
+    display: inline;
+}
+
+.typing-cursor {
+    display: inline-block;
+    width: 8px;
+    height: 1.2em;
+    background-color: #f8f8f2;
+    animation: blink 1s infinite;
+    vertical-align: middle;
+}
+
+@keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+}

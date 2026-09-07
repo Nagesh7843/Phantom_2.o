@@ -1,0 +1,39 @@
+# Secrets and Environment Variables
+.env
+.env.*
+!.env.example
+
+# Python Virtual Environments
+.venv/
+venv/
+env/
+ENV/
+
+# Databases & Session Stores
+database.db
+*.db
+*.db-*
+flask_session/
+
+# Python Cache & Compiled Files
+__pycache__/
+*.py[cod]
+*$py.class
+tempCodeRunnerFile.py
+
+# Logs and Debug Files
+*.log
+server.log
+mongo_debug.txt
+api_test_output.txt
+quick_test_output.txt
+test_output.txt
+
+# IDE and Editor Folders
+.vscode/
+.idea/
+
+# Frontend build artifacts and dependencies
+frontend/node_modules/
+frontend/.next/
+frontend/tsconfig.tsbuildinfo
