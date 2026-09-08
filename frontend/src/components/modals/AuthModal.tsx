@@ -234,18 +234,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             )}
           </button>
         </form>
-
-        {/* Guest Mode Option */}
-        <div className="pt-2 text-center">
-          <button
-            type="button"
-            onClick={handleContinueGuest}
-            className="text-xs text-zinc-400 hover:text-white transition-colors inline-flex items-center gap-1"
-          >
-            <span>Continue in Guest Mode</span>
-            <ArrowRight className="w-3 h-3" />
-          </button>
-        </div>
       </div>
     </div>
   );

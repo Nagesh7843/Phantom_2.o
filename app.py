@@ -467,7 +467,7 @@ def execute_ai_completion(messages_for_gemini: list, instruction_text: str) -> t
 
     Returns tuple of (response_text, provider_name, raw_response_dict).
     """
-    # 1. Google Gemini Primary
+    # 1. Google Gemini Primary (Multi-Model Resilient Fallback)
     if GEMINI_API_KEY:
         gemini_payload = {
             "systemInstruction": {
@@ -475,21 +475,29 @@ def execute_ai_completion(messages_for_gemini: list, instruction_text: str) -> t
             },
             "contents": messages_for_gemini
         }
-        for attempt in range(1, 4):
+        gemini_models = [
+            'gemini-flash-latest',
+            'gemini-3.5-flash',
+            'gemini-3.7-flash',
+            'gemini-flash-lite-latest',
+            'gemini-2.5-flash'
+        ]
+        for model_name in gemini_models:
             try:
-                resp = requests.post(f"{GEMINI_API_URL}?key={GEMINI_API_KEY}", json=gemini_payload, timeout=20)
+                model_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={GEMINI_API_KEY}"
+                resp = requests.post(model_url, json=gemini_payload, timeout=20)
                 if resp.status_code == 200:
                     raw = resp.json()
                     text = _extract_text_from_provider(raw, 'gemini')
                     if text:
                         return text, 'gemini', raw
                 elif resp.status_code == 429:
-                    print(f"[NOTE] Gemini returned 429 rate limit (Attempt {attempt}).")
-                    time.sleep(1.5 * attempt)
+                    print(f"[NOTE] Model {model_name} rate-limited (429). Switching to next available model...")
+                    continue
                 else:
-                    print(f"[NOTE] Gemini returned status {resp.status_code}: {resp.text[:150]}")
+                    print(f"[NOTE] Gemini ({model_name}) returned status {resp.status_code}: {resp.text[:100]}")
             except Exception as e:
-                print(f"[NOTE] Gemini connection error attempt {attempt}: {e}")
+                print(f"[NOTE] Gemini ({model_name}) connection error: {e}")
 
     # Convert Gemini format to OpenAI/OpenRouter chat format
     chat_messages = [{"role": "system", "content": instruction_text}]
@@ -1419,40 +1427,54 @@ Do not use special formatting characters like '*' or '#' in titles. Do not repea
         if search_citations:
             yield f"data: {json.dumps({'search_metadata': {'enabled': True, 'query': new_user_message_content.strip()[:60], 'citations': search_citations}, 'session_id': current_session_id, 'session_title': smart_session_title})}\n\n"
 
-        try:
-            stream_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse&key={GEMINI_API_KEY}"
-            resp = requests.post(stream_url, json=gemini_payload, stream=True, timeout=25)
+        stream_models = [
+            'gemini-flash-latest',
+            'gemini-3.5-flash',
+            'gemini-3.7-flash',
+            'gemini-flash-lite-latest',
+            'gemini-2.5-flash'
+        ]
 
-            if resp.status_code == 200:
-                for line in resp.iter_lines(decode_unicode=True):
-                    if line and line.startswith('data: '):
-                        data_str = line[6:]
-                        try:
-                            chunk_json = json.loads(data_str)
-                            candidates = chunk_json.get('candidates', [])
-                            if candidates and candidates[0].get('content'):
-                                parts = candidates[0]['content'].get('parts', [])
-                                if parts and parts[0].get('text'):
-                                    text_chunk = parts[0]['text']
-                                    full_response_accumulated.append(text_chunk)
-                                    yield f"data: {json.dumps({'chunk': text_chunk, 'session_id': current_session_id, 'session_title': smart_session_title})}\n\n"
-                        except Exception:
-                            continue
-            else:
-                fallback_resp = requests.post(f"{GEMINI_API_URL}?key={GEMINI_API_KEY}", json=gemini_payload, timeout=20)
-                if fallback_resp.status_code == 200:
-                    fb_json = fallback_resp.json()
-                    fb_text = _extract_text_from_provider(fb_json, 'gemini') or "No response"
-                    full_response_accumulated.append(fb_text)
-                    yield f"data: {json.dumps({'chunk': fb_text, 'session_id': current_session_id, 'session_title': smart_session_title})}\n\n"
+        stream_success = False
+        for model_name in stream_models:
+            try:
+                stream_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:streamGenerateContent?alt=sse&key={GEMINI_API_KEY}"
+                resp = requests.post(stream_url, json=gemini_payload, stream=True, timeout=25)
+
+                if resp.status_code == 200:
+                    for line in resp.iter_lines(decode_unicode=True):
+                        if line and line.startswith('data: '):
+                            data_str = line[6:]
+                            try:
+                                chunk_json = json.loads(data_str)
+                                candidates = chunk_json.get('candidates', [])
+                                if candidates and candidates[0].get('content'):
+                                    parts = candidates[0]['content'].get('parts', [])
+                                    if parts and parts[0].get('text'):
+                                        text_chunk = parts[0]['text']
+                                        full_response_accumulated.append(text_chunk)
+                                        yield f"data: {json.dumps({'chunk': text_chunk, 'session_id': current_session_id, 'session_title': smart_session_title})}\n\n"
+                            except Exception:
+                                continue
+                    stream_success = True
+                    break
+                elif resp.status_code == 429:
+                    print(f"[NOTE] Stream model {model_name} hit rate limit (429), trying next model...")
+                    continue
                 else:
-                    err_msg = "AI service temporarily unavailable. Please try again."
-                    yield f"data: {json.dumps({'chunk': err_msg, 'session_id': current_session_id, 'session_title': smart_session_title})}\n\n"
+                    print(f"[NOTE] Stream model {model_name} returned status {resp.status_code}")
+            except Exception as stream_err:
+                print(f"[NOTE] Stream model {model_name} error: {stream_err}")
 
-        except Exception as e:
-            app.logger.error(f"Stream error: {e}")
-            err_msg = f"Error during streaming: {str(e)}"
-            yield f"data: {json.dumps({'chunk': err_msg, 'session_id': current_session_id, 'session_title': smart_session_title})}\n\n"
+        if not stream_success:
+            # Fallback to non-streaming execution across models
+            response_text, provider_used, _ = execute_ai_completion(messages_for_gemini, instruction_text)
+            if response_text:
+                full_response_accumulated.append(response_text)
+                yield f"data: {json.dumps({'chunk': response_text, 'session_id': current_session_id, 'session_title': smart_session_title})}\n\n"
+            else:
+                err_msg = "AI service is currently busy. Please retry in a moment."
+                yield f"data: {json.dumps({'chunk': err_msg, 'session_id': current_session_id, 'session_title': smart_session_title})}\n\n"
 
         final_text = "".join(full_response_accumulated).strip()
         if final_text:
