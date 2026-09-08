@@ -568,6 +568,7 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ onNavigateHome }) =>
                 onTogglePlugin={handleTogglePlugin}
                 onOpenPlugins={() => setPluginsOpen(true)}
                 onOpenVoiceMode={() => setVoiceModeOpen(true)}
+                isAuthenticated={Boolean(userProfile?.authenticated)}
               />
             </div>
           )}

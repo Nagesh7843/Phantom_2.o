@@ -39,6 +39,7 @@ interface ChatInputProps {
   onTogglePlugin?: (pluginId: string, enabled: boolean) => void;
   onOpenPlugins?: () => void;
   onOpenVoiceMode?: () => void;
+  isAuthenticated?: boolean;
 }
 
 export const ChatInput: React.FC<ChatInputProps> = ({
@@ -51,6 +52,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   onTogglePlugin,
   onOpenPlugins,
   onOpenVoiceMode,
+  isAuthenticated = false,
 }) => {
   const [text, setText] = useState('');
   const [attachedFile, setAttachedFile] = useState<File | null>(null);
@@ -611,60 +613,65 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               )}
             </div>
 
-            {/* 3. Web Search Toggle Button */}
-            <button
-              type="button"
-              onClick={() => onTogglePlugin?.('web_search', !(pluginsState?.web_search ?? true))}
-              className={`p-1.5 rounded-lg transition-colors flex items-center gap-1 ${
-                (pluginsState?.web_search ?? true)
-                  ? 'text-emerald-400 bg-emerald-950/50 hover:bg-emerald-900/50'
-                  : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-850'
-              }`}
-              title={(pluginsState?.web_search ?? true) ? 'Web Search active (click to toggle)' : 'Enable Web Search'}
-            >
-              <Globe className="w-4 h-4" />
-              {(pluginsState?.web_search ?? true) && (
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-              )}
-            </button>
+            {/* 3. Authenticated Only Tools (Web Search, Voice Input, Voice Mode) */}
+            {isAuthenticated && (
+              <>
+                {/* Web Search Toggle Button */}
+                <button
+                  type="button"
+                  onClick={() => onTogglePlugin?.('web_search', !(pluginsState?.web_search ?? true))}
+                  className={`p-1.5 rounded-lg transition-colors flex items-center gap-1 ${
+                    (pluginsState?.web_search ?? true)
+                      ? 'text-emerald-400 bg-emerald-950/50 hover:bg-emerald-900/50'
+                      : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-850'
+                  }`}
+                  title={(pluginsState?.web_search ?? true) ? 'Web Search active (click to toggle)' : 'Enable Web Search'}
+                >
+                  <Globe className="w-4 h-4" />
+                  {(pluginsState?.web_search ?? true) && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                  )}
+                </button>
 
-            {/* 4. Voice Input Button */}
-            <button
-              type="button"
-              onClick={toggleVoiceInput}
-              className={`p-1.5 rounded-lg transition-all flex items-center gap-1.5 ${
-                isListening
-                  ? 'bg-zinc-800 text-white border border-white animate-pulse'
-                  : 'text-zinc-400 hover:text-white hover:bg-zinc-850'
-              }`}
-              title={isListening ? 'Stop listening' : 'Voice Input (Speech-to-Text)'}
-            >
-              {isListening ? (
-                <>
-                  <MicOff className="w-4 h-4 text-white" />
-                  <div className="flex items-center gap-0.5 h-4">
-                    <span className="sound-bar" />
-                    <span className="sound-bar" />
-                    <span className="sound-bar" />
-                    <span className="sound-bar" />
-                  </div>
-                </>
-              ) : (
-                <Mic className="w-4 h-4" />
-              )}
-            </button>
+                {/* Voice Input Button */}
+                <button
+                  type="button"
+                  onClick={toggleVoiceInput}
+                  className={`p-1.5 rounded-lg transition-all flex items-center gap-1.5 ${
+                    isListening
+                      ? 'bg-zinc-800 text-white border border-white animate-pulse'
+                      : 'text-zinc-400 hover:text-white hover:bg-zinc-850'
+                  }`}
+                  title={isListening ? 'Stop listening' : 'Voice Input (Speech-to-Text)'}
+                >
+                  {isListening ? (
+                    <>
+                      <MicOff className="w-4 h-4 text-white" />
+                      <div className="flex items-center gap-0.5 h-4">
+                        <span className="sound-bar" />
+                        <span className="sound-bar" />
+                        <span className="sound-bar" />
+                        <span className="sound-bar" />
+                      </div>
+                    </>
+                  ) : (
+                    <Mic className="w-4 h-4" />
+                  )}
+                </button>
 
-            {/* 5. Live Hands-Free Voice Mode Button */}
-            {onOpenVoiceMode && (
-              <button
-                type="button"
-                onClick={onOpenVoiceMode}
-                className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-850 transition-colors flex items-center gap-1.5 cursor-pointer"
-                title="Open Live Hands-Free Conversational Voice Mode"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-white" />
-                <span className="text-[11px] font-medium hidden sm:inline-block">Voice Mode</span>
-              </button>
+                {/* Live Hands-Free Voice Mode Button */}
+                {onOpenVoiceMode && (
+                  <button
+                    type="button"
+                    onClick={onOpenVoiceMode}
+                    className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-850 transition-colors flex items-center gap-1.5 cursor-pointer"
+                    title="Open Live Hands-Free Conversational Voice Mode"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-white" />
+                    <span className="text-[11px] font-medium hidden sm:inline-block">Voice Mode</span>
+                  </button>
+                )}
+              </>
             )}
           </div>
 

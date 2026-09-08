@@ -187,22 +187,12 @@ export const LibraryModal: React.FC<LibraryModalProps> = ({
         className="w-full max-w-4xl h-[85vh] max-h-[720px] bg-zinc-950 border border-zinc-800 rounded-3xl shadow-2xl flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
+        {/* Minimal Header */}
         <div className="p-5 border-b border-zinc-850 flex items-center justify-between flex-shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-xl bg-zinc-900 border border-zinc-850 flex items-center justify-center text-white shadow-mono-subtle">
-              <BookOpen className="w-4 h-4" />
-            </div>
-            <div>
-              <h2 className="text-sm font-bold text-white tracking-wide">Developer Library & Asset Hub</h2>
-              <p className="text-xs text-zinc-400 mt-0.5">
-                Generated images, attached documents, pinned conversations, prompts, and code
-              </p>
-            </div>
-          </div>
+          <h2 className="text-sm font-bold text-white tracking-wide">Library</h2>
           <button
             onClick={onClose}
-            className="p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors"
+            className="p-1.5 rounded-full text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors"
           >
             <X className="w-4 h-4" />
           </button>
@@ -220,7 +210,7 @@ export const LibraryModal: React.FC<LibraryModalProps> = ({
               }`}
             >
               <Pin className="w-3.5 h-3.5" />
-              <span>Pinned ({pinnedSessions.length})</span>
+              <span>Pinned</span>
             </button>
 
             <button
@@ -232,7 +222,7 @@ export const LibraryModal: React.FC<LibraryModalProps> = ({
               }`}
             >
               <ImageIcon className="w-3.5 h-3.5" />
-              <span>Generated Images ({images.length})</span>
+              <span>Images</span>
             </button>
 
             <button
@@ -244,7 +234,7 @@ export const LibraryModal: React.FC<LibraryModalProps> = ({
               }`}
             >
               <FileText className="w-3.5 h-3.5" />
-              <span>Documents & Files ({docs.length})</span>
+              <span>Files</span>
             </button>
 
             <button
@@ -268,7 +258,7 @@ export const LibraryModal: React.FC<LibraryModalProps> = ({
               }`}
             >
               <Code2 className="w-3.5 h-3.5" />
-              <span>Code Snippets</span>
+              <span>Snippets</span>
             </button>
           </div>
 
@@ -276,10 +266,10 @@ export const LibraryModal: React.FC<LibraryModalProps> = ({
             <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
-              placeholder="Search library assets..."
+              placeholder="Search library..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500 font-sans"
+              className="w-full bg-zinc-900 border border-zinc-700 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-white transition-colors"
             />
           </div>
         </div>

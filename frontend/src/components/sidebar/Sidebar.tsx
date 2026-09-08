@@ -190,48 +190,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
             >
               <Search className="w-4 h-4" />
             </button>
-
-            {/* 3. Library (Pinned / Saved) */}
-            <button
-              onClick={() => {
-                onOpenLibrary?.();
-              }}
-              className="p-2.5 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-900 transition-all active:scale-95"
-              title="Library (Pinned & Saved Prompts)"
-            >
-              <BookOpen className="w-4 h-4" />
-            </button>
-
-            {/* 4. Projects (Dev Studio Workspace) */}
-            <button
-              onClick={() => setActiveTab?.('compiler')}
-              className={`p-2.5 rounded-xl transition-all active:scale-95 ${
-                activeTab === 'compiler'
-                  ? 'text-white bg-zinc-850 shadow-mono-subtle'
-                  : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
-              }`}
-              title="Projects & Dev Studio"
-            >
-              <Folder className="w-4 h-4" />
-            </button>
-
-            {/* 5. Scheduled Tasks */}
-            <button
-              onClick={() => onOpenScheduled?.()}
-              className="p-2.5 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-900 transition-all active:scale-95"
-              title="Scheduled Automations"
-            >
-              <Clock className="w-4 h-4" />
-            </button>
-
-            {/* 6. Plugins */}
-            <button
-              onClick={() => onOpenPlugins?.()}
-              className="p-2.5 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-900 transition-all active:scale-95"
-              title="Plugins & Extensions"
-            >
-              <Puzzle className="w-4 h-4" />
-            </button>
           </div>
 
           {/* Bottom: Real User Profile Avatar (or Sign In if guest) */}
@@ -324,100 +282,105 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <span>New chat</span>
           </button>
 
-          {/* 2. Library */}
-          <button
-            onClick={() => onOpenLibrary?.()}
-            className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium text-zinc-300 hover:text-white hover:bg-zinc-900 transition-all text-left group"
-          >
-            <BookOpen className="w-4 h-4 text-zinc-400 group-hover:text-white transition-colors" />
-            <span className="flex-1">Library</span>
-            {pinnedSessions.length > 0 && (
-              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400">
-                {pinnedSessions.length}
-              </span>
-            )}
-          </button>
+          {/* Authenticated Only Options (Library, Projects, Scheduled, Plugins, More) */}
+          {isAuthenticated && (
+            <>
+              {/* 2. Library */}
+              <button
+                onClick={() => onOpenLibrary?.()}
+                className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium text-zinc-300 hover:text-white hover:bg-zinc-900 transition-all text-left group"
+              >
+                <BookOpen className="w-4 h-4 text-zinc-400 group-hover:text-white transition-colors" />
+                <span className="flex-1">Library</span>
+                {pinnedSessions.length > 0 && (
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400">
+                    {pinnedSessions.length}
+                  </span>
+                )}
+              </button>
 
-          {/* 3. Projects */}
-          <button
-            onClick={() => {
-              setActiveTab?.('compiler');
-              if (window.innerWidth < 768) onCloseMobile();
-            }}
-            className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium transition-all text-left group ${
-              activeTab === 'compiler'
-                ? 'bg-zinc-850 text-white font-bold shadow-mono-subtle'
-                : 'text-zinc-300 hover:text-white hover:bg-zinc-900'
-            }`}
-          >
-            <Folder className="w-4 h-4 text-zinc-400 group-hover:text-white transition-colors" />
-            <span>Projects</span>
-          </button>
+              {/* 3. Projects */}
+              <button
+                onClick={() => {
+                  setActiveTab?.('compiler');
+                  if (window.innerWidth < 768) onCloseMobile();
+                }}
+                className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium transition-all text-left group ${
+                  activeTab === 'compiler'
+                    ? 'bg-zinc-850 text-white font-bold shadow-mono-subtle'
+                    : 'text-zinc-300 hover:text-white hover:bg-zinc-900'
+                }`}
+              >
+                <Folder className="w-4 h-4 text-zinc-400 group-hover:text-white transition-colors" />
+                <span>Projects</span>
+              </button>
 
-          {/* 4. Scheduled */}
-          <button
-            onClick={() => onOpenScheduled?.()}
-            className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium text-zinc-300 hover:text-white hover:bg-zinc-900 transition-all text-left group"
-          >
-            <Clock className="w-4 h-4 text-zinc-400 group-hover:text-white transition-colors" />
-            <span>Scheduled</span>
-          </button>
+              {/* 4. Scheduled */}
+              <button
+                onClick={() => onOpenScheduled?.()}
+                className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium text-zinc-300 hover:text-white hover:bg-zinc-900 transition-all text-left group"
+              >
+                <Clock className="w-4 h-4 text-zinc-400 group-hover:text-white transition-colors" />
+                <span>Scheduled</span>
+              </button>
 
-          {/* 5. Plugins */}
-          <button
-            onClick={() => onOpenPlugins?.()}
-            className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium text-zinc-300 hover:text-white hover:bg-zinc-900 transition-all text-left group"
-          >
-            <Puzzle className="w-4 h-4 text-zinc-400 group-hover:text-white transition-colors" />
-            <span>Plugins</span>
-          </button>
+              {/* 5. Plugins */}
+              <button
+                onClick={() => onOpenPlugins?.()}
+                className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium text-zinc-300 hover:text-white hover:bg-zinc-900 transition-all text-left group"
+              >
+                <Puzzle className="w-4 h-4 text-zinc-400 group-hover:text-white transition-colors" />
+                <span>Plugins</span>
+              </button>
 
-          {/* 6. More */}
-          <div className="relative">
-            <button
-              onClick={() => setShowMoreMenu((prev) => !prev)}
-              className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium text-zinc-300 hover:text-white hover:bg-zinc-900 transition-all text-left group"
-            >
-              <MoreHorizontal className="w-4 h-4 text-zinc-400 group-hover:text-white transition-colors" />
-              <span>More</span>
-            </button>
-
-            {/* More Popover Options */}
-            {showMoreMenu && (
-              <div className="absolute left-2 right-2 top-full mt-1 bg-zinc-900 border border-zinc-750 rounded-2xl shadow-2xl p-1.5 z-50 space-y-0.5 animate-in fade-in duration-150">
+              {/* 6. More */}
+              <div className="relative">
                 <button
-                  onClick={() => {
-                    onOpenSettings?.('general');
-                    setShowMoreMenu(false);
-                  }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-zinc-200 hover:text-white hover:bg-zinc-800 text-left transition-colors"
+                  onClick={() => setShowMoreMenu((prev) => !prev)}
+                  className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium text-zinc-300 hover:text-white hover:bg-zinc-900 transition-all text-left group"
                 >
-                  <Settings className="w-3.5 h-3.5 text-zinc-400" />
-                  <span>System Preferences</span>
+                  <MoreHorizontal className="w-4 h-4 text-zinc-400 group-hover:text-white transition-colors" />
+                  <span>More</span>
                 </button>
-                <button
-                  onClick={() => {
-                    onOpenPlugins?.();
-                    setShowMoreMenu(false);
-                  }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-zinc-200 hover:text-white hover:bg-zinc-800 text-left transition-colors"
-                >
-                  <Sparkles className="w-3.5 h-3.5 text-zinc-400" />
-                  <span>AI Subprocess Engine</span>
-                </button>
-                <button
-                  onClick={() => {
-                    onOpenSettings?.('billing');
-                    setShowMoreMenu(false);
-                  }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-zinc-200 hover:text-white hover:bg-zinc-800 text-left transition-colors"
-                >
-                  <User className="w-3.5 h-3.5 text-zinc-400" />
-                  <span>Subscription & Billing</span>
-                </button>
+
+                {/* More Popover Options */}
+                {showMoreMenu && (
+                  <div className="absolute left-2 right-2 top-full mt-1 bg-zinc-900 border border-zinc-750 rounded-2xl shadow-2xl p-1.5 z-50 space-y-0.5 animate-in fade-in duration-150">
+                    <button
+                      onClick={() => {
+                        onOpenSettings?.('general');
+                        setShowMoreMenu(false);
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-zinc-200 hover:text-white hover:bg-zinc-800 text-left transition-colors"
+                    >
+                      <Settings className="w-3.5 h-3.5 text-zinc-400" />
+                      <span>System Preferences</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        onOpenPlugins?.();
+                        setShowMoreMenu(false);
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-zinc-200 hover:text-white hover:bg-zinc-800 text-left transition-colors"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-zinc-400" />
+                      <span>AI Subprocess Engine</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        onOpenSettings?.('billing');
+                        setShowMoreMenu(false);
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-zinc-200 hover:text-white hover:bg-zinc-800 text-left transition-colors"
+                    >
+                      <User className="w-3.5 h-3.5 text-zinc-400" />
+                      <span>Subscription & Billing</span>
+                    </button>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            </>
+          )}
         </div>
 
         {/* Search Box (Toggled) */}
@@ -516,7 +479,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           )}
         </div>
 
-        {/* Footer Toolbar: Theme Toggle, Settings, Real User Account */}
+        {/* Footer Toolbar: Theme Toggle, Settings / Sign In */}
         <div className="border-t border-zinc-850 p-2.5 space-y-2 bg-zinc-950">
           <div className="grid grid-cols-2 gap-1.5">
             <button
@@ -533,14 +496,26 @@ export const Sidebar: React.FC<SidebarProps> = ({
               )}
               <span>{currentTheme === 'theme-light' ? 'Dark' : 'Light'}</span>
             </button>
-            <button
-              onClick={onOpenSettings}
-              className="flex items-center justify-center gap-1.5 rounded-xl border border-zinc-800 bg-zinc-900 px-2.5 py-1.5 text-xs text-zinc-300 transition-colors hover:border-zinc-600 hover:text-white"
-              title="Open system preferences"
-            >
-              <Settings className="h-3.5 w-3.5" />
-              <span>Settings</span>
-            </button>
+
+            {isAuthenticated ? (
+              <button
+                onClick={onOpenSettings}
+                className="flex items-center justify-center gap-1.5 rounded-xl border border-zinc-800 bg-zinc-900 px-2.5 py-1.5 text-xs text-zinc-300 transition-colors hover:border-zinc-600 hover:text-white"
+                title="Open system preferences"
+              >
+                <Settings className="h-3.5 w-3.5" />
+                <span>Settings</span>
+              </button>
+            ) : (
+              <button
+                onClick={onOpenAuth}
+                className="flex items-center justify-center gap-1.5 rounded-xl border border-zinc-800 bg-zinc-900 px-2.5 py-1.5 text-xs text-white font-semibold transition-colors hover:border-zinc-600 hover:bg-zinc-800"
+                title="Sign in to your account"
+              >
+                <LogIn className="h-3.5 w-3.5" />
+                <span>Sign In</span>
+              </button>
+            )}
           </div>
 
           {userProfile?.authenticated ? (
