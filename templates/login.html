@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Phantom</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            overflow: hidden; /* Prevent scrollbars if canvas is slightly larger */
+            position: relative; /* Needed for absolute positioning of canvas */
+            background-color: #1a202c; /* Fallback background color */
+        }
+
+        /* Styles for the particle canvas */
+        #particleCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: block;
+            z-index: -1; /* Place canvas behind other content */
+            background: linear-gradient(135deg, #1a1a2e, #16213e, #0f3460); /* Gradient for the background itself */
+        }
+
+        /* Ensure your login content is above the canvas */
+        .login-container {
+            position: relative;
+            z-index: 1;
+            /* Flexbox utilities from Tailwind will handle centering */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 1rem;
+        }
+    </style>
+</head>
+<body class="text-white antialiased">
+    <!-- Particle Canvas - will be filled by JS -->
+    <canvas id="particleCanvas"></canvas>
+
+    <!-- Main Login Content Container -->
+    <div class="login-container">
+        <div class="grid md:grid-cols-2 gap-0 max-w-4xl w-full bg-gray-800 rounded-2xl shadow-2xl overflow-hidden">
+            <div class="hidden md:flex flex-col justify-center items-center p-12 bg-gray-800/50" style="background-image: url('https://images.unsplash.com/photo-1511376777868-611b5456c4d5?q=80&w=1200&auto=format&fit=crop'); background-size: cover; background-position: center;">
+                 <div class="bg-black bg-opacity-50 p-8 rounded-xl backdrop-blur-sm text-center">
+                    <h1 class="text-4xl font-bold mb-4">Welcome Back</h1>
+                    <p class="text-gray-300">Log in to continue your journey with Phantom AI.</p>
+                </div>
+            </div>
+            <div class="p-8 md:p-12">
+                <form id="login-form">
+                    <h1 class="text-3xl font-bold mb-2 text-teal-400">Login</h1>
+                    <h2 class="text-gray-400 mb-8">Enter your credentials to continue.</h2>
+                    {% if error_message %}
+                    <div class="mb-4 p-4 bg-red-900/30 border border-red-500 rounded-lg">
+                        <p class="text-red-400 text-sm">{{ error_message|safe }}</p>
+                    </div>
+                    {% endif %}
+                    <div class="mb-5 relative">
+                        <input type="email" id="email" name="username" placeholder="Email" required class="w-full pl-4 pr-4 py-3 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none transition-all duration-300">
+                    </div>
+                    <div class="mb-5 relative">
+                        <input type="password" id="password" name="password" placeholder="Password" required class="w-full pl-4 pr-4 py-3 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none transition-all duration-300">
+                    </div>
+                    
+                    <p id="error-message" class="text-red-400 text-sm text-center mb-4 hidden"></p>
+
+                    <button type="submit" class="w-full bg-teal-500 hover:bg-teal-600 text-white font-bold py-3 px-4 rounded-lg transition-all duration-300 shadow-lg shadow-teal-500/20 transform hover:scale-105">SIGN IN</button>
+                    
+                    <div class="my-8 flex items-center">
+                        <hr class="w-full border-gray-600"><span class="px-4 text-gray-500 text-sm">OR</span><hr class="w-full border-gray-600">
+                    </div>
+                    
+                    <a href="{{ url_for('login_google') }}" class="w-full flex items-center justify-center gap-3 bg-gray-700 hover:bg-gray-600 text-white font-medium py-3 px-4 rounded-lg transition-all duration-300">
+                        <svg class="w-5 h-5" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12s5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24s8.955,20,20,20s20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z"></path><path fill="#FF3D00" d="M6.306,14.691l6.571,4.819C14.655,15.108,18.961,12,24,12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C16.318,4,9.656,8.337,6.306,14.691z"></path><path fill="#4CAF50" d="M24,44c5.166,0,9.86-1.977,13.409-5.192l-6.19-5.238C29.211,35.091,26.715,36,24,36c-5.202,0-9.619-3.317-11.283-7.946l-6.522,5.025C9.505,39.556,16.227,44,24,44z"></path><path fill="#1976D2" d="M43.611,20.083H42V20H24v8h11.303c-0.792,2.237-2.231,4.166-4.087,5.571l6.19,5.238C39.99,34.556,44,29.865,44,24C44,22.659,43.862,21.35,43.611,20.083z"></path></svg>
+                        <span>Sign in with Google</span>
+                    </a>
+                    
+                     <div class="mt-6 text-center text-sm">
+                        <p class="text-gray-400">
+                           Don't have an account? <a href="{{ url_for('register') }}" class="text-teal-400 hover:text-teal-300 transition-colors duration-300">Sign Up</a>
+                        </p>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Use a relative base URL so the browser uses the same origin as the page.
+        // If you want to call a remote backend, you must enable CORS with credentials
+        // on the server and change this to the remote origin, AND use `credentials: 'include'`.
+        const BACKEND_API_BASE_URL = ""; // same-origin
+
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const form = e.target;
+            const username = form.elements['username'].value; // email
+            const password = form.elements['password'].value;
+            const errorMessageEl = document.getElementById('error-message');
+
+            try {
+                const response = await fetch(`${BACKEND_API_BASE_URL}/api/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                const result = await response.json();
+
+                if (response.ok) {
+                    // Redirect to the dashboard on the same origin so cookies/sessions apply.
+                    window.location.href = `${BACKEND_API_BASE_URL}/dashboard`;
+                } else {
+                    errorMessageEl.textContent = result.error || 'Login failed.';
+                    errorMessageEl.classList.remove('hidden');
+                }
+            } catch (error) {
+                errorMessageEl.textContent = 'Could not connect to the server.';
+                errorMessageEl.classList.remove('hidden');
+            }
+        });
+
+        // --- Particle Background Script ---
+        const canvas = document.getElementById('particleCanvas');
+        const ctx = canvas.getContext('2d');
+        let particles = [];
+        const numParticles = 80; // Fewer particles for a less busy background
+
+        // Set canvas size to full window
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        // Handle window resizing
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            createParticles(); // Re-create particles for new dimensions
+        });
+
+        class Particle {
+            constructor() {
+                this.x = Math.random() * canvas.width;
+                this.y = Math.random() * canvas.height;
+                this.size = Math.random() * 3 + 0.5; // Smaller particles
+                this.speedX = Math.random() * 1.5 - 0.75; // Slower movement
+                this.speedY = Math.random() * 1.5 - 0.75;
+                this.color = `rgba(255, 255, 255, ${Math.random() * 0.4 + 0.1})`; // More transparent
+            }
+
+            update() {
+                this.x += this.speedX;
+                this.y += this.speedY;
+
+                // Wrap around edges (instead of bouncing)
+                if (this.x > canvas.width + this.size) this.x = -this.size;
+                else if (this.x < -this.size) this.x = canvas.width + this.size;
+                if (this.y > canvas.height + this.size) this.y = -this.size;
+                else if (this.y < -this.size) this.y = canvas.height + this.size;
+            }
+
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        function createParticles() {
+            particles = []; // Clear existing particles
+            for (let i = 0; i < numParticles; i++) {
+                particles.push(new Particle());
+            }
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            // Use a semi-transparent fill to create a "fade trail" effect
+            ctx.fillStyle = 'rgba(15, 52, 96, 0.1)'; // Darker background color of the gradient
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            for (let i = 0; i < particles.length; i++) {
+                particles[i].update();
+                particles[i].draw();
+            }
+        }
+
+        createParticles();
+        animate();
+    </script>
+</body>
+</html>

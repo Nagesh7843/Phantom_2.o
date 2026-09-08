@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phantom Dev OS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white antialiased">
+    <div class="max-w-4xl mx-auto px-4 py-12">
+        <a href="{{ url_for('index') }}" class="text-teal-400 hover:text-teal-300 transition-colors mb-8 inline-block">&larr; Back to Home</a>
+        <h1 class="text-4xl md:text-5xl font-extrabold leading-tight mb-6 text-teal-400">Phantom Dev OS (Prototype)</h1>
+        <p class="text-xl text-gray-400 mb-12">Goal: Prototype of a unified development environment for tooling and collaboration.</p>
+        
+        <div class="space-y-6 text-gray-300">
+            <div class="block bg-gray-800 p-8 rounded-lg border border-gray-700/50 shadow-lg">
+                <h2 class="text-2xl font-bold mb-2 text-teal-400">Cloud Workspaces</h2>
+                <p class="text-gray-400">Provision reproducible development workspaces in the cloud; designed to reduce setup time for common stacks.</p>
+            </div>
+            <div class="block bg-gray-800 p-8 rounded-lg border border-gray-700/50 shadow-lg">
+                <h2 class="text-2xl font-bold mb-2 text-teal-400">Quick Workspace Templates</h2>
+                <p class="text-gray-400">Predefined workspace templates include typical toolchains and dependencies to speed project onboarding.</p>
+            </div>
+            <div class="block bg-gray-800 p-8 rounded-lg border border-gray-700/50 shadow-lg">
+                <h2 class="text-2xl font-bold mb-2 text-teal-400">Environment Configuration</h2>
+                <p class="text-gray-400">Tools to capture and reproduce environment configuration; automated suggestions are experimental.</p>
+            </div>
+            <div class="block bg-gray-800 p-8 rounded-lg border border-gray-700/50 shadow-lg">
+                <h2 class="text-2xl font-bold mb-2 text-teal-400">Collaboration</h2>
+                <p class="text-gray-400">Supports collaborative sessions and shared workspaces; integrations with communication tools are optional.</p>
+            </div>
+        </div>
+
+        <div class="mt-12 text-center">
+            <a href="#" class="bg-teal-500 text-gray-900 font-bold py-3 px-8 rounded-xl inline-block hover:bg-teal-400 transition-transform">
+                Request Access
+            </a>
+        </div>
+    </div>
+</body>
+</html>

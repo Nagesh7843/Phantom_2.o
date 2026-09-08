@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phantom Security Layer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white antialiased">
+    <div class="max-w-4xl mx-auto px-4 py-12">
+        <a href="{{ url_for('index') }}" class="text-teal-400 hover:text-teal-300 transition-colors mb-8 inline-block">&larr; Back to Home</a>
+        <h1 class="text-4xl md:text-5xl font-extrabold leading-tight mb-6 text-teal-400">Phantom Security Layer</h1>
+        <p class="text-xl text-gray-400 mb-12">Goal: Provide automated security checks and vulnerability detection.</p>
+        
+        <div class="space-y-6 text-gray-300">
+            <div class="block bg-gray-800 p-8 rounded-lg border border-gray-700/50 shadow-lg">
+                <h2 class="text-2xl font-bold mb-2 text-teal-400">Vulnerability Scanning</h2>
+                <p class="text-gray-400">Scans dependencies and code for known issues and recommends remediation steps.</p>
+            </div>
+            <div class="block bg-gray-800 p-8 rounded-lg border border-gray-700/50 shadow-lg">
+                <h2 class="text-2xl font-bold mb-2 text-teal-400">Monitoring & Alerts</h2>
+                <p class="text-gray-400">Provides basic monitoring and alerting for suspicious activity; integrations required for active blocking.</p>
+            </div>
+            <div class="block bg-gray-800 p-8 rounded-lg border border-gray-700/50 shadow-lg">
+                <h2 class="text-2xl font-bold mb-2 text-teal-400">Access Control</h2>
+                <p class="text-gray-400">Tools for managing API tokens and role-based access to services.</p>
+            </div>
+            <div class="block bg-gray-800 p-8 rounded-lg border border-gray-700/50 shadow-lg">
+                <h2 class="text-2xl font-bold mb-2 text-teal-400">Privacy Tools</h2>
+                <p class="text-gray-400">Features for anonymizing telemetry and limiting data exposure (experimental).</p>
+            </div>
+        </div>
+
+        <div class="mt-12 text-center">
+            <a href="#" class="bg-teal-500 text-gray-900 font-bold py-3 px-8 rounded-xl inline-block hover:bg-teal-400 transition-transform">
+                View Security Docs
+            </a>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phantom Dev Hub</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white antialiased">
+    <div class="max-w-4xl mx-auto px-4 py-12">
+        <a href="{{ url_for('index') }}" class="text-teal-400 hover:text-teal-300 transition-colors mb-8 inline-block">&larr; Back to Home</a>
+        <h1 class="text-4xl md:text-5xl font-extrabold leading-tight mb-6 text-teal-400">Phantom Dev Hub</h1>
+        <p class="text-xl text-gray-400 mb-12">Goal: Consolidated project tools for code, issues, and collaboration.</p>
+        
+        <div class="space-y-6 text-gray-300">
+            <div class="block bg-gray-800 p-8 rounded-lg border border-gray-700/50 shadow-lg">
+                <h2 class="text-2xl font-bold mb-2 text-teal-400">Repositories</h2>
+                <p class="text-gray-400">Host public or private repositories with basic access controls and integration hooks for CI/CD.</p>
+            </div>
+            <div class="block bg-gray-800 p-8 rounded-lg border border-gray-700/50 shadow-lg">
+                <h2 class="text-2xl font-bold mb-2 text-teal-400">Project Boards</h2>
+                <p class="text-gray-400">Simple boards to track issues and tasks; experimental task suggestions available.</p>
+            </div>
+            <div class="block bg-gray-800 p-8 rounded-lg border border-gray-700/50 shadow-lg">
+                <h2 class="text-2xl font-bold mb-2 text-teal-400">Documentation</h2>
+                <p class="text-gray-400">Automatic documentation generation from code comments and simple docstrings (prototype).</p>
+            </div>
+            <div class="block bg-gray-800 p-8 rounded-lg border border-gray-700/50 shadow-lg">
+                <h2 class="text-2xl font-bold mb-2 text-teal-400">Marketplace (Concept)</h2>
+                <p class="text-gray-400">A proposed marketplace for sharing models and templates; functionality is planned but limited in this prototype.</p>
+            </div>
+            <div class="block bg-gray-800 p-8 rounded-lg border border-gray-700/50 shadow-lg">
+                <h2 class="text-2xl font-bold mb-2 text-teal-400">Developer Profiles</h2>
+                <p class="text-gray-400">User profiles showing contributions, with optional badges based on activity metrics.</p>
+            </div>
+        </div>
+        
+        <p class="mt-12 text-center text-lg italic text-gray-500">Focused on project collaboration and code hosting tools in prototype form.</p>
+        <div class="mt-12 text-center">
+            <a href="#" class="bg-teal-500 text-gray-900 font-bold py-3 px-8 rounded-xl inline-block hover:bg-teal-400 transition-transform">
+                Learn More
+            </a>
+        </div>
+    </div>
+</body>
+</html>
