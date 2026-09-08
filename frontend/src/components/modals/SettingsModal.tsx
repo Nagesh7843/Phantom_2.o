@@ -236,8 +236,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           {/* Header */}
           <div className="p-4 border-b border-zinc-850 flex items-center justify-between">
             <div className="flex items-center gap-2.5">
-              <div className="w-6 h-6 rounded-lg bg-zinc-100 text-black dark:bg-black dark:text-white flex items-center justify-center border border-zinc-300 dark:border-zinc-800">
-                <PhantomIconSvg className="w-3.5 h-3.5 text-black dark:text-white" />
+              <div className="w-6 h-6 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center text-white">
+                <PhantomIconSvg className="w-3.5 h-3.5 text-white" />
               </div>
               <span id="settings-dialog-title" className="font-bold text-sm text-white tracking-wide">Settings</span>
             </div>

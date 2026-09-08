@@ -457,23 +457,15 @@ export default function Home() {
         {!sidebarOpen && (
           <button
             onClick={() => setSidebarOpen(true)}
-            className="group absolute left-3 top-3 z-30 w-9 h-9 rounded-xl border border-zinc-800 bg-zinc-950 p-0 text-zinc-400 shadow-lg transition-all hover:border-zinc-600 hover:text-white flex items-center justify-center cursor-pointer"
+            className="group absolute left-3 top-3 z-30 w-9 h-9 rounded-xl bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 text-zinc-100 hover:text-white shadow-md transition-all flex items-center justify-center cursor-pointer"
             title="Open sidebar"
             aria-label="Open sidebar"
           >
             {/* Default: Phantom Logo */}
-            <div className="flex items-center justify-center transition-all group-hover:hidden">
-              <div className="w-7 h-7 rounded-lg bg-zinc-100 text-black dark:bg-black dark:text-white flex items-center justify-center border border-zinc-300 dark:border-zinc-800 shadow-sm transition-colors">
-                <PhantomIconSvg className="w-4 h-4 text-black dark:text-white" />
-              </div>
-            </div>
+            <PhantomIconSvg className="w-5 h-5 text-zinc-100 group-hover:hidden transition-all" />
 
             {/* On Hover: Expand Panel Icon [ |> ] */}
-            <div className="hidden group-hover:flex items-center justify-center text-zinc-200 transition-all">
-              <div className="w-7 h-7 rounded-lg bg-zinc-900 text-zinc-200 flex items-center justify-center border border-zinc-700 shadow-mono-subtle">
-                <SidebarExpandIconSvg className="w-4 h-4 text-zinc-200 group-hover:text-white" />
-              </div>
-            </div>
+            <SidebarExpandIconSvg className="w-5 h-5 text-white hidden group-hover:block transition-all" />
           </button>
         )}
 

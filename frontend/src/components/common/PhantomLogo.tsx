@@ -94,13 +94,11 @@ export const PhantomLogo: React.FC<PhantomLogoProps> = ({
   if (variant === 'icon') {
     return (
       <div
-        className={`relative inline-flex items-center justify-center p-0.5 rounded-xl transition-all duration-300 ${
-          glow ? 'shadow-mono-glow' : ''
+        className={`inline-flex items-center justify-center ${currentSize.container} bg-zinc-900 border border-zinc-800 text-white transition-all duration-200 ${
+          glow ? 'shadow-sm' : ''
         } ${animated ? 'hover:scale-105 active:scale-95' : ''} ${className}`}
       >
-        <div className="w-full h-full bg-zinc-100 text-black dark:bg-black dark:text-white rounded-[10px] p-1.5 flex items-center justify-center border border-zinc-300 dark:border-zinc-800 transition-colors">
-          <PhantomIconSvg className={`${currentSize.icon} text-black dark:text-white`} />
-        </div>
+        <PhantomIconSvg className={`${currentSize.icon} text-white`} />
       </div>
     );
   }

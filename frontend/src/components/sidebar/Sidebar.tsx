@@ -156,23 +156,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
             {/* Theme-Adaptive Phantom Logo (Default) -> Converts to Sidebar Expand Icon on Cursor Hover */}
             <button
               onClick={onToggleSidebar}
-              className="w-9 h-9 rounded-xl hover:bg-zinc-900 border border-transparent hover:border-zinc-800 transition-all flex items-center justify-center group relative cursor-pointer"
+              className="w-9 h-9 rounded-xl bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 transition-all flex items-center justify-center group relative cursor-pointer text-zinc-100 hover:text-white"
               title="Open sidebar"
               aria-label="Open sidebar"
             >
               {/* Default: Phantom Logo */}
-              <div className="flex items-center justify-center transition-all group-hover:hidden">
-                <div className="w-8 h-8 rounded-lg bg-zinc-100 text-black dark:bg-black dark:text-white flex items-center justify-center border border-zinc-300 dark:border-zinc-800 shadow-sm transition-colors">
-                  <PhantomIconSvg className="w-4 h-4 text-black dark:text-white" />
-                </div>
-              </div>
+              <PhantomIconSvg className="w-5 h-5 text-zinc-100 group-hover:hidden transition-all" />
 
               {/* On Hover: Expand Panel Icon [ |> ] */}
-              <div className="hidden group-hover:flex items-center justify-center text-zinc-300 hover:text-white transition-all">
-                <div className="w-8 h-8 rounded-lg bg-zinc-900 text-zinc-200 flex items-center justify-center border border-zinc-700 shadow-mono-subtle">
-                  <SidebarExpandIconSvg className="w-4 h-4 text-zinc-200 group-hover:text-white" />
-                </div>
-              </div>
+              <SidebarExpandIconSvg className="w-5 h-5 text-white hidden group-hover:block transition-all" />
             </button>
 
             {/* 1. New Chat (Pencil) */}
@@ -286,8 +278,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* Top Header: Brand Name & Icons (Search & Collapse) */}
         <div className="px-3.5 pt-3.5 pb-2 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-lg bg-zinc-100 text-black dark:bg-black dark:text-white flex items-center justify-center border border-zinc-300 dark:border-zinc-800 shadow-sm transition-colors">
-              <PhantomIconSvg className="w-4 h-4 text-black dark:text-white" />
+            <div className="w-7 h-7 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center text-white">
+              <PhantomIconSvg className="w-4 h-4 text-white" />
             </div>
             <span className="font-bold text-sm text-white tracking-tight">Phantom</span>
           </div>
