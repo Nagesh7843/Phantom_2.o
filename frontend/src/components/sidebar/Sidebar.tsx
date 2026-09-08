@@ -481,10 +481,36 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {/* Footer Toolbar: Theme Toggle, Settings / Sign In */}
         <div className="border-t border-zinc-850 p-2.5 space-y-2 bg-zinc-950">
-          <div className="grid grid-cols-2 gap-1.5">
+          {isAuthenticated ? (
+            <div className="grid grid-cols-2 gap-1.5">
+              <button
+                onClick={onToggleTheme}
+                className="flex items-center justify-center gap-1.5 rounded-xl border border-zinc-800 bg-zinc-900 px-2.5 py-1.5 text-xs text-zinc-300 transition-colors hover:border-zinc-600 hover:text-white"
+                title={
+                  currentTheme === 'theme-light' ? 'Switch to dark mode' : 'Switch to light mode'
+                }
+              >
+                {currentTheme === 'theme-light' ? (
+                  <Moon className="h-3.5 w-3.5" />
+                ) : (
+                  <Sun className="h-3.5 w-3.5" />
+                )}
+                <span>{currentTheme === 'theme-light' ? 'Dark' : 'Light'}</span>
+              </button>
+
+              <button
+                onClick={onOpenSettings}
+                className="flex items-center justify-center gap-1.5 rounded-xl border border-zinc-800 bg-zinc-900 px-2.5 py-1.5 text-xs text-zinc-300 transition-colors hover:border-zinc-600 hover:text-white"
+                title="Open system preferences"
+              >
+                <Settings className="h-3.5 w-3.5" />
+                <span>Settings</span>
+              </button>
+            </div>
+          ) : (
             <button
               onClick={onToggleTheme}
-              className="flex items-center justify-center gap-1.5 rounded-xl border border-zinc-800 bg-zinc-900 px-2.5 py-1.5 text-xs text-zinc-300 transition-colors hover:border-zinc-600 hover:text-white"
+              className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-zinc-800 bg-zinc-900 px-2.5 py-1.5 text-xs text-zinc-300 transition-colors hover:border-zinc-600 hover:text-white"
               title={
                 currentTheme === 'theme-light' ? 'Switch to dark mode' : 'Switch to light mode'
               }
@@ -494,29 +520,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
               ) : (
                 <Sun className="h-3.5 w-3.5" />
               )}
-              <span>{currentTheme === 'theme-light' ? 'Dark' : 'Light'}</span>
+              <span>{currentTheme === 'theme-light' ? 'Dark Mode' : 'Light Mode'}</span>
             </button>
-
-            {isAuthenticated ? (
-              <button
-                onClick={onOpenSettings}
-                className="flex items-center justify-center gap-1.5 rounded-xl border border-zinc-800 bg-zinc-900 px-2.5 py-1.5 text-xs text-zinc-300 transition-colors hover:border-zinc-600 hover:text-white"
-                title="Open system preferences"
-              >
-                <Settings className="h-3.5 w-3.5" />
-                <span>Settings</span>
-              </button>
-            ) : (
-              <button
-                onClick={onOpenAuth}
-                className="flex items-center justify-center gap-1.5 rounded-xl border border-zinc-800 bg-zinc-900 px-2.5 py-1.5 text-xs text-white font-semibold transition-colors hover:border-zinc-600 hover:bg-zinc-800"
-                title="Sign in to your account"
-              >
-                <LogIn className="h-3.5 w-3.5" />
-                <span>Sign In</span>
-              </button>
-            )}
-          </div>
+          )}
 
           {userProfile?.authenticated ? (
             <button
@@ -547,7 +553,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-white px-3 py-1.5 text-xs font-semibold text-black transition-colors hover:bg-zinc-200"
             >
               <LogIn className="h-3.5 w-3.5" />
-              <span>Sign in</span>
+              <span>Sign In</span>
             </button>
           )}
         </div>

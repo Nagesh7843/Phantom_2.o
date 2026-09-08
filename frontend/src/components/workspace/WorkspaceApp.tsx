@@ -17,7 +17,7 @@ import { VoiceChatModal } from '@/components/modals/VoiceChatModal';
 import { PhantomIconSvg, SidebarExpandIconSvg } from '@/components/common/PhantomLogo';
 import { api } from '@/lib/api';
 import { ChatMessage, ChatSession, UserProfile, UserSettings } from '@/types';
-import { ArrowLeft, Home as HomeIcon } from 'lucide-react';
+import { ArrowLeft, Home as HomeIcon, User } from 'lucide-react';
 
 interface WorkspaceAppProps {
   onNavigateHome?: () => void;
@@ -536,7 +536,42 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ onNavigateHome }) =>
         {/* Dynamic Center Area based on activeTab */}
         <main className="flex-1 flex flex-col overflow-hidden relative">
           {activeTab === 'chat' && (
-            <div className="flex-1 flex flex-col h-full overflow-hidden bg-cyber-dark">
+            <div className="flex-1 flex flex-col h-full overflow-hidden bg-cyber-dark relative">
+              {/* Top Right Header Controls: Sign In or User Profile */}
+              <div className="absolute right-4 top-3.5 z-30 flex items-center gap-2">
+                {userProfile?.authenticated ? (
+                  <button
+                    onClick={() => setProfileOpen(true)}
+                    className="flex items-center gap-2 py-1 px-2.5 rounded-full bg-zinc-900/90 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 transition-all text-xs cursor-pointer shadow-sm group"
+                    title={userProfile.user.displayName || userProfile.user.email || 'User Profile'}
+                  >
+                    {userProfile.user.pictureUrl ? (
+                      <img
+                        src={userProfile.user.pictureUrl}
+                        alt="Avatar"
+                        className="w-5 h-5 rounded-full object-cover border border-zinc-700"
+                      />
+                    ) : (
+                      <div className="w-5 h-5 rounded-full bg-white text-black font-bold text-[10px] flex items-center justify-center">
+                        {(userProfile.user.displayName || userProfile.user.email || 'U')[0].toUpperCase()}
+                      </div>
+                    )}
+                    <span className="text-zinc-300 group-hover:text-white font-medium max-w-[120px] truncate text-xs">
+                      {userProfile.user.displayName || userProfile.user.email?.split('@')[0] || 'Account'}
+                    </span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setAuthOpen(true)}
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-white hover:bg-zinc-200 text-black font-bold text-xs shadow-mono-subtle transition-all cursor-pointer active:scale-95"
+                    title="Sign in to your account"
+                  >
+                    <User className="w-3.5 h-3.5 text-black" />
+                    <span>Sign In</span>
+                  </button>
+                )}
+              </div>
+
               <ChatContainer
                 messages={messages}
                 userAvatar={userProfile?.user.pictureUrl}
