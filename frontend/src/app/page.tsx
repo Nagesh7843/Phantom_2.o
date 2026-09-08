@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { PanelLeftOpen } from 'lucide-react';
 import { ActiveTab } from '@/components/layout/Header';
 import { Sidebar } from '@/components/sidebar/Sidebar';
 import { ChatContainer } from '@/components/chat/ChatContainer';

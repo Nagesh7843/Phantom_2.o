@@ -19,11 +19,14 @@ flask_session/
 __pycache__/
 *.py[cod]
 *$py.class
-tempCodeRunnerFile.py
+tempCodeRunnerFile.*
+*.tsbuildinfo
 
 # Logs and Debug Files
 *.log
+*.log.*
 server.log
+build-check.log
 mongo_debug.txt
 api_test_output.txt
 quick_test_output.txt
@@ -37,3 +40,4 @@ test_output.txt
 frontend/node_modules/
 frontend/.next/
 frontend/tsconfig.tsbuildinfo
+frontend/*.log
