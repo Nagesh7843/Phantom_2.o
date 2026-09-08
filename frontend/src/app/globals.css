@@ -87,7 +87,7 @@
   }
 
   body.theme-light .text-white,
-  body.theme-light [class*="text-white"] {
+  body.theme-light [class*="text-white"]:not(pre *):not(code *):not(.keep-dark *) {
     color: #0f172a !important;
   }
 
@@ -99,7 +99,7 @@
 
   body.theme-light .text-zinc-400,
   body.theme-light .text-zinc-500 {
-    color: #64748b !important;
+    color: #475569 !important;
   }
 
   body.theme-light .shadow-mono-glow,
@@ -123,6 +123,92 @@
     border: 1px solid #e2e8f0 !important;
     color: #0f172a !important;
     box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.1) !important;
+  }
+
+  /* Keep Terminal / Code Editors Deep Dark & Crisp in Light Mode (Developer Standard) */
+  body.theme-light .ide-code-dark,
+  body.theme-light .ide-code-dark * {
+    background-color: #09090b !important;
+    color: #e4e4e7 !important;
+  }
+
+  body.theme-light .ide-code-dark .code-line-num {
+    color: #71717a !important;
+  }
+
+  body.theme-light .ide-stdout-dark {
+    background-color: #050507 !important;
+    color: #34d399 !important;
+  }
+
+  /* Light Theme CTA Banner */
+  body.theme-light .cta-banner-box {
+    background: linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%) !important;
+    border-color: #cbd5e1 !important;
+  }
+
+  body.theme-light .cta-banner-box h2 {
+    color: #0f172a !important;
+  }
+
+  body.theme-light .cta-banner-box p {
+    color: #334155 !important;
+  }
+
+  body.theme-light .cta-banner-box button {
+    background-color: #0f172a !important;
+    color: #ffffff !important;
+  }
+
+  /* Light Theme Marquee */
+  body.theme-light .marquee-wrapper {
+    background-color: #f1f5f9 !important;
+    border-color: #e2e8f0 !important;
+  }
+
+  body.theme-light .marquee-title-text {
+    color: #0f172a !important;
+    font-weight: 700 !important;
+  }
+
+  body.theme-light .marquee-pill {
+    background-color: #ffffff !important;
+    border-color: #cbd5e1 !important;
+  }
+
+  body.theme-light .marquee-pill span {
+    color: #0f172a !important;
+  }
+
+  /* Light Theme Footer */
+  body.theme-light footer {
+    background-color: #f8fafc !important;
+    border-color: #e2e8f0 !important;
+    color: #334155 !important;
+  }
+
+  body.theme-light footer a {
+    color: #475569 !important;
+  }
+
+  body.theme-light footer a:hover {
+    color: #0f172a !important;
+  }
+
+  body.theme-light footer h4 {
+    color: #0f172a !important;
+    font-weight: 700 !important;
+  }
+
+  body.theme-light footer p,
+  body.theme-light footer span,
+  body.theme-light footer div {
+    color: #475569 !important;
+  }
+
+  body.theme-light footer .text-white,
+  body.theme-light footer [class*="text-white"] {
+    color: #0f172a !important;
   }
 }
 
@@ -316,4 +402,67 @@ body.theme-light .sound-bar {
 .sound-bar:nth-child(3) { animation-delay: 0.4s; }
 .sound-bar:nth-child(4) { animation-delay: 0.1s; }
 .sound-bar:nth-child(5) { animation-delay: 0.3s; }
+
+/* Developer Landing Page Visual Utilities (MongoDB & Vercel Style) */
+.bg-grid-white {
+  background-size: 40px 40px;
+  background-image: linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+                    linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+}
+body.theme-light .bg-grid-white {
+  background-image: linear-gradient(to right, rgba(0, 0, 0, 0.06) 1px, transparent 1px),
+                    linear-gradient(to bottom, rgba(0, 0, 0, 0.06) 1px, transparent 1px);
+}
+
+.bg-radial-gradient {
+  background: radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.12) 0%, rgba(0, 0, 0, 0) 70%);
+}
+body.theme-light .bg-radial-gradient {
+  background: radial-gradient(circle at 50% 0%, rgba(0, 0, 0, 0.06) 0%, rgba(255, 255, 255, 0) 70%);
+}
+
+.text-gradient-silver {
+  background: linear-gradient(180deg, #ffffff 0%, #a1a1aa 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+body.theme-light .text-gradient-silver {
+  background: linear-gradient(180deg, #09090b 0%, #52525b 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.text-gradient-glow {
+  background: linear-gradient(135deg, #ffffff 0%, #e4e4e7 50%, #71717a 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+@keyframes marquee {
+  0% { transform: translateX(0%); }
+  100% { transform: translateX(-50%); }
+}
+
+.animate-marquee {
+  display: flex;
+  width: max-content;
+  animation: marquee 35s linear infinite;
+}
+.animate-marquee:hover {
+  animation-play-state: paused;
+}
+
+.card-glow-hover {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.card-glow-hover:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255, 255, 255, 0.3);
+  box-shadow: 0 12px 30px -10px rgba(255, 255, 255, 0.1);
+}
+body.theme-light .card-glow-hover:hover {
+  border-color: rgba(0, 0, 0, 0.25);
+  box-shadow: 0 12px 30px -10px rgba(0, 0, 0, 0.08);
+}
+
 

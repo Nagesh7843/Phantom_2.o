@@ -1,4 +1,5 @@
 'use strict';
+
 import React, { useState, useRef, useEffect } from 'react';
 import {
   Send,
@@ -16,8 +17,14 @@ import {
   ShieldAlert,
   Terminal,
   Image as ImageIcon,
+  Film,
+  FileText,
+  FileCode,
+  Music,
+  FolderArchive,
   Globe,
-  Key,
+  Check,
+  File as GenericFileIcon,
 } from 'lucide-react';
 import { scanForSecrets, redactSecrets, SecretScanResult } from '@/lib/secretGuard';
 import { SecretWarningModal } from './SecretWarningModal';
@@ -46,9 +53,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const [text, setText] = useState('');
   const [attachedFile, setAttachedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [fileTypeCategory, setFileTypeCategory] = useState<'image' | 'video' | 'audio' | 'code' | 'doc' | 'other'>('other');
   const [isListening, setIsListening] = useState(false);
   const [selectedMode, setSelectedMode] = useState<string | null>(null);
   const [showModeMenu, setShowModeMenu] = useState(false);
+  const [showAttachMenu, setShowAttachMenu] = useState(false);
+  const [fileAcceptFilter, setFileAcceptFilter] = useState<string>('*/*');
 
   // Secret & Sensitive Data Guard State
   const [secretScan, setSecretScan] = useState<SecretScanResult>({
@@ -62,6 +72,22 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const recognitionRef = useRef<any>(null);
+  const attachMenuRef = useRef<HTMLDivElement>(null);
+  const modeMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close dropup menus when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (attachMenuRef.current && !attachMenuRef.current.contains(event.target as Node)) {
+        setShowAttachMenu(false);
+      }
+      if (modeMenuRef.current && !modeMenuRef.current.contains(event.target as Node)) {
+        setShowModeMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Live Secret Scanner on text change
   useEffect(() => {
@@ -128,17 +154,54 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
   };
 
+  const determineCategory = (file: File): 'image' | 'video' | 'audio' | 'code' | 'doc' | 'other' => {
+    const type = file.type.toLowerCase();
+    const ext = (file.name.split('.').pop() || '').toLowerCase();
+
+    if (type.startsWith('image/') || ['png', 'jpg', 'jpeg', 'webp', 'svg', 'gif', 'bmp', 'ico', 'tiff'].includes(ext)) {
+      return 'image';
+    }
+    if (type.startsWith('video/') || ['mp4', 'webm', 'mov', 'mkv', 'avi', 'wmv', 'flv', 'm4v'].includes(ext)) {
+      return 'video';
+    }
+    if (type.startsWith('audio/') || ['mp3', 'wav', 'ogg', 'm4a', 'aac', 'flac', 'wma'].includes(ext)) {
+      return 'audio';
+    }
+    if (['py', 'js', 'ts', 'tsx', 'jsx', 'cpp', 'c', 'h', 'hpp', 'rs', 'go', 'java', 'html', 'css', 'sql', 'sh', 'bash', 'yaml', 'yml', 'json', 'toml', 'env', 'dockerfile', 'rb', 'php', 'swift', 'kt'].includes(ext)) {
+      return 'code';
+    }
+    if (type.includes('pdf') || ['pdf', 'doc', 'docx', 'txt', 'md', 'csv', 'xlsx', 'xls', 'pptx', 'rtf'].includes(ext)) {
+      return 'doc';
+    }
+    return 'other';
+  };
+
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       setAttachedFile(file);
-      if (file.type.startsWith('image/')) {
+      const cat = determineCategory(file);
+      setFileTypeCategory(cat);
+
+      if (cat === 'image' || cat === 'video') {
         const url = URL.createObjectURL(file);
         setPreviewUrl(url);
       } else {
         setPreviewUrl(null);
       }
     }
+  };
+
+  const handleTriggerAttachOption = (acceptFilter: string) => {
+    setFileAcceptFilter(acceptFilter);
+    setShowAttachMenu(false);
+    setTimeout(() => {
+      if (fileInputRef.current) {
+        fileInputRef.current.accept = acceptFilter;
+        fileInputRef.current.value = '';
+        fileInputRef.current.click();
+      }
+    }, 50);
   };
 
   const removeFile = () => {
@@ -148,6 +211,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       setPreviewUrl(null);
     }
     if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
   const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
@@ -205,27 +274,103 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     { id: 'Security', label: 'Security Auditor', icon: Shield },
   ];
 
+  const attachmentOptions = [
+    {
+      id: 'images',
+      title: 'Photos & Images',
+      icon: ImageIcon,
+      accept: 'image/*,.png,.jpg,.jpeg,.webp,.svg,.gif,.bmp,.ico',
+    },
+    {
+      id: 'videos',
+      title: 'Videos',
+      icon: Film,
+      accept: 'video/*,.mp4,.webm,.mov,.mkv,.avi,.wmv,.flv',
+    },
+    {
+      id: 'documents',
+      title: 'Documents & PDFs',
+      icon: FileText,
+      accept: '.pdf,.doc,.docx,.txt,.md,.csv,.json,.xlsx,.xls,.pptx,.rtf',
+    },
+    {
+      id: 'code',
+      title: 'Code & Scripts',
+      icon: FileCode,
+      accept: '.py,.js,.ts,.tsx,.jsx,.cpp,.c,.h,.hpp,.rs,.go,.java,.html,.css,.sql,.sh,.bash,.yaml,.yml,.json,.toml,.env,.dockerfile',
+    },
+    {
+      id: 'audio',
+      title: 'Audio',
+      icon: Music,
+      accept: 'audio/*,.mp3,.wav,.ogg,.m4a,.aac,.flac',
+    },
+    {
+      id: 'all',
+      title: 'Browse all files...',
+      icon: FolderArchive,
+      accept: '*/*',
+    },
+  ];
+
   return (
     <div className="relative max-w-4xl mx-auto w-full px-3 pb-3">
-      {/* File Preview Chip in Monochrome */}
+      {/* File Preview Chip with Rich Multimodal Badge & Size */}
       {attachedFile && (
-        <div className="mb-2 inline-flex items-center gap-2 p-1.5 pl-2.5 rounded-xl bg-zinc-900 border border-zinc-700 text-xs text-zinc-200 shadow-mono-card animate-slide-up">
-          {previewUrl ? (
-            <img src={previewUrl} alt="Preview" className="w-8 h-8 rounded-lg object-cover" />
+        <div className="mb-2 inline-flex items-center gap-2.5 p-2 pl-3 rounded-2xl bg-zinc-900/95 border border-zinc-700 text-xs text-zinc-100 shadow-xl backdrop-blur-md animate-slide-up">
+          {/* Media Thumbnail / Icon */}
+          {fileTypeCategory === 'image' && previewUrl ? (
+            <img
+              src={previewUrl}
+              alt="Preview"
+              className="w-9 h-9 rounded-xl object-cover border border-zinc-600 shadow-sm"
+            />
+          ) : fileTypeCategory === 'video' ? (
+            <div className="w-9 h-9 rounded-xl bg-rose-950/80 border border-rose-700 flex items-center justify-center">
+              <Film className="w-5 h-5 text-rose-400" />
+            </div>
+          ) : fileTypeCategory === 'audio' ? (
+            <div className="w-9 h-9 rounded-xl bg-amber-950/80 border border-amber-700 flex items-center justify-center">
+              <Music className="w-5 h-5 text-amber-400" />
+            </div>
+          ) : fileTypeCategory === 'code' ? (
+            <div className="w-9 h-9 rounded-xl bg-cyan-950/80 border border-cyan-700 flex items-center justify-center">
+              <Code2 className="w-5 h-5 text-cyan-400" />
+            </div>
           ) : (
-            <Paperclip className="w-4 h-4 text-white" />
+            <div className="w-9 h-9 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center">
+              <FileText className="w-5 h-5 text-zinc-300" />
+            </div>
           )}
-          <span className="font-medium max-w-[200px] truncate">{attachedFile.name}</span>
+
+          {/* File Name & Details */}
+          <div className="flex flex-col min-w-0 pr-1">
+            <div className="flex items-center gap-1.5">
+              <span className="font-semibold text-white truncate max-w-[200px] sm:max-w-xs">
+                {attachedFile.name}
+              </span>
+              <span className="px-1.5 py-0.2 rounded text-[10px] font-mono font-bold uppercase bg-zinc-800 border border-zinc-700 text-zinc-300">
+                {fileTypeCategory}
+              </span>
+            </div>
+            <span className="text-[10px] text-zinc-400 font-mono">
+              {formatFileSize(attachedFile.size)} • Ready to inspect
+            </span>
+          </div>
+
+          {/* Remove Button */}
           <button
+            type="button"
             onClick={removeFile}
-            className="p-1 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-white"
+            className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+            title="Remove attachment"
           >
-            <X className="w-3.5 h-3.5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
       )}
 
-      {/* Selected Mode Pill in Monochrome */}
+      {/* Selected Mode Pill */}
       {selectedMode && (
         <div className="mb-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-900 border border-zinc-700 text-xs text-white animate-slide-up">
           <Sparkles className="w-3.5 h-3.5 text-white" />
@@ -286,24 +431,27 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           className="w-full bg-transparent text-white placeholder-zinc-500 text-sm px-4 pt-3.5 pb-12 focus:outline-none resize-none max-h-44 min-h-[52px]"
         />
 
-        {/* Hidden File Input */}
+        {/* Hidden Dynamic File Input */}
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/*,.txt,.py,.js,.ts,.json,.cpp,.c,.java,.rs,.go,.md,.html,.css"
+          accept={fileAcceptFilter}
           onChange={handleFileSelect}
           className="hidden"
         />
 
         {/* Composer Controls Bar */}
         <div className="absolute left-2 right-2 bottom-2 flex items-center justify-between pointer-events-auto">
-          {/* Left tools: Mode selector & File upload */}
+          {/* Left tools: Persona, Attach Dropup, Web Search, Voice */}
           <div className="flex items-center gap-1">
-            {/* Mode / Persona dropdown toggle */}
-            <div className="relative">
+            {/* 1. Mode / Persona Dropup Toggle */}
+            <div className="relative" ref={modeMenuRef}>
               <button
                 type="button"
-                onClick={() => setShowModeMenu(!showModeMenu)}
+                onClick={() => {
+                  setShowModeMenu(!showModeMenu);
+                  setShowAttachMenu(false);
+                }}
                 className={`p-1.5 rounded-lg text-xs flex items-center gap-1.5 transition-colors ${
                   selectedMode
                     ? 'bg-zinc-800 text-white border border-zinc-600'
@@ -319,8 +467,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
               {/* Mode Menu Dropdown */}
               {showModeMenu && (
-                <div className="absolute bottom-full left-0 mb-2 w-64 p-1.5 rounded-xl glass-dropdown border border-zinc-700 shadow-2xl z-50 bg-zinc-950/95 backdrop-blur-xl animate-fade-in">
-                  {/* Dev & Creative Studios section */}
+                <div className="absolute bottom-full left-0 mb-2 w-64 p-1.5 rounded-2xl glass-dropdown border border-zinc-700 shadow-2xl z-50 bg-zinc-950/95 backdrop-blur-xl animate-fade-in">
                   <div className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-zinc-400">
                     Dev & Creative Studios
                   </div>
@@ -330,7 +477,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                       setShowModeMenu(false);
                       onOpenStudio?.('compiler');
                     }}
-                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs text-left text-zinc-200 hover:bg-zinc-900 hover:text-white transition-colors group"
+                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs text-left text-zinc-200 hover:bg-zinc-900 hover:text-white transition-colors group"
                   >
                     <div className="p-1 rounded bg-zinc-900 border border-zinc-700 group-hover:border-zinc-500">
                       <Terminal className="w-3.5 h-3.5 text-white" />
@@ -346,20 +493,19 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                       setShowModeMenu(false);
                       onOpenStudio?.('image_studio');
                     }}
-                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs text-left text-zinc-200 hover:bg-zinc-900 hover:text-white transition-colors group mt-0.5"
+                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs text-left text-zinc-200 hover:bg-zinc-900 hover:text-white transition-colors group mt-0.5"
                   >
                     <div className="p-1 rounded bg-zinc-900 border border-zinc-700 group-hover:border-zinc-500">
                       <ImageIcon className="w-3.5 h-3.5 text-white" />
                     </div>
                     <div>
                       <div className="font-semibold text-white">AI Image Studio</div>
-                      <div className="text-[10px] text-zinc-400">Monochrome generative art</div>
+                      <div className="text-[10px] text-zinc-400">Generative diffusion art</div>
                     </div>
                   </button>
 
                   <div className="my-1.5 border-t border-zinc-800" />
 
-                  {/* Assistant Personas */}
                   <div className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-zinc-400">
                     AI Personas
                   </div>
@@ -401,17 +547,49 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               )}
             </div>
 
-            {/* File Attachment Button */}
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-850 transition-colors"
-              title="Attach image or file"
-            >
-              <Paperclip className="w-4 h-4" />
-            </button>
+            {/* 2. Paperclip Attachment Dropup Menu (Images, Video, Docs, Code, Audio, Any) */}
+            <div className="relative" ref={attachMenuRef}>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAttachMenu(!showAttachMenu);
+                  setShowModeMenu(false);
+                }}
+                className={`p-1.5 rounded-lg transition-all flex items-center gap-1 cursor-pointer ${
+                  showAttachMenu || attachedFile
+                    ? 'bg-zinc-800 text-white border border-zinc-600 shadow-sm'
+                    : 'text-zinc-400 hover:text-white hover:bg-zinc-850'
+                }`}
+                title="Attach Images, Videos, Documents, Code, or any file"
+                aria-label="Attach File"
+              >
+                <Paperclip className="w-4 h-4" />
+              </button>
 
-            {/* Web Search Toggle Button */}
+              {/* Minimal Clean Attachment Dropdown */}
+              {showAttachMenu && (
+                <div className="absolute bottom-full left-0 mb-2 w-56 p-1 rounded-xl glass-dropdown border border-zinc-700 shadow-xl z-50 bg-zinc-950/95 backdrop-blur-xl animate-fade-in">
+                  <div className="space-y-0.5">
+                    {attachmentOptions.map((opt) => {
+                      const Icon = opt.icon;
+                      return (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => handleTriggerAttachOption(opt.accept)}
+                          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs text-zinc-300 hover:text-white hover:bg-zinc-850 dark:hover:bg-zinc-800 transition-colors cursor-pointer text-left font-medium group"
+                        >
+                          <Icon className="w-4 h-4 text-zinc-400 group-hover:text-white" />
+                          <span>{opt.title}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 3. Web Search Toggle Button */}
             <button
               type="button"
               onClick={() => onTogglePlugin?.('web_search', !(pluginsState?.web_search ?? true))}
@@ -428,7 +606,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               )}
             </button>
 
-            {/* Voice Input Button */}
+            {/* 4. Voice Input Button */}
             <button
               type="button"
               onClick={toggleVoiceInput}
@@ -461,7 +639,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               <button
                 type="button"
                 onClick={onStopGeneration}
-                className="p-2 rounded-xl bg-zinc-800 text-white border border-zinc-600 hover:bg-zinc-700 transition-all"
+                className="p-2 rounded-xl bg-zinc-800 text-white border border-zinc-600 hover:bg-zinc-700 transition-all cursor-pointer"
                 title="Stop generation"
               >
                 <Square className="w-4 h-4 fill-white" />
@@ -473,7 +651,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 disabled={!text.trim() && !attachedFile}
                 className={`p-2 rounded-xl font-medium transition-all ${
                   text.trim() || attachedFile
-                    ? 'bg-white text-black shadow-mono-glow hover:bg-zinc-200 hover:scale-105 active:scale-95'
+                    ? 'bg-white text-black shadow-mono-glow hover:bg-zinc-200 hover:scale-105 active:scale-95 cursor-pointer'
                     : 'bg-zinc-800 text-zinc-600 cursor-not-allowed'
                 }`}
                 title="Send message"
@@ -496,4 +674,3 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     </div>
   );
 };
-

@@ -169,19 +169,50 @@ export const MessageItem: React.FC<MessageItemProps> = ({
             </div>
           )}
 
-          {/* Display attached image preview if present */}
+          {/* Display attached image, video, and audio preview if present */}
           {hasImageAttachment && (
-            <div className="mb-3">
-              {message.parts.map((p, i) =>
-                p.inlineData ? (
-                  <img
-                    key={i}
-                    src={`data:${p.inlineData.mimeType};base64,${p.inlineData.data}`}
-                    alt="Attached input"
-                    className="max-h-60 rounded-xl object-contain border border-zinc-700"
-                  />
-                ) : null
-              )}
+            <div className="mb-3 space-y-2">
+              {message.parts.map((p, i) => {
+                if (!p.inlineData) return null;
+                const mime = p.inlineData.mimeType || '';
+
+                if (mime.startsWith('image/')) {
+                  return (
+                    <img
+                      key={i}
+                      src={`data:${mime};base64,${p.inlineData.data}`}
+                      alt="Attached media"
+                      className="max-h-64 rounded-xl object-contain border border-zinc-700 bg-black/40 shadow-sm"
+                    />
+                  );
+                }
+
+                if (mime.startsWith('video/')) {
+                  return (
+                    <div key={i} className="max-w-md rounded-xl overflow-hidden border border-zinc-700 bg-black shadow-md">
+                      <video
+                        controls
+                        src={`data:${mime};base64,${p.inlineData.data}`}
+                        className="w-full max-h-72 object-contain"
+                      />
+                    </div>
+                  );
+                }
+
+                if (mime.startsWith('audio/')) {
+                  return (
+                    <div key={i} className="p-2 rounded-xl bg-zinc-900 border border-zinc-700 max-w-sm">
+                      <audio
+                        controls
+                        src={`data:${mime};base64,${p.inlineData.data}`}
+                        className="w-full h-8"
+                      />
+                    </div>
+                  );
+                }
+
+                return null;
+              })}
             </div>
           )}
 

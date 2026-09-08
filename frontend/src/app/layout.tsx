@@ -22,7 +22,7 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body className="bg-cyber-dark text-slate-100 antialiased h-screen overflow-hidden theme-dark">
+      <body className="bg-cyber-dark text-slate-100 antialiased min-h-screen theme-dark">
         {children}
       </body>
     </html>
