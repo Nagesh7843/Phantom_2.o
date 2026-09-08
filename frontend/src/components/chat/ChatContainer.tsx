@@ -1,10 +1,8 @@
 'use strict';
 import React, { useRef, useEffect, useState, useMemo } from 'react';
 import {
-  Sparkles,
   ArrowRight,
   RefreshCw,
-  Calendar,
   Flame,
 } from 'lucide-react';
 import { ChatMessage } from '@/types';
@@ -53,16 +51,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
     <div className="flex-1 overflow-y-auto px-2 sm:px-6 py-6 space-y-4">
       {messages.length === 0 ? (
         <div className="max-w-3xl mx-auto h-full flex flex-col items-center justify-center text-center py-8 px-4 animate-fade-in">
-          {/* Daily Badge & Dynamic Date Indicator */}
-          <div className="mb-4 inline-flex items-center gap-2 px-3 py-1 rounded-full bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 shadow-sm animate-slide-up">
-            <Calendar className="w-3.5 h-3.5 text-zinc-400" />
-            <span className="font-semibold text-zinc-200">{dailyData.dateTitle}</span>
-            <span className="text-zinc-600">•</span>
-            <span className="text-[11px] text-zinc-400 font-mono flex items-center gap-1">
-              <Sparkles className="w-3 h-3 text-zinc-300" />
-              Refreshed Daily
-            </span>
-          </div>
+
 
           <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-zinc-100 dark:text-white mb-2">
             How can Phantom assist you today?
