@@ -439,8 +439,21 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ onNavigateHome }) =>
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
     try {
       window.speechSynthesis.cancel();
-      const cleanText = text.replace(/[`*#_]/g, '');
+      if (window.speechSynthesis.paused) {
+        window.speechSynthesis.resume();
+      }
+      const cleanText = text
+        .replace(/```[\s\S]*?```/g, 'Code block omitted in speech.')
+        .replace(/[`*#_~[\]()]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+      if (!cleanText) return;
+
       const utterance = new SpeechSynthesisUtterance(cleanText);
+      utterance.rate = 1.05;
+      utterance.pitch = 1.0;
+
       if (settings.voice) {
         const voices = window.speechSynthesis.getVoices();
         const selected = voices.find((v) => v.name === settings.voice);
