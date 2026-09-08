@@ -94,6 +94,29 @@ def generate_smart_session_title(prompt: str) -> str:
     return title if title else "New Chat Session"
 
 
+def scan_text_for_secrets(text: str) -> list:
+    """Detects credentials, API keys, passwords, and tokens in user text."""
+    if not text or not isinstance(text, str):
+        return []
+    patterns = [
+        ("Private Cryptographic Key", r"-----BEGIN[ A-Z0-9_-]*PRIVATE KEY-----"),
+        ("OpenAI API Key", r"\bsk-(?:proj-|live-|test-|admin-)?[a-zA-Z0-9_\-]{20,80}\b"),
+        ("Anthropic API Key", r"\bsk-ant-(?:api[0-9]{2}-)?[a-zA-Z0-9_\-]{30,100}\b"),
+        ("Google Cloud / Gemini API Key", r"\bAIza[0-9A-Za-z\-_]{35}\b"),
+        ("AWS Access Key", r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b"),
+        ("AWS Secret Key", r"(?:aws_secret_access_key|aws_secret)\s*[:=]\s*['\"]?[a-zA-Z0-9\/+=]{40}['\"]?"),
+        ("GitHub Token", r"\b(?:ghp|gho|ghu|ghs|ghr)_[a-zA-Z0-9]{36,255}\b"),
+        ("Stripe Secret Key", r"\b(?:sk|pk|rk)_(?:live|test)_[0-9a-zA-Z]{24,100}\b"),
+        ("Database Connection String", r"\b(?:postgres|postgresql|mysql|mongodb|mongodb\+srv|redis):\/\/[a-zA-Z0-9_\-\.%]+:[^@\s]+@[a-zA-Z0-9_\-\.:]+"),
+    ]
+    detected = []
+    for label, pat in patterns:
+        if re.search(pat, text, re.IGNORECASE):
+            detected.append(label)
+    return detected
+
+
+
 app = Flask(__name__,
             template_folder='templates',
             static_folder='static')

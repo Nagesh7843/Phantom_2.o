@@ -13,10 +13,14 @@ import {
   BookOpen,
   Palette,
   Shield,
+  ShieldAlert,
   Terminal,
   Image as ImageIcon,
   Globe,
+  Key,
 } from 'lucide-react';
+import { scanForSecrets, redactSecrets, SecretScanResult } from '@/lib/secretGuard';
+import { SecretWarningModal } from './SecretWarningModal';
 
 interface ChatInputProps {
   onSendMessage: (text: string, file?: File | null, mode?: string | null) => void;
@@ -46,9 +50,24 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const [selectedMode, setSelectedMode] = useState<string | null>(null);
   const [showModeMenu, setShowModeMenu] = useState(false);
 
+  // Secret & Sensitive Data Guard State
+  const [secretScan, setSecretScan] = useState<SecretScanResult>({
+    hasSecrets: false,
+    secrets: [],
+    summary: '',
+    criticalCount: 0,
+  });
+  const [showSecretModal, setShowSecretModal] = useState(false);
+
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const recognitionRef = useRef<any>(null);
+
+  // Live Secret Scanner on text change
+  useEffect(() => {
+    const scan = scanForSecrets(text);
+    setSecretScan(scan);
+  }, [text]);
 
   // Auto-resize textarea
   useEffect(() => {
@@ -131,10 +150,36 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const handleSubmit = (e?: React.FormEvent) => {
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const pastedText = e.clipboardData?.getData('text') || '';
+    if (pastedText) {
+      const scan = scanForSecrets(pastedText);
+      if (scan.hasSecrets) {
+        setShowSecretModal(true);
+      }
+    }
+  };
+
+  const handleAutoRedact = () => {
+    const redacted = redactSecrets(text, secretScan.secrets);
+    setText(redacted);
+    setShowSecretModal(false);
+  };
+
+  const handleProceedAnyway = () => {
+    setShowSecretModal(false);
+    handleSubmit(undefined, true);
+  };
+
+  const handleSubmit = (e?: React.FormEvent, bypassSecretCheck = false) => {
     if (e) e.preventDefault();
     if (isGenerating) return;
     if (!text.trim() && !attachedFile) return;
+
+    if (!bypassSecretCheck && secretScan.hasSecrets) {
+      setShowSecretModal(true);
+      return;
+    }
 
     if (isListening && recognitionRef.current) {
       recognitionRef.current.stop();
@@ -194,7 +239,33 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         </div>
       )}
 
-
+      {/* Real-time Sensitive Secret Guard Banner */}
+      {secretScan.hasSecrets && (
+        <div className="mb-2 p-2.5 rounded-xl bg-amber-950/70 border border-amber-600/80 text-amber-200 text-xs flex items-center justify-between gap-3 shadow-lg shadow-amber-950/30 animate-slide-up">
+          <div className="flex items-center gap-2 min-w-0">
+            <ShieldAlert className="w-4 h-4 text-amber-400 flex-shrink-0 animate-pulse" />
+            <span className="font-semibold text-amber-300 truncate">
+              {secretScan.summary}
+            </span>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button
+              type="button"
+              onClick={handleAutoRedact}
+              className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-[11px] transition-all shadow"
+            >
+              Auto-Redact
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowSecretModal(true)}
+              className="px-2 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white border border-zinc-700 text-[11px] transition-colors"
+            >
+              Review
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Main Composer Box */}
       <div className="relative rounded-2xl bg-zinc-950 border border-zinc-800 focus-within:border-white shadow-mono-card transition-all focus-within:shadow-mono-glow">
@@ -203,6 +274,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={handleKeyDown}
+          onPaste={handlePaste}
           placeholder={
             isListening
               ? 'Listening to your voice... Speak now'
@@ -412,6 +484,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Secret & Sensitive Credential Warning Modal */}
+      <SecretWarningModal
+        isOpen={showSecretModal}
+        secrets={secretScan.secrets}
+        onClose={() => setShowSecretModal(false)}
+        onRedactAndApply={handleAutoRedact}
+        onProceedAnyway={handleProceedAnyway}
+      />
     </div>
   );
 };
