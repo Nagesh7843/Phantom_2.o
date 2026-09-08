@@ -424,17 +424,20 @@ body.theme-light .bg-radial-gradient {
 .text-gradient-silver {
   background: linear-gradient(180deg, #ffffff 0%, #a1a1aa 100%);
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 body.theme-light .text-gradient-silver {
   background: linear-gradient(180deg, #09090b 0%, #52525b 100%);
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
 .text-gradient-glow {
   background: linear-gradient(135deg, #ffffff 0%, #e4e4e7 50%, #71717a 100%);
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 

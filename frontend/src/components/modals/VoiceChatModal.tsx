@@ -545,24 +545,18 @@ export const VoiceChatModal: React.FC<VoiceChatModalProps> = ({
           </div>
         </div>
 
-        {/* Minimal Subtitle / Response */}
-        <div className="w-full min-h-[50px] flex items-center justify-center text-center px-2 mb-6">
+        {/* Minimal Voice Status Indicator (No text content / subtitles) */}
+        <div className="w-full h-8 flex items-center justify-center text-center px-2 mb-4">
           {errorMessage ? (
             <p className="text-xs text-red-400">{errorMessage}</p>
-          ) : voiceState === 'speaking' && aiResponse ? (
-            <p className="text-xs sm:text-sm text-zinc-200 leading-relaxed line-clamp-3">
-              "{aiResponse}"
-            </p>
-          ) : transcript ? (
-            <p className="text-xs sm:text-sm text-white font-medium line-clamp-3">
-              "{transcript}"
-            </p>
           ) : (
-            <p className="text-xs text-zinc-500">
+            <p className="text-xs text-zinc-400 tracking-wide">
               {voiceState === 'listening'
                 ? 'Listening...'
                 : voiceState === 'thinking'
                 ? 'Thinking...'
+                : voiceState === 'speaking'
+                ? 'Speaking...'
                 : 'Tap to speak'}
             </p>
           )}
