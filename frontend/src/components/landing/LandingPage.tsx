@@ -33,6 +33,7 @@ import {
 } from 'lucide-react';
 import { PhantomLogo, PhantomIconSvg } from '../common/PhantomLogo';
 import { EnterpriseQuoteModal } from '../modals/EnterpriseQuoteModal';
+import { UserProfile } from '@/types';
 
 interface LandingPageProps {
   onLaunchApp: () => void;
@@ -40,6 +41,7 @@ interface LandingPageProps {
   currentTheme?: string;
   onToggleTheme?: () => void;
   backendOnline?: boolean;
+  userProfile?: UserProfile | null;
 }
 
 export const LandingPage: React.FC<LandingPageProps> = ({
@@ -48,6 +50,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   currentTheme = 'theme-dark',
   onToggleTheme,
   backendOnline = true,
+  userProfile,
 }) => {
   const [activeCodeTab, setActiveCodeTab] = useState<'python' | 'typescript' | 'rust' | 'go' | 'cpp'>('python');
   const [isRunningCode, setIsRunningCode] = useState(false);
@@ -461,15 +464,36 @@ func main() {
               </button>
             )}
 
-            {/* Sign In button */}
-            {onOpenAuth && (
+            {/* User Profile or Sign In button */}
+            {userProfile?.authenticated ? (
+              <button
+                onClick={onLaunchApp}
+                className="flex items-center gap-2 py-1 px-2.5 rounded-full bg-zinc-900/90 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 transition-all text-xs cursor-pointer shadow-sm group"
+                title={userProfile.user.displayName || userProfile.user.email || 'User Account'}
+              >
+                {userProfile.user.pictureUrl ? (
+                  <img
+                    src={userProfile.user.pictureUrl}
+                    alt="Avatar"
+                    className="w-5 h-5 rounded-full object-cover border border-zinc-700"
+                  />
+                ) : (
+                  <div className="w-5 h-5 rounded-full bg-white text-black font-bold text-[10px] flex items-center justify-center">
+                    {(userProfile.user.displayName || userProfile.user.email || 'U')[0].toUpperCase()}
+                  </div>
+                )}
+                <span className="text-zinc-300 group-hover:text-white font-medium max-w-[120px] truncate text-xs">
+                  {userProfile.user.displayName || userProfile.user.email?.split('@')[0] || 'Account'}
+                </span>
+              </button>
+            ) : onOpenAuth ? (
               <button
                 onClick={onOpenAuth}
-                className="hidden sm:inline-flex text-xs font-medium text-zinc-300 hover:text-white px-3 py-1.5 rounded-lg hover:bg-zinc-800/60 transition-colors"
+                className="hidden sm:inline-flex text-xs font-medium text-zinc-300 hover:text-white px-3 py-1.5 rounded-lg hover:bg-zinc-800/60 transition-colors cursor-pointer"
               >
                 Sign In
               </button>
-            )}
+            ) : null}
 
             {/* Primary Launch App CTA */}
             <button

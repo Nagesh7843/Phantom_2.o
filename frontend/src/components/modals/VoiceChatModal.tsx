@@ -15,19 +15,28 @@ import { api } from '@/lib/api';
 interface VoiceChatModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onSaveVoiceExchange?: (
+    userText: string,
+    aiText: string,
+    sessionId?: string,
+    sessionTitle?: string
+  ) => void;
   onSendMessage?: (text: string) => Promise<void>;
   activeSessionId?: string;
   userVoice?: string;
   language?: string;
+  onSessionUpdated?: (sessionId: string, sessionTitle?: string) => void;
 }
 
 export const VoiceChatModal: React.FC<VoiceChatModalProps> = ({
   isOpen,
   onClose,
+  onSaveVoiceExchange,
   onSendMessage,
   activeSessionId,
   userVoice = '',
   language = 'en-US',
+  onSessionUpdated,
 }) => {
   const [voiceState, setVoiceState] = useState<'idle' | 'listening' | 'thinking' | 'speaking'>('idle');
   const [transcript, setTranscript] = useState('');
@@ -46,6 +55,13 @@ export const VoiceChatModal: React.FC<VoiceChatModalProps> = ({
   const accumulatedRef = useRef<string>('');
   const isOpenRef = useRef<boolean>(isOpen);
   const synthResumeTimerRef = useRef<any>(null);
+
+  // Fast sentence-streaming speech queue
+  const speechQueueRef = useRef<string[]>([]);
+  const isSpeakingQueueRef = useRef<boolean>(false);
+  const streamCompletedRef = useRef<boolean>(false);
+  const pendingBufferRef = useRef<string>('');
+  const activeUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
 
   useEffect(() => {
     voiceStateRef.current = voiceState;
@@ -106,6 +122,11 @@ export const VoiceChatModal: React.FC<VoiceChatModalProps> = ({
   }, [isOpen]);
 
   const stopSpeaking = () => {
+    speechQueueRef.current = [];
+    isSpeakingQueueRef.current = false;
+    streamCompletedRef.current = false;
+    pendingBufferRef.current = '';
+
     if (synthResumeTimerRef.current) {
       clearInterval(synthResumeTimerRef.current);
       synthResumeTimerRef.current = null;
@@ -307,14 +328,118 @@ export const VoiceChatModal: React.FC<VoiceChatModalProps> = ({
     }
   };
 
+  const processSpeechQueue = () => {
+    if (!isMountedRef.current || !isOpenRef.current) return;
+    if (isSpeakingQueueRef.current) return;
+
+    if (speechQueueRef.current.length === 0) {
+      if (streamCompletedRef.current) {
+        if (isMountedRef.current && isOpenRef.current) {
+          setVoiceState('idle');
+          voiceStateRef.current = 'idle';
+          setTimeout(() => {
+            if (isMountedRef.current && isOpenRef.current && voiceStateRef.current === 'idle') {
+              startListening();
+            }
+          }, 300);
+        }
+      }
+      return;
+    }
+
+    const nextSentence = speechQueueRef.current.shift();
+    if (!nextSentence) {
+      processSpeechQueue();
+      return;
+    }
+
+    const clean = nextSentence
+      .replace(/```[\s\S]*?```/g, '')
+      .replace(/`([^`]+)`/g, '$1')
+      .replace(/https?:\/\/\S+/g, '')
+      .replace(/[*#_~[\]()<>]/g, '')
+      .replace(/\n+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (!clean) {
+      processSpeechQueue();
+      return;
+    }
+
+    isSpeakingQueueRef.current = true;
+    setVoiceState('speaking');
+    voiceStateRef.current = 'speaking';
+
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+      isSpeakingQueueRef.current = false;
+      return;
+    }
+
+    try {
+      if (window.speechSynthesis.paused) {
+        window.speechSynthesis.resume();
+      }
+
+      const utterance = new SpeechSynthesisUtterance(clean);
+      activeUtteranceRef.current = utterance;
+      utterance.rate = 1.05;
+      utterance.pitch = 1.0;
+      utterance.lang = language || 'en-US';
+
+      const voices = window.speechSynthesis.getVoices();
+      if (userVoice && voices.length > 0) {
+        const match = voices.find((v) => v.name === userVoice);
+        if (match) utterance.voice = match;
+      } else if (voices.length > 0) {
+        const preferred =
+          voices.find(
+            (v) =>
+              (v.lang.startsWith('en') || v.lang === language) &&
+              (v.name.includes('Natural') ||
+                v.name.includes('Google') ||
+                v.name.includes('Neural') ||
+                v.name.includes('Online'))
+          ) || voices.find((v) => v.lang.startsWith('en') || v.lang === language);
+        if (preferred) utterance.voice = preferred;
+      }
+
+      utterance.onend = () => {
+        activeUtteranceRef.current = null;
+        isSpeakingQueueRef.current = false;
+        processSpeechQueue();
+      };
+
+      utterance.onerror = (e) => {
+        console.warn('Speech chunk note:', e);
+        activeUtteranceRef.current = null;
+        isSpeakingQueueRef.current = false;
+        processSpeechQueue();
+      };
+
+      window.speechSynthesis.speak(utterance);
+    } catch (err) {
+      console.warn('Speech synthesis error:', err);
+      activeUtteranceRef.current = null;
+      isSpeakingQueueRef.current = false;
+      processSpeechQueue();
+    }
+  };
+
   const handleSendVoicePrompt = async (promptText: string) => {
     if (!promptText.trim()) return;
 
+    stopSpeaking();
     stopListening();
     setVoiceState('thinking');
     voiceStateRef.current = 'thinking';
     setTranscript(promptText);
     setAiResponse('');
+
+    speechQueueRef.current = [];
+    isSpeakingQueueRef.current = false;
+    streamCompletedRef.current = false;
+    pendingBufferRef.current = '';
 
     try {
       let accumulatedAiText = '';
@@ -324,16 +449,45 @@ export const VoiceChatModal: React.FC<VoiceChatModalProps> = ({
           contents: [{ role: 'user', parts: [{ text: promptText }] }],
           session_id: activeSessionId,
           language_name: language,
+          is_voice_mode: true,
         },
-        (chunk: string) => {
+        (chunk: string, sId?: string, sTitle?: string) => {
+          if (!isMountedRef.current || !isOpenRef.current) return;
+          if (sId) onSessionUpdated?.(sId, sTitle);
           accumulatedAiText += chunk;
-          if (isMountedRef.current) {
-            setAiResponse(accumulatedAiText);
+          setAiResponse(accumulatedAiText);
+
+          // Real-time sentence parser for instant streaming speech
+          pendingBufferRef.current += chunk;
+          const sentenceRegex = /^([\s\S]*?[.?!:\n]+)(\s+[\s\S]*|$)/;
+          let match = pendingBufferRef.current.match(sentenceRegex);
+          while (match) {
+            const sentence = match[1].trim();
+            pendingBufferRef.current = match[2] ? match[2].trimStart() : '';
+            if (sentence) {
+              speechQueueRef.current.push(sentence);
+              if (!isSpeakingQueueRef.current) {
+                processSpeechQueue();
+              }
+            }
+            match = pendingBufferRef.current.match(sentenceRegex);
           }
         },
-        () => {
-          if (isMountedRef.current && isOpenRef.current) {
-            speakAiResponse(accumulatedAiText);
+        (sId?: string, sTitle?: string) => {
+          if (!isMountedRef.current || !isOpenRef.current) return;
+          streamCompletedRef.current = true;
+          const leftover = pendingBufferRef.current.trim();
+          pendingBufferRef.current = '';
+          if (leftover) {
+            speechQueueRef.current.push(leftover);
+          }
+          if (!isSpeakingQueueRef.current) {
+            processSpeechQueue();
+          }
+
+          // Persist the voice conversation into the active chat session
+          if (accumulatedAiText.trim()) {
+            onSaveVoiceExchange?.(promptText, accumulatedAiText.trim(), sId, sTitle);
           }
         },
         (err: string) => {
@@ -351,124 +505,6 @@ export const VoiceChatModal: React.FC<VoiceChatModalProps> = ({
         voiceStateRef.current = 'idle';
       }
     }
-  };
-
-  const speakAiResponse = (rawText: string) => {
-    if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
-      setVoiceState('idle');
-      voiceStateRef.current = 'idle';
-      return;
-    }
-
-    setVoiceState('speaking');
-    voiceStateRef.current = 'speaking';
-    stopSpeaking();
-
-    const clean = rawText
-      .replace(/```[\s\S]*?```/g, 'Code snippet provided.')
-      .replace(/`([^`]+)`/g, '$1')
-      .replace(/https?:\/\/\S+/g, '')
-      .replace(/[*#_~[\]()<>]/g, '')
-      .replace(/\n+/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-
-    if (!clean) {
-      setVoiceState('idle');
-      voiceStateRef.current = 'idle';
-      if (isMountedRef.current && isOpenRef.current) {
-        startListening();
-      }
-      return;
-    }
-
-    setTimeout(() => {
-      if (!isMountedRef.current || !isOpenRef.current) return;
-
-      try {
-        window.speechSynthesis.cancel();
-        if (window.speechSynthesis.paused) {
-          window.speechSynthesis.resume();
-        }
-
-        const utterance = new SpeechSynthesisUtterance(clean);
-        utterance.rate = 1.0;
-        utterance.pitch = 1.0;
-        utterance.lang = language || 'en-US';
-
-        const voices = window.speechSynthesis.getVoices();
-        if (userVoice && voices.length > 0) {
-          const match = voices.find((v) => v.name === userVoice);
-          if (match) utterance.voice = match;
-        } else if (voices.length > 0) {
-          const preferred =
-            voices.find(
-              (v) =>
-                (v.lang.startsWith('en') || v.lang === language) &&
-                (v.name.includes('Natural') ||
-                  v.name.includes('Google') ||
-                  v.name.includes('Neural') ||
-                  v.name.includes('Online'))
-            ) || voices.find((v) => v.lang.startsWith('en') || v.lang === language);
-          if (preferred) utterance.voice = preferred;
-        }
-
-        synthResumeTimerRef.current = setInterval(() => {
-          if (!window.speechSynthesis.speaking) {
-            if (synthResumeTimerRef.current) {
-              clearInterval(synthResumeTimerRef.current);
-              synthResumeTimerRef.current = null;
-            }
-          } else {
-            window.speechSynthesis.pause();
-            window.speechSynthesis.resume();
-          }
-        }, 10000);
-
-        utterance.onend = () => {
-          if (synthResumeTimerRef.current) {
-            clearInterval(synthResumeTimerRef.current);
-            synthResumeTimerRef.current = null;
-          }
-          if (isMountedRef.current) {
-            setVoiceState('idle');
-            voiceStateRef.current = 'idle';
-            if (isOpenRef.current) {
-              setTimeout(() => {
-                if (isMountedRef.current && isOpenRef.current) {
-                  startListening();
-                }
-              }, 300);
-            }
-          }
-        };
-
-        utterance.onerror = (e) => {
-          if (synthResumeTimerRef.current) {
-            clearInterval(synthResumeTimerRef.current);
-            synthResumeTimerRef.current = null;
-          }
-          console.warn('Speech error:', e);
-          if (isMountedRef.current) {
-            setVoiceState('idle');
-            voiceStateRef.current = 'idle';
-            if (isOpenRef.current) {
-              setTimeout(() => {
-                if (isMountedRef.current && isOpenRef.current) {
-                  startListening();
-                }
-              }, 300);
-            }
-          }
-        };
-
-        window.speechSynthesis.speak(utterance);
-      } catch (err) {
-        console.warn('Speech synthesis error:', err);
-        setVoiceState('idle');
-        voiceStateRef.current = 'idle';
-      }
-    }, 50);
   };
 
   if (!isOpen) return null;

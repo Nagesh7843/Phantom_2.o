@@ -170,6 +170,7 @@ export const api = {
       session_id?: string | null;
       language_name?: string;
       plugins?: Record<string, boolean>;
+      is_voice_mode?: boolean;
     },
     onChunk: (chunk: string, sessionId?: string, sessionTitle?: string) => void,
     onDone: (sessionId?: string, sessionTitle?: string, searchMetadata?: any) => void,

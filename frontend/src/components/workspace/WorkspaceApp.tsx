@@ -157,6 +157,10 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ onNavigateHome }) =>
         const cached = sessionStorage.getItem('phantom_active_session');
         if (cached && data.sessions.some((s) => s.session_id === cached)) {
           handleSelectSession(cached);
+        } else if (data.sessions.length > 0) {
+          handleSelectSession(data.sessions[0].session_id);
+        } else {
+          handleNewChat();
         }
       }
     } catch {
@@ -262,6 +266,44 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ onNavigateHome }) =>
       reader.onerror = reject;
       reader.readAsText(file);
     });
+  };
+
+  const handleSaveVoiceExchange = (
+    userText: string,
+    aiText: string,
+    sessionId?: string,
+    sessionTitle?: string
+  ) => {
+    if (!userText.trim() || !aiText.trim()) return;
+
+    if (sessionId && sessionId !== activeSessionId) {
+      setActiveSessionId(sessionId);
+      sessionStorage.setItem('phantom_active_session', sessionId);
+    }
+    if (sessionTitle) {
+      setSessions((prev) =>
+        prev.map((s) =>
+          s.session_id === (sessionId || activeSessionId)
+            ? { ...s, title: sessionTitle }
+            : s
+        )
+      );
+    }
+
+    const userMsg: ChatMessage = {
+      id: `user_voice_${Date.now()}`,
+      role: 'user',
+      parts: [{ text: userText }],
+      timestamp: new Date().toISOString(),
+    };
+    const modelMsg: ChatMessage = {
+      id: `model_voice_${Date.now() + 1}`,
+      role: 'model',
+      parts: [{ text: aiText }],
+      timestamp: new Date().toISOString(),
+    };
+
+    setMessages((prev) => [...prev, userMsg, modelMsg]);
   };
 
   // Send Message & Real-Time SSE Streaming
@@ -694,12 +736,26 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ onNavigateHome }) =>
       <VoiceChatModal
         isOpen={voiceModeOpen}
         onClose={() => setVoiceModeOpen(false)}
+        onSaveVoiceExchange={handleSaveVoiceExchange}
         onSendMessage={async (prompt) => {
           handleSendMessage(prompt);
         }}
         activeSessionId={activeSessionId || undefined}
         userVoice={settings.voice}
         language={settings.language}
+        onSessionUpdated={(sId, sTitle) => {
+          if (sId && sId !== activeSessionId) {
+            setActiveSessionId(sId);
+            sessionStorage.setItem('phantom_active_session', sId);
+          }
+          if (sTitle) {
+            setSessions((prev) =>
+              prev.map((s) =>
+                s.session_id === (sId || activeSessionId) ? { ...s, title: sTitle } : s
+              )
+            );
+          }
+        }}
       />
     </div>
   );

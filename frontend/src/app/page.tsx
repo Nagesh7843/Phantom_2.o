@@ -5,6 +5,7 @@ import { LandingPage } from '@/components/landing/LandingPage';
 import { WorkspaceApp } from '@/components/workspace/WorkspaceApp';
 import { AuthModal } from '@/components/modals/AuthModal';
 import { UserProfile } from '@/types';
+import { api } from '@/lib/api';
 
 export default function Home() {
   const [view, setView] = useState<'landing' | 'app'>('landing');
@@ -38,6 +39,15 @@ export default function Home() {
       }
     };
     checkHealth();
+
+    // 4. Load Current User Profile
+    const loadProfile = async () => {
+      try {
+        const prof = await api.getUserProfile();
+        if (prof) setUserProfile(prof);
+      } catch {}
+    };
+    loadProfile();
   }, []);
 
   const handleToggleTheme = () => {
@@ -70,6 +80,7 @@ export default function Home() {
         currentTheme={theme}
         onToggleTheme={handleToggleTheme}
         backendOnline={backendOnline}
+        userProfile={userProfile}
       />
 
       <AuthModal
