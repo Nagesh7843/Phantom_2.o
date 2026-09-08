@@ -83,10 +83,79 @@ export const api = {
     });
   },
 
+  togglePinSession: async (
+    sessionId: string,
+    isPinned?: boolean
+  ): Promise<{ message: string; session_id: string; is_pinned: boolean }> => {
+    return request<{ message: string; session_id: string; is_pinned: boolean }>(
+      `/api/session/${sessionId}/pin`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ is_pinned: isPinned }),
+      }
+    );
+  },
+
+  // Subscription & Billing Management
+  getSubscription: async (): Promise<any> => {
+    return request<any>('/api/user/subscription');
+  },
+
+  upgradeSubscription: async (tier: string, paymentInfo?: any): Promise<any> => {
+    return request<any>('/api/user/subscription/upgrade', {
+      method: 'POST',
+      body: JSON.stringify({ tier, ...paymentInfo }),
+    });
+  },
+
+  cancelSubscription: async (): Promise<any> => {
+    return request<any>('/api/user/subscription/cancel', {
+      method: 'POST',
+    });
+  },
+
+  // Scheduled Tasks API
+  getScheduledTasks: async (): Promise<{ tasks: any[] }> => {
+    return request<{ tasks: any[] }>('/api/scheduled/tasks');
+  },
+
+  saveScheduledTask: async (task: any): Promise<{ success: boolean; task_id: string }> => {
+    return request<{ success: boolean; task_id: string }>('/api/scheduled/tasks', {
+      method: 'POST',
+      body: JSON.stringify(task),
+    });
+  },
+
+  deleteScheduledTask: async (taskId: string): Promise<{ success: boolean }> => {
+    return request<{ success: boolean }>(`/api/scheduled/tasks/${taskId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  // Developer Plugins API
+  getPlugins: async (): Promise<{ plugins: Record<string, boolean> }> => {
+    return request<{ plugins: Record<string, boolean> }>('/api/plugins');
+  },
+
+  savePlugins: async (plugins: Record<string, boolean>): Promise<{ success: boolean }> => {
+    return request<{ success: boolean }>('/api/plugins', {
+      method: 'PUT',
+      body: JSON.stringify(plugins),
+    });
+  },
+
+  directWebSearch: async (query: string): Promise<any> => {
+    return request<any>('/api/plugins/web_search', {
+      method: 'POST',
+      body: JSON.stringify({ query }),
+    });
+  },
+
   sendMessage: async (payload: {
     contents: any[];
     session_id?: string | null;
     language_name?: string;
+    plugins?: Record<string, boolean>;
   }) => {
     return request<any>('/api/chat', {
       method: 'POST',
@@ -96,10 +165,16 @@ export const api = {
 
   // Streaming AI completions via Server-Sent Events (SSE)
   streamChat: async (
-    payload: { contents: any[]; session_id?: string | null },
-    onChunk: (chunk: string, sessionId?: string) => void,
-    onDone: (sessionId?: string) => void,
-    onError: (err: string) => void
+    payload: {
+      contents: any[];
+      session_id?: string | null;
+      language_name?: string;
+      plugins?: Record<string, boolean>;
+    },
+    onChunk: (chunk: string, sessionId?: string, sessionTitle?: string) => void,
+    onDone: (sessionId?: string, sessionTitle?: string, searchMetadata?: any) => void,
+    onError: (err: string) => void,
+    onSearchMetadata?: (metadata: any) => void
   ) => {
     try {
       const response = await fetch('/api/chat/stream', {
@@ -117,7 +192,7 @@ export const api = {
           standardResp?.error?.message ||
           'Could not retrieve answer.';
         onChunk(text);
-        onDone(payload.session_id || undefined);
+        onDone(payload.session_id || undefined, standardResp?.session_title);
         return;
       }
 
@@ -125,6 +200,8 @@ export const api = {
       const decoder = new TextDecoder('utf-8');
       let buffer = '';
       let activeSessionId = payload.session_id || undefined;
+      let activeSessionTitle: string | undefined = undefined;
+      let activeSearchMetadata: any = null;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -140,11 +217,16 @@ export const api = {
             try {
               const data = JSON.parse(trimmed.slice(6));
               if (data.session_id) activeSessionId = data.session_id;
+              if (data.session_title) activeSessionTitle = data.session_title;
+              if (data.search_metadata) {
+                activeSearchMetadata = data.search_metadata;
+                onSearchMetadata?.(data.search_metadata);
+              }
               if (data.chunk) {
-                onChunk(data.chunk, activeSessionId);
+                onChunk(data.chunk, activeSessionId, activeSessionTitle);
               }
               if (data.done) {
-                onDone(activeSessionId);
+                onDone(activeSessionId, activeSessionTitle, activeSearchMetadata);
               }
             } catch (jsonErr) {
               console.warn('SSE parsing error', jsonErr);
@@ -152,7 +234,7 @@ export const api = {
           }
         }
       }
-      onDone(activeSessionId);
+      onDone(activeSessionId, activeSessionTitle, activeSearchMetadata);
     } catch (e: any) {
       onError(e.message || 'Stream connection error');
     }

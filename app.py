@@ -35,6 +35,64 @@ except Exception as _dbe:
     db_layer = None
     print(f"[NOTE] Database layer import note: {_dbe}")
 
+try:
+    import search_engine
+except Exception as _se:
+    search_engine = None
+    print(f"[NOTE] Search engine module note: {_se}")
+
+def generate_smart_session_title(prompt: str) -> str:
+    """
+    Generate a concise, professional 4 to 5 word summary title for a chat session
+    based on the user's initial question or prompt.
+    """
+    if not prompt or not prompt.strip():
+        return "New Chat Session"
+    
+    clean = prompt.strip()
+    
+    # 1. Clean boilerplate prefixes
+    prefixes_to_strip = [
+        r'^(can you|could you|please|kindly|i want you to|i need you to|help me with|help me|tell me about|tell me|explain to me|explain how to|explain|how to|how do i|how can i|what is the|what are the|write a|create a|implement a|generate a|give me a|give me|show me)\s+',
+        r'^(can|could|please|hey|hello|hi|phantom|bot|ai)\s+',
+        r'^(in python|in javascript|in react|in rust|in cpp|in c\+\+|in go|in java|in sql)\s+'
+    ]
+    for pattern in prefixes_to_strip:
+        clean = re.sub(pattern, '', clean, flags=re.IGNORECASE).strip()
+    
+    cleaned_words = re.findall(r'[a-zA-Z0-9\+\#\.\-]+', clean)
+    
+    stopwords = {'a', 'an', 'the', 'and', 'or', 'of', 'in', 'on', 'at', 'to', 'for', 'with', 'by', 'about', 'like', 'through', 'over', 'before', 'between', 'after', 'since', 'without', 'under', 'within', 'along', 'following', 'across', 'behind', 'beyond', 'plus', 'except', 'but', 'up', 'out', 'around', 'down', 'off', 'above', 'near', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'do', 'does', 'did'}
+    
+    meaningful_words = [w for w in cleaned_words if w.lower() not in stopwords]
+    
+    if len(meaningful_words) >= 4:
+        selected_words = meaningful_words[:5]
+    elif len(cleaned_words) >= 4:
+        selected_words = cleaned_words[:5]
+    elif meaningful_words:
+        selected_words = meaningful_words
+    else:
+        selected_words = cleaned_words[:5]
+        
+    if not selected_words:
+        return "General Inquiry"
+        
+    formatted = []
+    for w in selected_words:
+        w_up = w.upper()
+        if w_up in ['AI', 'API', 'UI', 'UX', 'CSS', 'HTML', 'SQL', 'JWT', 'REST', 'SDK', 'LLM', 'DB', 'OS', 'FCM', 'SSE']:
+            formatted.append(w_up)
+        elif w.lower() in ['c++', 'c#', '.net']:
+            formatted.append(w.upper())
+        else:
+            formatted.append(w.capitalize())
+            
+    title = " ".join(formatted).strip()
+    if len(title) > 38:
+        title = title[:38].rstrip()
+    return title if title else "New Chat Session"
+
 
 app = Flask(__name__,
             template_folder='templates',
@@ -1116,14 +1174,16 @@ def get_all_sessions():
             user_id_obj = ObjectId(user_id) if (user_id and ObjectId.is_valid(user_id)) else user_id
             sessions_cursor = chat_sessions_collection.find(
                 {'$or': [{'user_id': user_id}, {'user_id': str(user_id)}, {'user_id': user_id_obj}]}
-            ).sort('last_updated', -1)
+            ).sort([('is_pinned', -1), ('last_updated', -1)])
             
             for s in sessions_cursor:
                 session_title = s.get('title', 'New Chat Session')
+                last_up = s.get('last_updated', s.get('created_at', datetime.now(timezone.utc)))
                 all_sessions.append({
                     "session_id": str(s['_id']),
                     "title": session_title,
-                    "last_updated": s.get('last_updated', s.get('created_at', datetime.now(timezone.utc))).isoformat()
+                    "is_pinned": bool(s.get('is_pinned', False)),
+                    "last_updated": last_up.isoformat() if hasattr(last_up, 'isoformat') else str(last_up)
                 })
         
         return jsonify({"sessions": all_sessions}), 200
@@ -1239,6 +1299,51 @@ def chat_stream_api():
             except Exception as e:
                 app.logger.warning(f"Failed to save user message: {e}")
 
+    # Check and generate smart session title if this is a new/default session
+    smart_session_title = None
+    if current_session_id and new_user_message_content.strip():
+        try:
+            needs_title = False
+            if db_layer:
+                all_s = db_layer.get_all_sessions(user_id)
+                for s in all_s:
+                    if s.get('session_id') == current_session_id:
+                        if s.get('title') in ["New Chat Session", "Untitled Session", ""]:
+                            needs_title = True
+                        break
+            if not needs_title and chat_sessions_collection is not None:
+                session_id_obj = ObjectId(current_session_id) if ObjectId.is_valid(current_session_id) else current_session_id
+                s_doc = chat_sessions_collection.find_one({'_id': session_id_obj})
+                if s_doc and s_doc.get('title') in ["New Chat Session", "Untitled Session", ""]:
+                    needs_title = True
+
+            if needs_title:
+                smart_session_title = generate_smart_session_title(new_user_message_content.strip())
+                if db_layer:
+                    db_layer.rename_session(current_session_id, user_id, smart_session_title)
+                if chat_sessions_collection is not None:
+                    session_id_obj = ObjectId(current_session_id) if ObjectId.is_valid(current_session_id) else current_session_id
+                    chat_sessions_collection.update_one(
+                        {'_id': session_id_obj},
+                        {'$set': {'title': smart_session_title, 'last_updated': datetime.now(timezone.utc)}}
+                    )
+        except Exception as _ste:
+            app.logger.warning(f"Error evaluating smart session title: {_ste}")
+
+    # Real-Time Web Search Plugin & Precision Context Injection
+    plugins_payload = client_payload.get('plugins', {})
+    web_search_active = bool(plugins_payload.get('web_search', False))
+    search_context_text = ""
+    search_citations = []
+
+    if web_search_active and search_engine and new_user_message_content.strip():
+        try:
+            search_res = search_engine.perform_live_web_search(new_user_message_content.strip(), max_results=5)
+            search_context_text = search_res.get('context_text', '')
+            search_citations = search_res.get('results', [])
+        except Exception as _se_err:
+            app.logger.warning(f"Real-time web search execution error: {_se_err}")
+
     # Detect image generation queries
     is_img, clean_subject = is_image_generation_request(new_user_message_content)
     if is_img:
@@ -1265,15 +1370,16 @@ def chat_stream_api():
                 except Exception:
                     pass
 
-            yield f"data: {json.dumps({'chunk': markdown_img, 'session_id': current_session_id})}\n\n"
-            yield f"data: {json.dumps({'done': True, 'session_id': current_session_id})}\n\n"
+            yield f"data: {json.dumps({'chunk': markdown_img, 'session_id': current_session_id, 'session_title': smart_session_title})}\n\n"
+            yield f"data: {json.dumps({'done': True, 'session_id': current_session_id, 'session_title': smart_session_title})}\n\n"
 
         return Response(generate_image_stream(), mimetype='text/event-stream')
 
-    instruction_text = """
-You are Phantom_2.o, an advanced AI assistant.
-Your answers must always be well-structured, clear, and professional, similar to ChatGPT's response style. 
-Do not use any special formatting characters like '*', '#', or extra placeholders. Do not repeat your name in your responses.
+    instruction_text = f"""
+You are Phantom_2.o, an advanced AI assistant with real-time intelligence.
+Your answers must always be well-structured, clear, precise, and professional, similar to ChatGPT's response style. 
+Do not use special formatting characters like '*' or '#' in titles. Do not repeat your name in your responses.
+{f"REAL-TIME WEB SEARCH ENGINE ACTIVE (HIGH PRECISION MODE):\n{search_context_text}\nInstructions: The above citations are retrieved live from the web right now. Use these facts, links, and data to deliver an extremely factual, accurate, and up-to-date answer. Cite URLs where relevant." if search_context_text else ""}
 1. Begin with a short introduction or summary relevant to the user's query.
 2. Present explanations in clean paragraphs with clear flow.
 3. When listing items or steps, use plain numbering (1, 2, 3...) or dashes (-).
@@ -1286,6 +1392,9 @@ Do not use any special formatting characters like '*', '#', or extra placeholder
 
     def event_stream():
         full_response_accumulated = []
+        if search_citations:
+            yield f"data: {json.dumps({'search_metadata': {'enabled': True, 'query': new_user_message_content.strip()[:60], 'citations': search_citations}, 'session_id': current_session_id, 'session_title': smart_session_title})}\n\n"
+
         try:
             stream_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse&key={GEMINI_API_KEY}"
             resp = requests.post(stream_url, json=gemini_payload, stream=True, timeout=25)
@@ -1302,7 +1411,7 @@ Do not use any special formatting characters like '*', '#', or extra placeholder
                                 if parts and parts[0].get('text'):
                                     text_chunk = parts[0]['text']
                                     full_response_accumulated.append(text_chunk)
-                                    yield f"data: {json.dumps({'chunk': text_chunk, 'session_id': current_session_id})}\n\n"
+                                    yield f"data: {json.dumps({'chunk': text_chunk, 'session_id': current_session_id, 'session_title': smart_session_title})}\n\n"
                         except Exception:
                             continue
             else:
@@ -1311,15 +1420,15 @@ Do not use any special formatting characters like '*', '#', or extra placeholder
                     fb_json = fallback_resp.json()
                     fb_text = _extract_text_from_provider(fb_json, 'gemini') or "No response"
                     full_response_accumulated.append(fb_text)
-                    yield f"data: {json.dumps({'chunk': fb_text, 'session_id': current_session_id})}\n\n"
+                    yield f"data: {json.dumps({'chunk': fb_text, 'session_id': current_session_id, 'session_title': smart_session_title})}\n\n"
                 else:
                     err_msg = "AI service temporarily unavailable. Please try again."
-                    yield f"data: {json.dumps({'chunk': err_msg, 'session_id': current_session_id})}\n\n"
+                    yield f"data: {json.dumps({'chunk': err_msg, 'session_id': current_session_id, 'session_title': smart_session_title})}\n\n"
 
         except Exception as e:
             app.logger.error(f"Stream error: {e}")
             err_msg = f"Error during streaming: {str(e)}"
-            yield f"data: {json.dumps({'chunk': err_msg, 'session_id': current_session_id})}\n\n"
+            yield f"data: {json.dumps({'chunk': err_msg, 'session_id': current_session_id, 'session_title': smart_session_title})}\n\n"
 
         final_text = "".join(full_response_accumulated).strip()
         if final_text:
@@ -1342,7 +1451,7 @@ Do not use any special formatting characters like '*', '#', or extra placeholder
                 except Exception as e:
                     app.logger.error(f"Failed to save streamed response to DB: {e}")
 
-        yield f"data: {json.dumps({'done': True, 'session_id': current_session_id})}\n\n"
+        yield f"data: {json.dumps({'done': True, 'session_id': current_session_id, 'session_title': smart_session_title})}\n\n"
 
     return Response(event_stream(), mimetype='text/event-stream')
 
@@ -1409,13 +1518,19 @@ def chat_api():
                     new_user_message_content += cleaned + " "
 
                 elif 'inlineData' in part and 'data' in part['inlineData']:
-                    mime_type = part['inlineData']['mimeType']
-                    data = part['inlineData']['data']
-                    if not mime_type.startswith('image/'):
-                        return jsonify({"error": {"message": "Unsupported inline data type. Only images are allowed."}}), 400
-                    if len(data) * 0.75 / (1024 * 1024) > 5:
-                        return jsonify({"error": {"message": "Image size exceeds 5MB limit."}}), 413
-                    new_user_message_content += "[Image Data] "
+                    mime_type = part['inlineData'].get('mimeType', '')
+                    data = part['inlineData'].get('data', '')
+                    if mime_type.startswith('image/'):
+                        if len(data) * 0.75 / (1024 * 1024) > 5:
+                            return jsonify({"error": {"message": "Image size exceeds 5MB limit."}}), 413
+                        new_user_message_content += "[Image Data] "
+                    else:
+                        try:
+                            import base64
+                            decoded_doc = base64.b64decode(data).decode('utf-8', errors='ignore')
+                            new_user_message_content += f"\n\n[Attached Document Content]:\n{decoded_doc}\n"
+                        except Exception:
+                            new_user_message_content += "[Attached Document] "
 
         if new_user_message_content.strip():
             if db_layer:
@@ -1590,6 +1705,114 @@ def manage_session(session_id):
     return jsonify({"error": "Method not allowed."}), 405
 
 
+# --- PIN / UNPIN CHAT SESSION API ---
+@app.route('/api/session/<session_id>/pin', methods=['POST'])
+def pin_session_api(session_id):
+    user_id = get_current_user_id() or session.get('guest_id', 'guest_default')
+    data = request.get_json(silent=True) or {}
+    is_pinned_val = data.get('is_pinned')
+
+    try:
+        new_pinned_state = False
+        if db_layer:
+            new_pinned_state = db_layer.toggle_pin_session(session_id, user_id, is_pinned_val)
+
+        if chat_sessions_collection is not None:
+            session_id_obj = ObjectId(session_id) if ObjectId.is_valid(session_id) else session_id
+            if is_pinned_val is not None:
+                new_pinned_state = bool(is_pinned_val)
+            else:
+                existing = chat_sessions_collection.find_one({'_id': session_id_obj})
+                new_pinned_state = not bool(existing.get('is_pinned', False)) if existing else True
+            chat_sessions_collection.update_one(
+                {'_id': session_id_obj},
+                {'$set': {'is_pinned': new_pinned_state, 'last_updated': datetime.now(timezone.utc)}}
+            )
+
+        return jsonify({
+            "message": "Pin status updated successfully.",
+            "session_id": session_id,
+            "is_pinned": new_pinned_state
+        }), 200
+    except Exception as e:
+        app.logger.error(f"Error toggling pin on session {session_id}: {e}", exc_info=True)
+        return jsonify({"error": "Failed to update pin status."}), 500
+
+
+# --- SUBSCRIPTION & BILLING APIS ---
+@app.route('/api/user/subscription', methods=['GET'])
+def get_user_subscription_api():
+    user_id = get_current_user_id() or session.get('guest_id', 'guest_default')
+    
+    if db_layer:
+        sub_data = db_layer.get_user_subscription(user_id)
+        return jsonify(sub_data), 200
+    
+    return jsonify({
+        "tier": "pro",
+        "plan": {
+            "id": "pro",
+            "name": "Phantom 2.0 Pro Developer",
+            "price": "$50",
+            "period": "/ month",
+            "badge": "Enterprise",
+            "features": [
+                "Unlimited AI chat & reasoning models",
+                "Unlimited multi-language code compilation (30+ langs)",
+                "Ultra 4K UHD image generation",
+                "Full PostgreSQL Enterprise persistence"
+            ]
+        },
+        "all_plans": {},
+        "usage": {
+            "messages_today": 0,
+            "messages_limit": 999999,
+            "compilations_today": 0,
+            "compilations_limit": 999999,
+            "is_unlimited": True
+        },
+        "invoices": [],
+        "status": "active"
+    }), 200
+
+
+@app.route('/api/user/subscription/upgrade', methods=['POST'])
+def upgrade_subscription_api():
+    user_id = get_current_user_id() or session.get('guest_id', 'guest_default')
+    data = request.get_json(silent=True) or {}
+    tier = (data.get('tier') or 'pro').lower().strip()
+    
+    if db_layer:
+        success = db_layer.update_user_subscription(user_id, tier, data)
+        if success:
+            sub_data = db_layer.get_user_subscription(user_id)
+            return jsonify({
+                "success": True,
+                "message": f"Successfully updated plan to {tier.capitalize()}!",
+                "subscription": sub_data
+            }), 200
+        else:
+            return jsonify({"error": "Invalid plan tier requested."}), 400
+            
+    return jsonify({"success": True, "tier": tier}), 200
+
+
+@app.route('/api/user/subscription/cancel', methods=['POST'])
+def cancel_subscription_api():
+    user_id = get_current_user_id() or session.get('guest_id', 'guest_default')
+    
+    if db_layer:
+        db_layer.update_user_subscription(user_id, 'free')
+        sub_data = db_layer.get_user_subscription(user_id)
+        return jsonify({
+            "success": True,
+            "message": "Subscription cancelled. Reverted to Phantom Free.",
+            "subscription": sub_data
+        }), 200
+    
+    return jsonify({"success": True, "tier": "free"}), 200
+
+
 # --- NEW: API for Image Generation ---
 @app.route('/api/generate_image', methods=['POST'])
 def generate_image_api():
@@ -1602,6 +1825,12 @@ def generate_image_api():
         return jsonify({"error": "Prompt is required."}), 400
 
     image_url, enhanced_prompt = generate_image_with_hf_or_fallback(user_prompt)
+
+    if db_layer:
+        try:
+            db_layer.save_user_image(user_id, session_id, user_prompt, enhanced_prompt, image_url)
+        except Exception as _ie:
+            app.logger.warning(f"Failed to save image to DB layer: {_ie}")
 
     if mongo_db is not None and session_id:
         try:
@@ -1626,6 +1855,15 @@ def generate_image_api():
     }), 200
 
 
+@app.route('/api/images', methods=['GET'])
+def get_images_api():
+    user_id = get_current_user_id() or session.get('guest_id', 'guest_default')
+    images = []
+    if db_layer:
+        images = db_layer.get_user_images(user_id)
+    return jsonify({"images": images}), 200
+
+
 # --- NEW: Health Check Endpoint ---
 @app.route('/api/health', methods=['GET'])
 def health_check():
@@ -1639,6 +1877,125 @@ def health_check():
         "ai": ai_status,
         "timestamp": datetime.now(timezone.utc).isoformat()
     }), 200
+
+
+# --- SCHEDULED TASKS & CRON AUTOMATION APIS ---
+@app.route('/api/scheduled/tasks', methods=['GET', 'POST'])
+def manage_scheduled_tasks():
+    user_id = get_current_user_id() or session.get('guest_id', 'guest_default')
+
+    if request.method == 'GET':
+        tasks = []
+        if db_layer:
+            tasks = db_layer.get_scheduled_tasks(user_id)
+        return jsonify({"tasks": tasks}), 200
+
+    if request.method == 'POST':
+        data = request.get_json(silent=True) or {}
+        if not data.get('name') or not data.get('prompt'):
+            return jsonify({"error": "Task name and prompt are required."}), 400
+
+        task_id = None
+        if db_layer:
+            task_id = db_layer.save_scheduled_task(data, user_id)
+
+        return jsonify({
+            "success": True,
+            "message": "Scheduled task saved successfully.",
+            "task_id": task_id
+        }), 201
+
+
+@app.route('/api/scheduled/tasks/<task_id>', methods=['PUT', 'DELETE'])
+def manage_single_scheduled_task(task_id):
+    user_id = get_current_user_id() or session.get('guest_id', 'guest_default')
+
+    if request.method == 'DELETE':
+        if db_layer:
+            db_layer.delete_scheduled_task(task_id, user_id)
+        return jsonify({"success": True, "message": "Scheduled task deleted."}), 200
+
+    if request.method == 'PUT':
+        data = request.get_json(silent=True) or {}
+        if 'active' in data:
+            if db_layer:
+                db_layer.toggle_scheduled_task(task_id, user_id, data['active'], data.get('nextRun') or data.get('next_run'))
+        else:
+            if db_layer:
+                data['id'] = task_id
+                db_layer.save_scheduled_task(data, user_id)
+
+        return jsonify({"success": True, "message": "Scheduled task updated."}), 200
+
+
+# --- REAL-TIME FMC & WEB PUSH NOTIFICATION DISPATCH API ---
+@app.route('/api/notifications/push', methods=['POST'])
+def dispatch_push_notification_api():
+    user_id = get_current_user_id() or session.get('guest_id', 'guest_default')
+    data = request.get_json(silent=True) or {}
+    
+    title = data.get('title', 'Phantom AI Notification')
+    body = data.get('body', 'Scheduled trigger completed.')
+    icon = data.get('icon', '/favicon.ico')
+    tag = data.get('tag', 'phantom-alert')
+    payload = data.get('data', {})
+
+    app.logger.info(f"[PUSH NOTIFICATION] Dispatched to {user_id}: '{title}' - {body}")
+
+    return jsonify({
+        "success": True,
+        "message": "Web push notification registered and dispatched successfully.",
+        "delivered_at": datetime.now(timezone.utc).isoformat(),
+        "notification": {
+            "title": title,
+            "body": body,
+            "icon": icon,
+            "tag": tag,
+            "data": payload
+        }
+    }), 200
+
+
+# --- DEVELOPER PLUGINS API ---
+@app.route('/api/plugins', methods=['GET', 'PUT'])
+def manage_plugins_api():
+    user_id = get_current_user_id() or session.get('guest_id', 'guest_default')
+
+    if request.method == 'GET':
+        plugins = None
+        if db_layer:
+            plugins = db_layer.get_user_plugins(user_id)
+        if not plugins:
+            plugins = {
+                "web_search": True,
+                "compiler_engine": True,
+                "postgres_sync": True,
+                "image_studio": True,
+                "speech_voice": True,
+                "sandbox_safety": True
+            }
+        return jsonify({"plugins": plugins}), 200
+
+    if request.method == 'PUT':
+        data = request.get_json(silent=True) or {}
+        if db_layer:
+            db_layer.save_user_plugins(user_id, data)
+        return jsonify({"success": True, "message": "Plugin settings saved.", "plugins": data}), 200
+
+
+@app.route('/api/plugins/web_search', methods=['POST'])
+def direct_web_search_api():
+    data = request.get_json(silent=True) or {}
+    query = data.get('query', '').strip()
+    if not query:
+        return jsonify({"error": "Query parameter is required."}), 400
+
+    if search_engine:
+        results = search_engine.perform_live_web_search(query, max_results=data.get('max_results', 5))
+        return jsonify(results), 200
+    else:
+        return jsonify({"error": "Search engine module unavailable."}), 503
+
 
 
 # --- NEW: Subscription Integration (Sketch) ---
@@ -2022,6 +2379,17 @@ def manage_single_project(project_id):
 @app.route('/api/run_code', methods=['POST'])
 def run_code():
     """Compiles and executes multi-language code snippets securely in an isolated temp environment."""
+    user_id = get_current_user_id() or session.get('guest_id', 'guest_default')
+    if db_layer:
+        allowed, current, limit, tier = db_layer.check_and_increment_usage(user_id, 'compile')
+        if not allowed:
+            return jsonify({
+                'success': False,
+                'output': f"⚠️ Daily compilation limit exceeded for your Phantom {tier.capitalize()} plan ({current}/{limit}).\nUpgrade to Plus or Pro in Settings -> Billing for unlimited high-speed compilation.",
+                'error': f"Compilation quota reached ({current}/{limit}).",
+                'quota_exceeded': True
+            }), 429
+
     data = request.get_json(silent=True) or {}
     code = data.get('code')
     language = (data.get('language') or '').lower().strip()
@@ -2085,9 +2453,10 @@ def run_code():
         proc_key = session.get('user', {}).get('email') or request.remote_addr
         try:
             flags = 0x08000000 if os.name == 'nt' else 0
+            effective_input = input_data if input_data is not None else ""
             proc = subprocess.Popen(
                 cmd_list,
-                stdin=subprocess.PIPE if input_data is not None else None,
+                stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
@@ -2099,14 +2468,14 @@ def run_code():
                 active_compiler_processes[proc_key] = proc
 
             try:
-                stdout_str, stderr_str = proc.communicate(input=input_data if input_data is not None else None, timeout=timeout)
+                stdout_str, stderr_str = proc.communicate(input=effective_input, timeout=timeout)
                 return stdout_str or "", stderr_str or "", proc.returncode
             except subprocess.TimeoutExpired:
                 try:
                     proc.kill()
                 except Exception:
                     pass
-                return "", "Execution timed out (10s limit exceeded).", 124
+                return "", "Execution timed out (10s limit exceeded). Tip: If your program asks for input via input() or cin, provide values in the standard input field.", 124
             finally:
                 with active_compiler_processes_lock:
                     active_compiler_processes.pop(proc_key, None)

@@ -1,3 +1,4 @@
+'use strict';
 import React, { useState, useRef, useEffect } from 'react';
 import {
   Send,
@@ -14,6 +15,7 @@ import {
   Shield,
   Terminal,
   Image as ImageIcon,
+  Globe,
 } from 'lucide-react';
 
 interface ChatInputProps {
@@ -22,6 +24,9 @@ interface ChatInputProps {
   onStopGeneration?: () => void;
   languageName?: string;
   onOpenStudio?: (tab: 'compiler' | 'image_studio') => void;
+  pluginsState?: Record<string, boolean>;
+  onTogglePlugin?: (pluginId: string, enabled: boolean) => void;
+  onOpenPlugins?: () => void;
 }
 
 export const ChatInput: React.FC<ChatInputProps> = ({
@@ -30,6 +35,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   onStopGeneration,
   languageName = 'English',
   onOpenStudio,
+  pluginsState,
+  onTogglePlugin,
+  onOpenPlugins,
 }) => {
   const [text, setText] = useState('');
   const [attachedFile, setAttachedFile] = useState<File | null>(null);
@@ -66,7 +74,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         for (let i = event.resultIndex; i < event.results.length; i++) {
           transcript += event.results[i][0].transcript;
         }
-        setText((prev) => (prev ? `${prev} ${transcript}` : transcript));
+        setText((prev: string) => (prev ? `${prev} ${transcript}` : transcript));
       };
 
       recognition.onerror = (event: any) => {
@@ -185,6 +193,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           </button>
         </div>
       )}
+
+
 
       {/* Main Composer Box */}
       <div className="relative rounded-2xl bg-zinc-950 border border-zinc-800 focus-within:border-white shadow-mono-card transition-all focus-within:shadow-mono-glow">
@@ -327,6 +337,23 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               title="Attach image or file"
             >
               <Paperclip className="w-4 h-4" />
+            </button>
+
+            {/* Web Search Toggle Button */}
+            <button
+              type="button"
+              onClick={() => onTogglePlugin?.('web_search', !(pluginsState?.web_search ?? true))}
+              className={`p-1.5 rounded-lg transition-colors flex items-center gap-1 ${
+                (pluginsState?.web_search ?? true)
+                  ? 'text-emerald-400 bg-emerald-950/50 hover:bg-emerald-900/50'
+                  : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-850'
+              }`}
+              title={(pluginsState?.web_search ?? true) ? 'Web Search active (click to toggle)' : 'Enable Web Search'}
+            >
+              <Globe className="w-4 h-4" />
+              {(pluginsState?.web_search ?? true) && (
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+              )}
             </button>
 
             {/* Voice Input Button */}

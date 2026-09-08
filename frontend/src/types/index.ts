@@ -16,12 +16,63 @@ export interface ChatMessage {
   type?: 'text' | 'image' | 'code';
   db_id?: string;
   typing?: boolean;
+  searchMetadata?: {
+    enabled?: boolean;
+    query?: string;
+    citations?: Array<{
+      title: string;
+      snippet: string;
+      url: string;
+    }>;
+  };
 }
 
 export interface ChatSession {
   session_id: string;
   title: string;
+  is_pinned?: boolean;
   last_updated?: string;
+  created_at?: string;
+}
+
+export type SubscriptionTier = 'free' | 'plus' | 'pro';
+
+export interface PlanDetail {
+  id: SubscriptionTier;
+  name: string;
+  price: string;
+  period: string;
+  badge: string;
+  daily_messages: number;
+  daily_compilations: number;
+  image_generation_daily: number;
+  max_image_res: string;
+  cloud_storage: string;
+  speed: string;
+  features: string[];
+}
+
+export interface InvoiceItem {
+  id: string;
+  plan: string;
+  amount: string;
+  status: string;
+  date: string;
+}
+
+export interface SubscriptionInfo {
+  tier: SubscriptionTier;
+  plan: PlanDetail;
+  all_plans: Record<SubscriptionTier, PlanDetail>;
+  usage: {
+    messages_today: number;
+    messages_limit: number;
+    compilations_today: number;
+    compilations_limit: number;
+    is_unlimited: boolean;
+  };
+  invoices: InvoiceItem[];
+  status: string;
 }
 
 export interface UserProfile {
@@ -33,6 +84,7 @@ export interface UserProfile {
     theme?: string;
     language?: string;
     voice?: string;
+    subscription_tier?: SubscriptionTier;
   };
 }
 

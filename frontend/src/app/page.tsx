@@ -11,6 +11,10 @@ import { ImageStudio } from '@/components/dashboard/ImageStudio';
 import { SettingsModal } from '@/components/modals/SettingsModal';
 import { AuthModal } from '@/components/modals/AuthModal';
 import { ProfileModal } from '@/components/modals/ProfileModal';
+import { LibraryModal } from '@/components/modals/LibraryModal';
+import { ScheduledModal } from '@/components/modals/ScheduledModal';
+import { PluginsModal } from '@/components/modals/PluginsModal';
+import { PhantomIconSvg, SidebarExpandIconSvg } from '@/components/common/PhantomLogo';
 import { api } from '@/lib/api';
 import { ChatMessage, ChatSession, UserProfile, UserSettings } from '@/types';
 
@@ -41,17 +45,51 @@ export default function Home() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const [scheduledOpen, setScheduledOpen] = useState(false);
+  const [pluginsOpen, setPluginsOpen] = useState(false);
   const [backendOnline, setBackendOnline] = useState(false);
+
+  // Developer Plugins & Tools State
+  const [plugins, setPlugins] = useState<Record<string, boolean>>({
+    web_search: true,
+    compiler_engine: true,
+    postgres_sync: true,
+    image_studio: true,
+    speech_voice: true,
+    sandbox_safety: true,
+  });
+
+  const handleTogglePlugin = (pluginId: string, enabled: boolean) => {
+    const updated = { ...plugins, [pluginId]: enabled };
+    setPlugins(updated);
+    try {
+      localStorage.setItem('phantom-plugins', JSON.stringify(updated));
+      api.savePlugins(updated).catch(() => {});
+    } catch {}
+  };
 
   const activeStreamAbort = useRef<boolean>(false);
 
-  // Load Initial Data (Health, Profile, Sessions, Local Settings)
+  // Load Initial Data (Health, Profile, Sessions, Local Settings, Plugins)
   useEffect(() => {
     // 1. Restore local theme
     const savedTheme = localStorage.getItem('phantom-theme') || 'theme-dark';
     document.body.classList.remove('theme-dark', 'theme-light');
     document.body.classList.add(savedTheme);
     setSettings((prev) => ({ ...prev, theme: savedTheme }));
+
+    // Restore saved plugins
+    try {
+      const savedPlugins = localStorage.getItem('phantom-plugins');
+      if (savedPlugins) {
+        setPlugins(JSON.parse(savedPlugins));
+      } else {
+        api.getPlugins().then((res) => {
+          if (res?.plugins) setPlugins(res.plugins);
+        }).catch(() => {});
+      }
+    } catch {}
 
     // 2. Check Backend Health
     const checkHealth = async () => {
@@ -176,6 +214,33 @@ export default function Home() {
     }
   };
 
+  const handleTogglePinSession = async (sessionId: string) => {
+    const currentSession = sessions.find((s) => s.session_id === sessionId);
+    const newPinned = !currentSession?.is_pinned;
+    const updated = sessions.map((s) =>
+      s.session_id === sessionId ? { ...s, is_pinned: newPinned } : s
+    );
+    setSessions(updated);
+
+    if (userProfile?.authenticated) {
+      try {
+        await api.togglePinSession(sessionId, newPinned);
+        loadAllSessions();
+      } catch (err) {
+        console.error('Failed to toggle pin on session:', err);
+      }
+    }
+  };
+
+  const readFileAsText = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsText(file);
+    });
+  };
+
   // Send Message & Real-Time SSE Streaming
   const handleSendMessage = async (
     text: string,
@@ -186,13 +251,33 @@ export default function Home() {
 
     let parts: any[] = [];
     if (file) {
-      const base64 = await convertFileToBase64(file);
-      parts.push({
-        inlineData: {
-          mimeType: file.type,
-          data: base64.split(',')[1],
-        },
-      });
+      if (file.type.startsWith('image/')) {
+        const base64 = await convertFileToBase64(file);
+        parts.push({
+          inlineData: {
+            mimeType: file.type,
+            data: base64.split(',')[1],
+          },
+        });
+      } else {
+        // Read text, markdown, code, json, csv, and document files
+        try {
+          const docContent = await readFileAsText(file);
+          const ext = file.name.split('.').pop() || 'txt';
+          parts.push({
+            text: `[Attached Document: ${file.name}]\n\`\`\`${ext}\n${docContent}\n\`\`\`\n`,
+          });
+        } catch (readErr) {
+          console.warn('Document read note:', readErr);
+          const base64 = await convertFileToBase64(file);
+          parts.push({
+            inlineData: {
+              mimeType: file.type || 'text/plain',
+              data: base64.split(',')[1],
+            },
+          });
+        }
+      }
     }
 
     let finalPrompt = text;
@@ -225,7 +310,7 @@ export default function Home() {
     setIsGenerating(true);
     activeStreamAbort.current = false;
 
-    // Build backend payload
+    // Build backend payload with active plugins configuration
     const payload = {
       contents: updatedHistory.map((m) => ({
         role: m.role,
@@ -233,17 +318,27 @@ export default function Home() {
       })),
       session_id: activeSessionId,
       language_name: settings.language,
+      plugins: plugins,
     };
 
     let accumulatedText = '';
 
     await api.streamChat(
       payload,
-      (chunk: string, sessionId?: string) => {
+      (chunk: string, sessionId?: string, sessionTitle?: string) => {
         if (activeStreamAbort.current) return;
         if (sessionId && sessionId !== activeSessionId) {
           setActiveSessionId(sessionId);
           sessionStorage.setItem('phantom_active_session', sessionId);
+        }
+        if (sessionTitle) {
+          setSessions((prev) =>
+            prev.map((s) =>
+              s.session_id === (sessionId || activeSessionId)
+                ? { ...s, title: sessionTitle }
+                : s
+            )
+          );
         }
         accumulatedText += chunk;
         setMessages((prev) =>
@@ -254,11 +349,27 @@ export default function Home() {
           )
         );
       },
-      (sessionId?: string) => {
+      (sessionId?: string, sessionTitle?: string, searchMetadata?: any) => {
         setIsGenerating(false);
         if (sessionId) {
           setActiveSessionId(sessionId);
           sessionStorage.setItem('phantom_active_session', sessionId);
+        }
+        if (sessionTitle) {
+          setSessions((prev) =>
+            prev.map((s) =>
+              s.session_id === (sessionId || activeSessionId)
+                ? { ...s, title: sessionTitle }
+                : s
+            )
+          );
+        }
+        if (searchMetadata) {
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === pendingMsgId ? { ...msg, searchMetadata } : msg
+            )
+          );
         }
         // Auto speak response if enabled
         if (settings.autoSpeak && accumulatedText) {
@@ -277,6 +388,13 @@ export default function Home() {
                   parts: [{ text: `Error: ${err}` }],
                 }
               : msg
+          )
+        );
+      },
+      (searchMetadata: any) => {
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === pendingMsgId ? { ...msg, searchMetadata } : msg
           )
         );
       }
@@ -339,11 +457,23 @@ export default function Home() {
         {!sidebarOpen && (
           <button
             onClick={() => setSidebarOpen(true)}
-            className="absolute left-3 top-3 z-30 rounded-lg border border-zinc-800 bg-zinc-950 p-2 text-zinc-400 shadow-lg transition-colors hover:border-zinc-600 hover:text-white"
-            title="Show sidebar"
-            aria-label="Show sidebar"
+            className="group absolute left-3 top-3 z-30 w-9 h-9 rounded-xl border border-zinc-800 bg-zinc-950 p-0 text-zinc-400 shadow-lg transition-all hover:border-zinc-600 hover:text-white flex items-center justify-center cursor-pointer"
+            title="Open sidebar"
+            aria-label="Open sidebar"
           >
-            <PanelLeftOpen className="h-4 w-4" />
+            {/* Default: Phantom Logo */}
+            <div className="flex items-center justify-center transition-all group-hover:hidden">
+              <div className="w-7 h-7 rounded-lg bg-zinc-100 text-black dark:bg-black dark:text-white flex items-center justify-center border border-zinc-300 dark:border-zinc-800 shadow-sm transition-colors">
+                <PhantomIconSvg className="w-4 h-4 text-black dark:text-white" />
+              </div>
+            </div>
+
+            {/* On Hover: Expand Panel Icon [ |> ] */}
+            <div className="hidden group-hover:flex items-center justify-center text-zinc-200 transition-all">
+              <div className="w-7 h-7 rounded-lg bg-zinc-900 text-zinc-200 flex items-center justify-center border border-zinc-700 shadow-mono-subtle">
+                <SidebarExpandIconSvg className="w-4 h-4 text-zinc-200 group-hover:text-white" />
+              </div>
+            </div>
           </button>
         )}
 
@@ -357,6 +487,7 @@ export default function Home() {
           onNewChat={handleNewChat}
           onRenameSession={handleRenameSession}
           onDeleteSession={handleDeleteSession}
+          onTogglePinSession={handleTogglePinSession}
           activeTab={activeTab}
           setActiveTab={setActiveTab}
           isAuthenticated={Boolean(userProfile?.authenticated)}
@@ -364,6 +495,9 @@ export default function Home() {
           userProfile={userProfile}
           onOpenSettings={() => setSettingsOpen(true)}
           onOpenProfile={() => setProfileOpen(true)}
+          onOpenLibrary={() => setLibraryOpen(true)}
+          onOpenScheduled={() => setScheduledOpen(true)}
+          onOpenPlugins={() => setPluginsOpen(true)}
           currentTheme={settings.theme}
           onToggleTheme={handleToggleTheme}
           onToggleSidebar={() => setSidebarOpen((open) => !open)}
@@ -401,6 +535,9 @@ export default function Home() {
                 onStopGeneration={handleStopGeneration}
                 languageName={settings.language}
                 onOpenStudio={(tab) => setActiveTab(tab)}
+                pluginsState={plugins}
+                onTogglePlugin={handleTogglePlugin}
+                onOpenPlugins={() => setPluginsOpen(true)}
               />
             </div>
           )}
@@ -430,6 +567,7 @@ export default function Home() {
         onClose={() => setSettingsOpen(false)}
         settings={settings}
         onSaveSettings={(newSettings) => setSettings(newSettings)}
+        userProfile={userProfile}
       />
 
       <AuthModal
@@ -453,6 +591,37 @@ export default function Home() {
             setSessions([]);
           }
         }}
+      />
+
+      <LibraryModal
+        isOpen={libraryOpen}
+        onClose={() => setLibraryOpen(false)}
+        sessions={sessions}
+        onSelectSession={handleSelectSession}
+        onTogglePinSession={handleTogglePinSession}
+        onOpenStudio={(tab) => setActiveTab(tab)}
+        onSendPromptToChat={(prompt) => {
+          setLibraryOpen(false);
+          setActiveTab('chat');
+          handleSendMessage(prompt);
+        }}
+      />
+
+      <ScheduledModal
+        isOpen={scheduledOpen}
+        onClose={() => setScheduledOpen(false)}
+        onRunPrompt={(prompt) => {
+          setScheduledOpen(false);
+          setActiveTab('chat');
+          handleSendMessage(prompt);
+        }}
+      />
+
+      <PluginsModal
+        isOpen={pluginsOpen}
+        onClose={() => setPluginsOpen(false)}
+        pluginsState={plugins}
+        onTogglePlugin={handleTogglePlugin}
       />
     </div>
   );

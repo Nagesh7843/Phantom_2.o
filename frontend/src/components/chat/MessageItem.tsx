@@ -11,6 +11,10 @@ import {
   RotateCcw,
   Sparkles,
   Edit3,
+  Globe,
+  ExternalLink,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { ChatMessage, Role } from '@/types';
 
@@ -33,11 +37,15 @@ export const MessageItem: React.FC<MessageItemProps> = ({
 }) => {
   const [copied, setCopied] = useState(false);
   const [copiedCodeId, setCopiedCodeId] = useState<string | null>(null);
+  const [showCitations, setShowCitations] = useState(false);
 
   const isUser = message.role === 'user';
   const textContent =
     message.parts.map((p) => p.text || '').join('\n').trim() || '';
   const hasImageAttachment = message.parts.some((p) => p.inlineData);
+  const hasCitations = Boolean(
+    message.searchMetadata?.citations && message.searchMetadata.citations.length > 0
+  );
 
   const handleCopyFull = () => {
     navigator.clipboard.writeText(textContent);
@@ -101,6 +109,12 @@ export const MessageItem: React.FC<MessageItemProps> = ({
               ? new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
               : 'Just now'}
           </span>
+          {!isUser && hasCitations && (
+            <span className="px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-400 font-mono text-[10px] border border-emerald-800 flex items-center gap-1">
+              <Globe className="w-2.5 h-2.5" />
+              Web Verified
+            </span>
+          )}
         </div>
 
         {/* Bubble Box */}
@@ -111,6 +125,50 @@ export const MessageItem: React.FC<MessageItemProps> = ({
               : 'ai-bubble text-white rounded-tl-none shadow-mono-card'
           }`}
         >
+          {/* Real-Time Live Web Search Citations Box */}
+          {!isUser && hasCitations && message.searchMetadata?.citations && (
+            <div className="mb-3 p-2.5 rounded-xl bg-zinc-950/90 border border-zinc-800 text-xs shadow-inner">
+              <div
+                className="flex items-center justify-between text-zinc-300 font-semibold cursor-pointer select-none"
+                onClick={() => setShowCitations(!showCitations)}
+              >
+                <span className="flex items-center gap-1.5 text-emerald-400 text-[11px] font-mono">
+                  <Globe className="w-3.5 h-3.5" />
+                  Real-Time Web Search ({message.searchMetadata.citations.length} Verified Sources)
+                </span>
+                {showCitations ? (
+                  <ChevronUp className="w-3.5 h-3.5 text-zinc-400" />
+                ) : (
+                  <ChevronDown className="w-3.5 h-3.5 text-zinc-400" />
+                )}
+              </div>
+
+              {showCitations && (
+                <div className="mt-2 space-y-1.5 pt-2 border-t border-zinc-850 animate-in fade-in duration-150">
+                  {message.searchMetadata.citations.map((c, i) => (
+                    <a
+                      key={i}
+                      href={c.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-start justify-between gap-2 p-1.5 rounded-lg bg-zinc-900/70 hover:bg-zinc-850 text-[11px] text-zinc-300 hover:text-white transition-colors group"
+                    >
+                      <div className="min-w-0">
+                        <span className="font-semibold text-white group-hover:text-emerald-400 truncate block">
+                          [{i + 1}] {c.title}
+                        </span>
+                        {c.snippet && (
+                          <span className="text-zinc-500 text-[10px] line-clamp-1">{c.snippet}</span>
+                        )}
+                      </div>
+                      <ExternalLink className="w-3 h-3 flex-shrink-0 text-zinc-500 group-hover:text-white mt-0.5" />
+                    </a>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Display attached image preview if present */}
           {hasImageAttachment && (
             <div className="mb-3">
