@@ -203,6 +203,14 @@ export const api = {
       let activeSessionTitle: string | undefined = undefined;
       let activeSearchMetadata: any = null;
 
+      let doneTriggered = false;
+      const notifyDone = () => {
+        if (!doneTriggered) {
+          doneTriggered = true;
+          onDone(activeSessionId, activeSessionTitle, activeSearchMetadata);
+        }
+      };
+
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -226,7 +234,7 @@ export const api = {
                 onChunk(data.chunk, activeSessionId, activeSessionTitle);
               }
               if (data.done) {
-                onDone(activeSessionId, activeSessionTitle, activeSearchMetadata);
+                notifyDone();
               }
             } catch (jsonErr) {
               console.warn('SSE parsing error', jsonErr);
@@ -234,7 +242,7 @@ export const api = {
           }
         }
       }
-      onDone(activeSessionId, activeSessionTitle, activeSearchMetadata);
+      notifyDone();
     } catch (e: any) {
       onError(e.message || 'Stream connection error');
     }

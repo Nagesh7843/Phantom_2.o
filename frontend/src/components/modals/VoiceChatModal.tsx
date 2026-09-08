@@ -9,8 +9,6 @@ import {
   X,
   Sparkles,
   RefreshCw,
-  Send,
-  Radio,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 
@@ -26,6 +24,7 @@ interface VoiceChatModalProps {
 export const VoiceChatModal: React.FC<VoiceChatModalProps> = ({
   isOpen,
   onClose,
+  onSendMessage,
   activeSessionId,
   userVoice = '',
   language = 'en-US',
@@ -35,15 +34,26 @@ export const VoiceChatModal: React.FC<VoiceChatModalProps> = ({
   const [aiResponse, setAiResponse] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [audioLevel, setAudioLevel] = useState<number>(0);
-  const [isAutoLoop, setIsAutoLoop] = useState<boolean>(true);
 
+  const voiceStateRef = useRef<'idle' | 'listening' | 'thinking' | 'speaking'>('idle');
   const recognitionRef = useRef<any>(null);
   const silenceTimerRef = useRef<any>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animFrameRef = useRef<number | null>(null);
-  const isMountedRef = useRef(true);
+  const isMountedRef = useRef<boolean>(true);
+  const accumulatedRef = useRef<string>('');
+  const isOpenRef = useRef<boolean>(isOpen);
+  const synthResumeTimerRef = useRef<any>(null);
+
+  useEffect(() => {
+    voiceStateRef.current = voiceState;
+  }, [voiceState]);
+
+  useEffect(() => {
+    isOpenRef.current = isOpen;
+  }, [isOpen]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -56,7 +66,14 @@ export const VoiceChatModal: React.FC<VoiceChatModalProps> = ({
   const cleanupAudio = () => {
     stopSpeaking();
     stopListening();
-    if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+    if (animFrameRef.current) {
+      cancelAnimationFrame(animFrameRef.current);
+      animFrameRef.current = null;
+    }
+    if (synthResumeTimerRef.current) {
+      clearInterval(synthResumeTimerRef.current);
+      synthResumeTimerRef.current = null;
+    }
     if (mediaStreamRef.current) {
       mediaStreamRef.current.getTracks().forEach((t) => t.stop());
       mediaStreamRef.current = null;
@@ -70,17 +87,33 @@ export const VoiceChatModal: React.FC<VoiceChatModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       setVoiceState('idle');
+      voiceStateRef.current = 'idle';
       setTranscript('');
+      accumulatedRef.current = '';
       setAiResponse('');
       setErrorMessage(null);
+
+      const startTimer = setTimeout(() => {
+        if (isMountedRef.current && isOpenRef.current) {
+          startListening();
+        }
+      }, 200);
+
+      return () => clearTimeout(startTimer);
     } else {
       cleanupAudio();
     }
   }, [isOpen]);
 
   const stopSpeaking = () => {
+    if (synthResumeTimerRef.current) {
+      clearInterval(synthResumeTimerRef.current);
+      synthResumeTimerRef.current = null;
+    }
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
+      try {
+        window.speechSynthesis.cancel();
+      } catch {}
     }
   };
 
@@ -94,15 +127,18 @@ export const VoiceChatModal: React.FC<VoiceChatModalProps> = ({
         recognitionRef.current.onresult = null;
         recognitionRef.current.onerror = null;
         recognitionRef.current.onend = null;
+        recognitionRef.current.onspeechend = null;
         recognitionRef.current.stop();
       } catch {}
       recognitionRef.current = null;
     }
-    if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+    if (animFrameRef.current) {
+      cancelAnimationFrame(animFrameRef.current);
+      animFrameRef.current = null;
+    }
     setAudioLevel(0);
   };
 
-  // Real-time microphone audio visualizer
   const setupAudioAnalyser = async (stream: MediaStream) => {
     try {
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
@@ -142,6 +178,7 @@ export const VoiceChatModal: React.FC<VoiceChatModalProps> = ({
     stopListening();
     setErrorMessage(null);
     setTranscript('');
+    accumulatedRef.current = '';
 
     const SpeechRecognition =
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -149,6 +186,7 @@ export const VoiceChatModal: React.FC<VoiceChatModalProps> = ({
     if (!SpeechRecognition) {
       setErrorMessage('Speech recognition is not supported in this browser. Please use Chrome or Edge.');
       setVoiceState('idle');
+      voiceStateRef.current = 'idle';
       return;
     }
 
@@ -165,11 +203,22 @@ export const VoiceChatModal: React.FC<VoiceChatModalProps> = ({
       recognition.interimResults = true;
       recognition.lang = language || 'en-US';
 
-      let accumulated = '';
+      const triggerSend = () => {
+        if (silenceTimerRef.current) {
+          clearTimeout(silenceTimerRef.current);
+          silenceTimerRef.current = null;
+        }
+        const textToSend = accumulatedRef.current.trim();
+        if (textToSend && isMountedRef.current && isOpenRef.current) {
+          accumulatedRef.current = '';
+          handleSendVoicePrompt(textToSend);
+        }
+      };
 
       recognition.onstart = () => {
         if (isMountedRef.current) {
           setVoiceState('listening');
+          voiceStateRef.current = 'listening';
         }
       };
 
@@ -187,43 +236,63 @@ export const VoiceChatModal: React.FC<VoiceChatModalProps> = ({
         }
 
         const currentText = (final + interim).trim();
-        accumulated = currentText;
+        accumulatedRef.current = currentText;
+
         if (isMountedRef.current) {
           setTranscript(currentText);
         }
 
-        // Reset silence timer on every new speech token
-        if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+        if (silenceTimerRef.current) {
+          clearTimeout(silenceTimerRef.current);
+          silenceTimerRef.current = null;
+        }
 
-        // Auto-send when user finishes speaking (1.2s silence pause)
-        if (currentText.length > 2) {
+        // Send automatically on pause (1.0s silence)
+        if (currentText.length > 0) {
           silenceTimerRef.current = setTimeout(() => {
-            if (accumulated.trim() && isMountedRef.current) {
-              handleSendVoicePrompt(accumulated.trim());
-            }
-          }, 1200);
+            triggerSend();
+          }, 1000);
+        }
+      };
+
+      recognition.onspeechend = () => {
+        if (accumulatedRef.current.trim()) {
+          if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+          silenceTimerRef.current = setTimeout(() => {
+            triggerSend();
+          }, 600);
         }
       };
 
       recognition.onerror = (event: any) => {
-        console.warn('Voice recognition error:', event.error);
+        console.warn('Voice recognition status:', event.error);
         if (event.error === 'not-allowed') {
-          setErrorMessage('Microphone access was denied. Please allow microphone permissions.');
+          setErrorMessage('Microphone access denied. Please allow audio permissions.');
         } else if (event.error === 'no-speech') {
-          // No speech detected -> stay in listening mode
           return;
         }
-        if (isMountedRef.current && voiceState === 'listening') {
-          setVoiceState('idle');
+        if (isMountedRef.current && voiceStateRef.current === 'listening') {
+          if (!accumulatedRef.current.trim()) {
+            setVoiceState('idle');
+            voiceStateRef.current = 'idle';
+          }
         }
       };
 
       recognition.onend = () => {
-        if (isMountedRef.current && voiceState === 'listening') {
-          if (accumulated.trim()) {
-            handleSendVoicePrompt(accumulated.trim());
+        if (isMountedRef.current && voiceStateRef.current === 'listening') {
+          if (accumulatedRef.current.trim()) {
+            triggerSend();
+          } else if (isOpenRef.current) {
+            try {
+              recognition.start();
+            } catch {
+              setVoiceState('idle');
+              voiceStateRef.current = 'idle';
+            }
           } else {
             setVoiceState('idle');
+            voiceStateRef.current = 'idle';
           }
         }
       };
@@ -232,8 +301,9 @@ export const VoiceChatModal: React.FC<VoiceChatModalProps> = ({
       recognitionRef.current = recognition;
     } catch (err: any) {
       console.warn('Mic start failed:', err);
-      setErrorMessage('Could not access microphone. Please enable audio permissions in your browser.');
+      setErrorMessage('Could not access microphone.');
       setVoiceState('idle');
+      voiceStateRef.current = 'idle';
     }
   };
 
@@ -242,6 +312,7 @@ export const VoiceChatModal: React.FC<VoiceChatModalProps> = ({
 
     stopListening();
     setVoiceState('thinking');
+    voiceStateRef.current = 'thinking';
     setTranscript(promptText);
     setAiResponse('');
 
@@ -261,22 +332,23 @@ export const VoiceChatModal: React.FC<VoiceChatModalProps> = ({
           }
         },
         () => {
-          // Stream completed -> immediately speak the response aloud
-          if (isMountedRef.current) {
+          if (isMountedRef.current && isOpenRef.current) {
             speakAiResponse(accumulatedAiText);
           }
         },
         (err: string) => {
           if (isMountedRef.current) {
-            setErrorMessage(`AI response error: ${err}`);
+            setErrorMessage(`Error: ${err}`);
             setVoiceState('idle');
+            voiceStateRef.current = 'idle';
           }
         }
       );
     } catch (err: any) {
       if (isMountedRef.current) {
-        setErrorMessage(err.message || 'Failed to connect to AI voice model');
+        setErrorMessage(err.message || 'Connection error');
         setVoiceState('idle');
+        voiceStateRef.current = 'idle';
       }
     }
   };
@@ -284,115 +356,139 @@ export const VoiceChatModal: React.FC<VoiceChatModalProps> = ({
   const speakAiResponse = (rawText: string) => {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
       setVoiceState('idle');
+      voiceStateRef.current = 'idle';
       return;
     }
 
     setVoiceState('speaking');
+    voiceStateRef.current = 'speaking';
     stopSpeaking();
 
-    // Chrome speech synthesis unstuck fix
-    window.speechSynthesis.cancel();
-    if (window.speechSynthesis.paused) {
-      window.speechSynthesis.resume();
-    }
-
-    // Clean text for natural speech
     const clean = rawText
-      .replace(/```[\s\S]*?```/g, 'Code snippet generated.')
-      .replace(/[`*#_~[\]()]/g, '')
+      .replace(/```[\s\S]*?```/g, 'Code snippet provided.')
+      .replace(/`([^`]+)`/g, '$1')
+      .replace(/https?:\/\/\S+/g, '')
+      .replace(/[*#_~[\]()<>]/g, '')
+      .replace(/\n+/g, ' ')
       .replace(/\s+/g, ' ')
       .trim();
 
     if (!clean) {
       setVoiceState('idle');
-      if (isAutoLoop) startListening();
+      voiceStateRef.current = 'idle';
+      if (isMountedRef.current && isOpenRef.current) {
+        startListening();
+      }
       return;
     }
 
-    const utterance = new SpeechSynthesisUtterance(clean);
-    utterance.rate = 1.05;
-    utterance.pitch = 1.0;
-    utterance.lang = language || 'en-US';
+    setTimeout(() => {
+      if (!isMountedRef.current || !isOpenRef.current) return;
 
-    if (userVoice) {
-      const voices = window.speechSynthesis.getVoices();
-      const match = voices.find((v) => v.name === userVoice);
-      if (match) utterance.voice = match;
-    }
-
-    utterance.onend = () => {
-      if (isMountedRef.current) {
-        setVoiceState('idle');
-        // When AI finishes speaking, automatically start listening again for true continuous conversation
-        if (isAutoLoop && isOpen) {
-          setTimeout(() => {
-            if (isMountedRef.current && isOpen) {
-              startListening();
-            }
-          }, 350);
+      try {
+        window.speechSynthesis.cancel();
+        if (window.speechSynthesis.paused) {
+          window.speechSynthesis.resume();
         }
-      }
-    };
 
-    utterance.onerror = (e) => {
-      console.warn('Speech synthesis playback note:', e);
-      if (isMountedRef.current) {
+        const utterance = new SpeechSynthesisUtterance(clean);
+        utterance.rate = 1.0;
+        utterance.pitch = 1.0;
+        utterance.lang = language || 'en-US';
+
+        const voices = window.speechSynthesis.getVoices();
+        if (userVoice && voices.length > 0) {
+          const match = voices.find((v) => v.name === userVoice);
+          if (match) utterance.voice = match;
+        } else if (voices.length > 0) {
+          const preferred =
+            voices.find(
+              (v) =>
+                (v.lang.startsWith('en') || v.lang === language) &&
+                (v.name.includes('Natural') ||
+                  v.name.includes('Google') ||
+                  v.name.includes('Neural') ||
+                  v.name.includes('Online'))
+            ) || voices.find((v) => v.lang.startsWith('en') || v.lang === language);
+          if (preferred) utterance.voice = preferred;
+        }
+
+        synthResumeTimerRef.current = setInterval(() => {
+          if (!window.speechSynthesis.speaking) {
+            if (synthResumeTimerRef.current) {
+              clearInterval(synthResumeTimerRef.current);
+              synthResumeTimerRef.current = null;
+            }
+          } else {
+            window.speechSynthesis.pause();
+            window.speechSynthesis.resume();
+          }
+        }, 10000);
+
+        utterance.onend = () => {
+          if (synthResumeTimerRef.current) {
+            clearInterval(synthResumeTimerRef.current);
+            synthResumeTimerRef.current = null;
+          }
+          if (isMountedRef.current) {
+            setVoiceState('idle');
+            voiceStateRef.current = 'idle';
+            if (isOpenRef.current) {
+              setTimeout(() => {
+                if (isMountedRef.current && isOpenRef.current) {
+                  startListening();
+                }
+              }, 300);
+            }
+          }
+        };
+
+        utterance.onerror = (e) => {
+          if (synthResumeTimerRef.current) {
+            clearInterval(synthResumeTimerRef.current);
+            synthResumeTimerRef.current = null;
+          }
+          console.warn('Speech error:', e);
+          if (isMountedRef.current) {
+            setVoiceState('idle');
+            voiceStateRef.current = 'idle';
+            if (isOpenRef.current) {
+              setTimeout(() => {
+                if (isMountedRef.current && isOpenRef.current) {
+                  startListening();
+                }
+              }, 300);
+            }
+          }
+        };
+
+        window.speechSynthesis.speak(utterance);
+      } catch (err) {
+        console.warn('Speech synthesis error:', err);
         setVoiceState('idle');
-        if (isAutoLoop && isOpen) startListening();
+        voiceStateRef.current = 'idle';
       }
-    };
-
-    window.speechSynthesis.speak(utterance);
+    }, 50);
   };
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-xl p-4 animate-fade-in">
-      <div className="relative w-full max-w-md rounded-3xl border border-zinc-800 bg-zinc-950 p-6 sm:p-8 flex flex-col items-center shadow-2xl overflow-hidden">
-        {/* Ambient Radial Glow */}
-        <div
-          className={`absolute -top-20 left-1/2 -translate-x-1/2 w-64 h-64 rounded-full blur-[100px] pointer-events-none transition-all duration-700 ${
-            voiceState === 'listening'
-              ? 'bg-emerald-500/25'
-              : voiceState === 'thinking'
-              ? 'bg-cyan-500/30 animate-pulse'
-              : voiceState === 'speaking'
-              ? 'bg-white/20'
-              : 'bg-zinc-800/10'
-          }`}
-        />
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fade-in">
+      <div className="relative w-full max-w-xs sm:max-w-sm rounded-3xl bg-zinc-950 border border-zinc-800 p-6 sm:p-8 flex flex-col items-center shadow-2xl">
+        {/* Minimal Close Button */}
+        <button
+          onClick={() => {
+            cleanupAudio();
+            onClose();
+          }}
+          className="absolute top-4 right-4 p-2 rounded-full text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors cursor-pointer"
+          title="Close"
+        >
+          <X className="w-4 h-4" />
+        </button>
 
-        {/* Top Header Bar */}
-        <div className="w-full flex items-center justify-between z-10 mb-4">
-          <div className="flex items-center gap-2">
-            <span
-              className={`w-2.5 h-2.5 rounded-full ${
-                voiceState === 'listening'
-                  ? 'bg-emerald-400 animate-ping'
-                  : voiceState === 'speaking'
-                  ? 'bg-white animate-pulse'
-                  : 'bg-zinc-600'
-              }`}
-            />
-            <span className="text-xs font-mono uppercase tracking-widest text-zinc-300 font-semibold">
-              Live Voice Conversation
-            </span>
-          </div>
-
-          <button
-            onClick={() => {
-              cleanupAudio();
-              onClose();
-            }}
-            className="p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-900 border border-zinc-800/60 transition-colors cursor-pointer"
-            title="Close Voice Mode"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        {/* Central Animated Neural Orb */}
+        {/* Minimal Center Pulsing Orb */}
         <div
           className="my-6 relative flex items-center justify-center cursor-pointer select-none"
           onClick={() => {
@@ -406,106 +502,86 @@ export const VoiceChatModal: React.FC<VoiceChatModalProps> = ({
             }
           }}
         >
-          {/* Pulsing Dynamic Outer Rings based on real mic volume */}
+          {/* Subtle Outer Ring */}
           <div
-            className={`w-36 h-36 sm:w-44 sm:h-44 rounded-full border flex items-center justify-center transition-all duration-300 ${
+            className={`w-32 h-32 rounded-full border flex items-center justify-center transition-all duration-300 ${
               voiceState === 'listening'
-                ? 'border-emerald-400/60 shadow-[0_0_50px_rgba(52,211,153,0.35)]'
+                ? 'border-white/40 shadow-[0_0_30px_rgba(255,255,255,0.15)]'
                 : voiceState === 'thinking'
-                ? 'border-cyan-400/70 animate-spin shadow-[0_0_50px_rgba(34,211,238,0.3)]'
+                ? 'border-zinc-500 animate-spin'
                 : voiceState === 'speaking'
-                ? 'border-white/70 animate-pulse shadow-[0_0_50px_rgba(255,255,255,0.35)]'
+                ? 'border-white/60 animate-pulse shadow-[0_0_30px_rgba(255,255,255,0.2)]'
                 : 'border-zinc-800 hover:border-zinc-700'
             }`}
             style={{
               transform:
                 voiceState === 'listening'
-                  ? `scale(${1 + Math.min(audioLevel * 0.8, 0.4)})`
+                  ? `scale(${1 + Math.min(audioLevel * 0.6, 0.25)})`
                   : 'scale(1)',
             }}
           >
-            {/* Inner Core */}
+            {/* Core Circle */}
             <div
-              className={`w-24 h-24 sm:w-28 sm:h-28 rounded-full flex items-center justify-center transition-all duration-300 shadow-lg ${
+              className={`w-20 h-20 rounded-full flex items-center justify-center transition-all duration-300 ${
                 voiceState === 'listening'
-                  ? 'bg-emerald-500 text-black'
+                  ? 'bg-white text-black'
                   : voiceState === 'thinking'
-                  ? 'bg-cyan-500 text-black'
+                  ? 'bg-zinc-800 text-white'
                   : voiceState === 'speaking'
                   ? 'bg-white text-black shadow-mono-glow'
-                  : 'bg-zinc-900 text-zinc-400 border border-zinc-800 hover:bg-zinc-800'
+                  : 'bg-zinc-900 text-zinc-400 hover:text-white hover:bg-zinc-850'
               }`}
             >
               {voiceState === 'listening' ? (
-                <Mic className="w-10 h-10 animate-bounce" />
+                <Mic className="w-7 h-7" />
               ) : voiceState === 'thinking' ? (
-                <Sparkles className="w-10 h-10 animate-spin" />
+                <RefreshCw className="w-6 h-6 animate-spin" />
               ) : voiceState === 'speaking' ? (
-                <Volume2 className="w-10 h-10 animate-pulse" />
+                <Volume2 className="w-7 h-7 animate-pulse" />
               ) : (
-                <Mic className="w-8 h-8" />
+                <Mic className="w-6 h-6" />
               )}
             </div>
           </div>
         </div>
 
-        {/* Status Indicator Pill */}
-        <div className="mb-4">
-          <span
-            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-medium transition-colors ${
-              voiceState === 'listening'
-                ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
-                : voiceState === 'thinking'
-                ? 'bg-cyan-950 text-cyan-300 border border-cyan-800'
-                : voiceState === 'speaking'
-                ? 'bg-zinc-800 text-white border border-zinc-700'
-                : 'bg-zinc-900 text-zinc-400 border border-zinc-800'
-            }`}
-          >
-            {voiceState === 'listening' && (
-              <>
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-                Listening... (stops speaking to send)
-              </>
-            )}
-            {voiceState === 'thinking' && (
-              <>
-                <RefreshCw className="w-3 h-3 animate-spin" />
-                Thinking...
-              </>
-            )}
-            {voiceState === 'speaking' && (
-              <>
-                <Volume2 className="w-3 h-3" />
-                Speaking to you...
-              </>
-            )}
-            {voiceState === 'idle' && 'Tap the Orb to Start Talking'}
-          </span>
-        </div>
-
-        {/* Live Conversation Display Box */}
-        <div className="w-full min-h-[90px] max-h-40 overflow-y-auto p-4 rounded-2xl bg-zinc-900/80 border border-zinc-800 text-center font-sans">
+        {/* Minimal Subtitle / Response */}
+        <div className="w-full min-h-[50px] flex items-center justify-center text-center px-2 mb-6">
           {errorMessage ? (
             <p className="text-xs text-red-400">{errorMessage}</p>
           ) : voiceState === 'speaking' && aiResponse ? (
-            <p className="text-xs sm:text-sm text-zinc-200 leading-relaxed italic">
-              "{aiResponse.slice(0, 220)}{aiResponse.length > 220 ? '...' : ''}"
+            <p className="text-xs sm:text-sm text-zinc-200 leading-relaxed line-clamp-3">
+              "{aiResponse}"
             </p>
           ) : transcript ? (
-            <p className="text-xs sm:text-sm text-white font-medium leading-relaxed">
+            <p className="text-xs sm:text-sm text-white font-medium line-clamp-3">
               "{transcript}"
             </p>
           ) : (
             <p className="text-xs text-zinc-500">
-              Speak naturally. When you pause, Phantom AI will answer and speak directly with you.
+              {voiceState === 'listening'
+                ? 'Listening...'
+                : voiceState === 'thinking'
+                ? 'Thinking...'
+                : 'Tap to speak'}
             </p>
           )}
         </div>
 
-        {/* Action Controls Toolbar */}
-        <div className="w-full flex items-center justify-center gap-3 mt-6 z-10">
-          {voiceState === 'listening' ? (
+        {/* Minimal Bottom Action Control */}
+        <div className="flex items-center justify-center gap-3">
+          {voiceState === 'speaking' ? (
+            <button
+              onClick={() => {
+                stopSpeaking();
+                startListening();
+              }}
+              className="px-4 py-2 rounded-full bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-xs text-zinc-300 hover:text-white flex items-center gap-2 transition-colors cursor-pointer"
+            >
+              <VolumeX className="w-3.5 h-3.5" />
+              <span>Interrupt</span>
+            </button>
+          ) : voiceState === 'listening' ? (
             <button
               onClick={() => {
                 if (transcript.trim()) {
@@ -513,31 +589,20 @@ export const VoiceChatModal: React.FC<VoiceChatModalProps> = ({
                 } else {
                   stopListening();
                   setVoiceState('idle');
+                  voiceStateRef.current = 'idle';
                 }
               }}
-              className="px-6 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black text-xs font-bold flex items-center gap-2 transition-all cursor-pointer shadow-md"
+              className="px-4 py-2 rounded-full bg-white text-black hover:bg-zinc-200 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
             >
-              <Send className="w-3.5 h-3.5" />
-              <span>Send Query</span>
-            </button>
-          ) : voiceState === 'speaking' ? (
-            <button
-              onClick={() => {
-                stopSpeaking();
-                startListening();
-              }}
-              className="px-5 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-semibold flex items-center gap-2 border border-zinc-700 transition-all cursor-pointer"
-            >
-              <VolumeX className="w-3.5 h-3.5" />
-              <span>Interrupt & Speak</span>
+              <span>Done</span>
             </button>
           ) : (
             <button
               onClick={startListening}
-              className="px-7 py-3 rounded-xl bg-white hover:bg-zinc-200 text-black text-xs font-bold flex items-center gap-2 transition-all cursor-pointer shadow-mono-glow hover:scale-105 active:scale-95"
+              className="px-5 py-2 rounded-full bg-white text-black hover:bg-zinc-200 text-xs font-semibold flex items-center gap-2 transition-colors cursor-pointer"
             >
-              <Mic className="w-4 h-4 fill-black" />
-              <span>Start Speaking</span>
+              <Mic className="w-3.5 h-3.5" />
+              <span>Speak</span>
             </button>
           )}
         </div>
