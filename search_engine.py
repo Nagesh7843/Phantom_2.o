@@ -182,8 +182,10 @@ def fetch_dynamic_suggestions(query_seed: str = "", offset: int = 0) -> list:
     random.shuffle(shuffled_topics)
     selected_topics = shuffled_topics[:4]
 
-    suggestions = []
-    for idx, t in enumerate(selected_topics):
+    from concurrent.futures import ThreadPoolExecutor, wait
+
+    def fetch_single_topic(idx_topic):
+        idx, t = idx_topic
         try:
             search_res = perform_live_web_search(t["query"], max_results=1)
             results = search_res.get("results", [])
@@ -195,7 +197,7 @@ def fetch_dynamic_suggestions(query_seed: str = "", offset: int = 0) -> list:
                 snippet = top.get("snippet", t["template_desc"])
                 if len(snippet) > 85:
                     snippet = snippet[:85].rstrip() + "..."
-                suggestions.append({
+                return (idx, {
                     "id": f"dyn_{idx}_{int(time.time())}",
                     "category": t["category"],
                     "title": title,
@@ -203,16 +205,35 @@ def fetch_dynamic_suggestions(query_seed: str = "", offset: int = 0) -> list:
                     "icon": t["icon"],
                     "prompt": f"Based on recent developments in {t['category']} ('{top['title']}'): {t['template_prompt']}"
                 })
-            else:
-                suggestions.append({
-                    "id": f"dyn_{idx}_{int(time.time())}",
-                    "category": t["category"],
-                    "title": t["template_title"],
-                    "desc": t["template_desc"],
-                    "icon": t["icon"],
-                    "prompt": t["template_prompt"]
-                })
         except Exception:
+            pass
+
+        return (idx, {
+            "id": f"dyn_{idx}_{int(time.time())}",
+            "category": t["category"],
+            "title": t["template_title"],
+            "desc": t["template_desc"],
+            "icon": t["icon"],
+            "prompt": t["template_prompt"]
+        })
+
+    suggestions_map = {}
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        futures = [executor.submit(fetch_single_topic, (idx, t)) for idx, t in enumerate(selected_topics)]
+        done, _ = wait(futures, timeout=2.5)
+        for fut in done:
+            try:
+                idx, item = fut.result()
+                suggestions_map[idx] = item
+            except Exception:
+                pass
+
+    # Ensure all slots are filled in original order with fallback if timeout
+    suggestions = []
+    for idx, t in enumerate(selected_topics):
+        if idx in suggestions_map:
+            suggestions.append(suggestions_map[idx])
+        else:
             suggestions.append({
                 "id": f"dyn_{idx}_{int(time.time())}",
                 "category": t["category"],
@@ -223,6 +244,8 @@ def fetch_dynamic_suggestions(query_seed: str = "", offset: int = 0) -> list:
             })
 
     return suggestions
+
+
 
 if __name__ == "__main__":
     res = perform_live_web_search("Python 3.13 features")
