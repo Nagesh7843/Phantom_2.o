@@ -38,6 +38,7 @@ interface ChatInputProps {
   pluginsState?: Record<string, boolean>;
   onTogglePlugin?: (pluginId: string, enabled: boolean) => void;
   onOpenPlugins?: () => void;
+  onOpenVoiceMode?: () => void;
 }
 
 export const ChatInput: React.FC<ChatInputProps> = ({
@@ -49,6 +50,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   pluginsState,
   onTogglePlugin,
   onOpenPlugins,
+  onOpenVoiceMode,
 }) => {
   const [text, setText] = useState('');
   const [attachedFile, setAttachedFile] = useState<File | null>(null);
@@ -103,27 +105,60 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
   }, [text]);
 
-  // Web Speech API for voice recognition
-  useEffect(() => {
+  // Dedicated robust speech recognition handler
+  const toggleVoiceInput = async () => {
     const SpeechRecognition =
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
-    if (SpeechRecognition) {
+    if (!SpeechRecognition) {
+      alert('Speech recognition is not supported in this browser. Please use Google Chrome or Microsoft Edge.');
+      return;
+    }
+
+    if (isListening) {
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop();
+        } catch {}
+      }
+      setIsListening(false);
+      return;
+    }
+
+    try {
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        await navigator.mediaDevices.getUserMedia({ audio: true });
+      }
+
       const recognition = new SpeechRecognition();
       recognition.continuous = true;
       recognition.interimResults = true;
       recognition.lang = 'en-US';
 
+      let baseText = text ? text.trim() + ' ' : '';
+
       recognition.onresult = (event: any) => {
-        let transcript = '';
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          transcript += event.results[i][0].transcript;
+        let interimTranscript = '';
+        let finalTranscript = '';
+
+        for (let i = 0; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            finalTranscript += transcript + ' ';
+          } else {
+            interimTranscript += transcript;
+          }
         }
-        setText((prev: string) => (prev ? `${prev} ${transcript}` : transcript));
+
+        const newText = (baseText + finalTranscript + interimTranscript).replace(/\s+/g, ' ');
+        setText(newText);
       };
 
       recognition.onerror = (event: any) => {
-        console.error('Speech recognition error:', event.error);
+        console.warn('Speech recognition status:', event.error);
+        if (event.error === 'not-allowed') {
+          alert('Microphone access was denied. Please allow microphone permissions in your browser settings.');
+        }
         setIsListening(false);
       };
 
@@ -131,26 +166,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         setIsListening(false);
       };
 
+      recognition.start();
       recognitionRef.current = recognition;
-    }
-  }, []);
-
-  const toggleVoiceInput = () => {
-    if (!recognitionRef.current) {
-      alert('Speech recognition is not supported in this browser. Please use Chrome or Edge.');
-      return;
-    }
-
-    if (isListening) {
-      recognitionRef.current.stop();
+      setIsListening(true);
+    } catch (err) {
+      console.warn('Could not start speech recognition:', err);
+      alert('Could not access microphone. Please check your browser audio permissions.');
       setIsListening(false);
-    } else {
-      try {
-        recognitionRef.current.start();
-        setIsListening(true);
-      } catch (err) {
-        console.error(err);
-      }
     }
   };
 
@@ -631,6 +653,19 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 <Mic className="w-4 h-4" />
               )}
             </button>
+
+            {/* 5. Live Hands-Free Voice Mode Button */}
+            {onOpenVoiceMode && (
+              <button
+                type="button"
+                onClick={onOpenVoiceMode}
+                className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-850 transition-colors flex items-center gap-1.5 cursor-pointer"
+                title="Open Live Hands-Free Conversational Voice Mode"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-white" />
+                <span className="text-[11px] font-medium hidden sm:inline-block">Voice Mode</span>
+              </button>
+            )}
           </div>
 
           {/* Right tool: Send / Stop button */}

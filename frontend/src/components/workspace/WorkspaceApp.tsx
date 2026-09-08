@@ -13,6 +13,7 @@ import { ProfileModal } from '@/components/modals/ProfileModal';
 import { LibraryModal } from '@/components/modals/LibraryModal';
 import { ScheduledModal } from '@/components/modals/ScheduledModal';
 import { PluginsModal } from '@/components/modals/PluginsModal';
+import { VoiceChatModal } from '@/components/modals/VoiceChatModal';
 import { PhantomIconSvg, SidebarExpandIconSvg } from '@/components/common/PhantomLogo';
 import { api } from '@/lib/api';
 import { ChatMessage, ChatSession, UserProfile, UserSettings } from '@/types';
@@ -52,6 +53,7 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ onNavigateHome }) =>
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [scheduledOpen, setScheduledOpen] = useState(false);
   const [pluginsOpen, setPluginsOpen] = useState(false);
+  const [voiceModeOpen, setVoiceModeOpen] = useState(false);
   const [backendOnline, setBackendOnline] = useState(false);
 
   // Developer Plugins & Tools State
@@ -552,6 +554,7 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ onNavigateHome }) =>
                 pluginsState={plugins}
                 onTogglePlugin={handleTogglePlugin}
                 onOpenPlugins={() => setPluginsOpen(true)}
+                onOpenVoiceMode={() => setVoiceModeOpen(true)}
               />
             </div>
           )}
@@ -636,6 +639,18 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ onNavigateHome }) =>
         onClose={() => setPluginsOpen(false)}
         pluginsState={plugins}
         onTogglePlugin={handleTogglePlugin}
+      />
+
+      {/* Direct Conversational Live Voice Mode Modal */}
+      <VoiceChatModal
+        isOpen={voiceModeOpen}
+        onClose={() => setVoiceModeOpen(false)}
+        onSendMessage={async (prompt) => {
+          handleSendMessage(prompt);
+        }}
+        activeSessionId={activeSessionId || undefined}
+        userVoice={settings.voice}
+        language={settings.language}
       />
     </div>
   );
