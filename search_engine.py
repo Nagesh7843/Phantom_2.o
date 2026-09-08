@@ -117,8 +117,116 @@ def perform_live_web_search(query: str, max_results: int = 5) -> dict:
         "source_count": len(results)
     }
 
+def fetch_dynamic_suggestions(query_seed: str = "", offset: int = 0) -> list:
+    """
+    Dynamically generates real-time suggestions based on live web search & trending tech news.
+    Returns a list of 4 dynamic suggestion items.
+    """
+    import time
+    import random
+
+    topics_pool = [
+        {
+            "category": "AI Research",
+            "query": "latest AI LLM breakthroughs news",
+            "icon": "sparkles",
+            "template_title": "Explore Latest AI Breakthroughs",
+            "template_desc": "Analyze newest model capabilities and research findings",
+            "template_prompt": "What are the latest breakthroughs and benchmark results in modern LLMs and generative AI?"
+        },
+        {
+            "category": "Web & Cloud",
+            "query": "trending developer frameworks tools Next.js React Rust",
+            "icon": "code",
+            "template_title": "Modern Full-Stack Architecture",
+            "template_desc": "Build scalable reactive systems with modern frameworks",
+            "template_prompt": "Explain best practices for architecting high-scale Next.js and Rust microservices."
+        },
+        {
+            "category": "Cybersecurity",
+            "query": "cybersecurity vulnerabilities zero day advisories",
+            "icon": "shield",
+            "template_title": "Security & Vulnerability Audit",
+            "template_desc": "Evaluate zero-trust protocols and authentication security",
+            "template_prompt": "Provide a comprehensive security checklist for securing cloud APIs and microservices."
+        },
+        {
+            "category": "High Performance",
+            "query": "high performance computing algorithms async concurrency",
+            "icon": "zap",
+            "template_title": "Concurrency & Performance Tuning",
+            "template_desc": "Optimize event loop throughput and zero-copy memory pipelines",
+            "template_prompt": "How can I optimize asynchronous high-throughput concurrency and avoid memory bottlenecks?"
+        },
+        {
+            "category": "Database & Distributed",
+            "query": "database distributed systems replication sharding",
+            "icon": "database",
+            "template_title": "Distributed State & Consensus",
+            "template_desc": "Design fault-tolerant data stores and Raft consensus",
+            "template_prompt": "Explain how distributed databases achieve high availability and consensus under network partitions."
+        },
+        {
+            "category": "Generative Media",
+            "query": "generative AI image video models Flux diffusion",
+            "icon": "palette",
+            "template_title": "Generative Art & Visual Synthesis",
+            "template_desc": "Explore diffusion models, neural rendering, and prompt engineering",
+            "template_prompt": "Create a high-contrast minimalist monochrome architectural concept rendering in 8k resolution."
+        }
+    ]
+
+    shuffled_topics = list(topics_pool)
+    if offset:
+        random.seed(int(time.time() * 1000) + offset)
+    random.shuffle(shuffled_topics)
+    selected_topics = shuffled_topics[:4]
+
+    suggestions = []
+    for idx, t in enumerate(selected_topics):
+        try:
+            search_res = perform_live_web_search(t["query"], max_results=1)
+            results = search_res.get("results", [])
+            if results:
+                top = results[0]
+                title = top.get("title", t["template_title"])
+                if len(title) > 42:
+                    title = title[:42].rstrip() + "..."
+                snippet = top.get("snippet", t["template_desc"])
+                if len(snippet) > 85:
+                    snippet = snippet[:85].rstrip() + "..."
+                suggestions.append({
+                    "id": f"dyn_{idx}_{int(time.time())}",
+                    "category": t["category"],
+                    "title": title,
+                    "desc": snippet,
+                    "icon": t["icon"],
+                    "prompt": f"Based on recent developments in {t['category']} ('{top['title']}'): {t['template_prompt']}"
+                })
+            else:
+                suggestions.append({
+                    "id": f"dyn_{idx}_{int(time.time())}",
+                    "category": t["category"],
+                    "title": t["template_title"],
+                    "desc": t["template_desc"],
+                    "icon": t["icon"],
+                    "prompt": t["template_prompt"]
+                })
+        except Exception:
+            suggestions.append({
+                "id": f"dyn_{idx}_{int(time.time())}",
+                "category": t["category"],
+                "title": t["template_title"],
+                "desc": t["template_desc"],
+                "icon": t["icon"],
+                "prompt": t["template_prompt"]
+            })
+
+    return suggestions
+
 if __name__ == "__main__":
     res = perform_live_web_search("Python 3.13 features")
     print(f"Total results found: {res['source_count']}")
     for r in res['results']:
         print(r['title'], '->', r['url'])
+

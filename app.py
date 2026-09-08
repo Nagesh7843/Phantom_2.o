@@ -3283,6 +3283,96 @@ def security_layer_logs():
     }), 200
 
 
+# --- DYNAMIC CHAT SUGGESTIONS ENDPOINT (LIVE WEB SEARCH & TRENDING TECH) ---
+@app.route('/api/suggestions/dynamic', methods=['GET', 'POST'])
+def dynamic_suggestions():
+    """
+    Returns real-time dynamic prompt suggestions based on live web search & trending tech news.
+    """
+    try:
+        offset = request.args.get('offset', 0, type=int)
+        query_seed = request.args.get('seed', '')
+        if search_engine:
+            items = search_engine.fetch_dynamic_suggestions(query_seed=query_seed, offset=offset)
+        else:
+            items = []
+        return jsonify({'success': True, 'suggestions': items}), 200
+    except Exception as e:
+        app.logger.warning(f"Error fetching dynamic suggestions: {e}")
+        return jsonify({'success': False, 'suggestions': []}), 200
+
+
+# --- PLUGINS API ---
+@app.route('/api/plugins', methods=['GET', 'PUT'])
+def user_plugins_api():
+    user_id = get_current_user_id() or session.get('guest_id') or "guest_default"
+    default_plugins = {
+        'web_search': True,
+        'compiler_engine': True,
+        'postgres_sync': True,
+        'image_studio': True,
+        'speech_voice': True,
+        'sandbox_safety': True,
+    }
+    if request.method == 'GET':
+        if db_layer:
+            plugins = db_layer.get_user_plugins(user_id) or default_plugins
+        else:
+            plugins = default_plugins
+        return jsonify({'plugins': plugins}), 200
+
+    elif request.method == 'PUT':
+        data = request.get_json(silent=True) or {}
+        plugins = data.get('plugins', default_plugins)
+        if db_layer:
+            db_layer.save_user_plugins(user_id, plugins)
+        return jsonify({'success': True, 'plugins': plugins}), 200
+
+
+# --- IMAGES GALLERY API ---
+@app.route('/api/images', methods=['GET'])
+def user_images_api():
+    user_id = get_current_user_id() or session.get('guest_id') or "guest_default"
+    if db_layer:
+        images = db_layer.get_user_images(user_id)
+    else:
+        images = []
+    return jsonify({'images': images}), 200
+
+
+# --- SCHEDULED AUTOMATION TASKS API ---
+@app.route('/api/scheduled/tasks', methods=['GET', 'POST', 'PUT', 'DELETE'])
+def scheduled_tasks_api():
+    user_id = get_current_user_id() or session.get('guest_id') or "guest_default"
+    if request.method == 'GET':
+        if db_layer:
+            tasks = db_layer.get_scheduled_tasks(user_id)
+        else:
+            tasks = []
+        return jsonify({'tasks': tasks}), 200
+
+    data = request.get_json(silent=True) or {}
+    if request.method in ('POST', 'PUT'):
+        task_id = data.get('id') or str(uuid.uuid4())
+        task_name = data.get('name', 'Automation Task')
+        task_type = data.get('task_type', 'cron')
+        schedule = data.get('schedule', '0 9 * * *')
+        action = data.get('action', 'daily_briefing')
+        enabled = bool(data.get('enabled', True))
+        notify = bool(data.get('notify', True))
+
+        if db_layer:
+            db_layer.save_scheduled_task(task_id, user_id, task_name, task_type, schedule, action, enabled, notify)
+        return jsonify({'success': True, 'task_id': task_id}), 200
+
+    elif request.method == 'DELETE':
+        task_id = data.get('id') or request.args.get('id')
+        if task_id and db_layer:
+            db_layer.delete_scheduled_task(task_id, user_id)
+        return jsonify({'success': True}), 200
+
+
+
 # --- Start the Flask server ---
 if __name__ == '__main__':
     print("\n--- Starting Flask Backend Server ---")

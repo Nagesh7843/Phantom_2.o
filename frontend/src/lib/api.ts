@@ -463,4 +463,9 @@ export const api = {
       method: 'DELETE',
     });
   },
+
+  // Dynamic Prompt Suggestions API (Live Web Search & Trending Tech)
+  getDynamicSuggestions: async (offset = 0): Promise<{ success: boolean; suggestions: any[] }> => {
+    return request<{ success: boolean; suggestions: any[] }>(`/api/suggestions/dynamic?offset=${offset}`);
+  },
 };
