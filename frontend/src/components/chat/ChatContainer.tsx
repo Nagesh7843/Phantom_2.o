@@ -1,15 +1,15 @@
 'use strict';
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState, useMemo } from 'react';
 import {
   Sparkles,
-  Code2,
-  Image as ImageIcon,
-  ShieldAlert,
-  Compass,
   ArrowRight,
+  RefreshCw,
+  Calendar,
+  Flame,
 } from 'lucide-react';
 import { ChatMessage } from '@/types';
 import { MessageItem } from './MessageItem';
+import { getDailyPromptSuggestions, PromptSuggestion } from '@/lib/dailyPrompts';
 
 interface ChatContainerProps {
   messages: ChatMessage[];
@@ -31,65 +31,92 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
   onSelectSuggestion,
 }) => {
   const bottomRef = useRef<HTMLDivElement>(null);
+  const [shuffleCount, setShuffleCount] = useState(0);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const suggestions = [
-    {
-      title: 'Analyze & Debug Code',
-      desc: 'Build web sandbox apps or fix complex async code',
-      icon: Code2,
-      prompt: 'Can you analyze this code, explain its logic, and show optimized performance improvements?',
-    },
-    {
-      title: 'Generate Creative Visuals',
-      desc: 'Create high-contrast visuals, logos, and UI concept art',
-      icon: ImageIcon,
-      prompt: 'Create a high-contrast minimalist monochrome architectural concept rendering in 8k resolution',
-    },
-    {
-      title: 'Security & Architecture Audit',
-      desc: 'Evaluate API security, sanitization, and best practices',
-      icon: ShieldAlert,
-      prompt: 'Explain best practices for securing REST, WebSocket, and GraphQL endpoints against vulnerabilities',
-    },
-    {
-      title: 'AI & System Architecture',
-      desc: 'Deep dive into Transformer architectures & tokenization',
-      icon: Compass,
-      prompt: 'Explain the internal mechanics of LLM attention mechanisms and token embedding matrices in depth',
-    },
-  ];
+  // Dynamic daily prompts refreshed deterministically every calendar day or via shuffle button
+  const dailyData = useMemo(() => {
+    return getDailyPromptSuggestions(shuffleCount);
+  }, [shuffleCount]);
+
+  const handleShuffle = () => {
+    setIsRefreshing(true);
+    setShuffleCount((prev) => prev + 1);
+    setTimeout(() => setIsRefreshing(false), 300);
+  };
 
   return (
     <div className="flex-1 overflow-y-auto px-2 sm:px-6 py-6 space-y-4">
       {messages.length === 0 ? (
         <div className="max-w-3xl mx-auto h-full flex flex-col items-center justify-center text-center py-8 px-4 animate-fade-in">
+          {/* Daily Badge & Dynamic Date Indicator */}
+          <div className="mb-4 inline-flex items-center gap-2 px-3 py-1 rounded-full bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 shadow-sm animate-slide-up">
+            <Calendar className="w-3.5 h-3.5 text-zinc-400" />
+            <span className="font-semibold text-zinc-200">{dailyData.dateTitle}</span>
+            <span className="text-zinc-600">•</span>
+            <span className="text-[11px] text-zinc-400 font-mono flex items-center gap-1">
+              <Sparkles className="w-3 h-3 text-zinc-300" />
+              Refreshed Daily
+            </span>
+          </div>
+
           <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-zinc-100 dark:text-white mb-2">
             How can Phantom assist you today?
           </h2>
-          <p className="text-sm text-zinc-400 dark:text-zinc-400 max-w-md mb-8">
+          <p className="text-sm text-zinc-400 dark:text-zinc-400 max-w-md mb-6">
             Next-generation multi-model AI, project code editor, and live web sandbox.
           </p>
 
-          {/* Quick Start Suggestions Grid */}
+          {/* Daily Suggestions Header with Shuffle Button */}
+          <div className="w-full flex items-center justify-between px-1 mb-3">
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-zinc-400 font-mono uppercase tracking-wider">
+              <Flame className="w-3.5 h-3.5 text-amber-400" />
+              <span>{dailyData.dayLabel}</span>
+            </div>
+            <button
+              type="button"
+              onClick={handleShuffle}
+              className="px-2.5 py-1 rounded-lg text-xs text-zinc-400 hover:text-white hover:bg-zinc-850 border border-transparent hover:border-zinc-800 transition-all flex items-center gap-1.5 active:scale-95 group"
+              title="Get a fresh set of prompt ideas"
+            >
+              <RefreshCw className={`w-3 h-3 transition-transform ${isRefreshing ? 'animate-spin text-white' : 'group-hover:rotate-180 duration-500'}`} />
+              <span className="text-[11px] font-medium">Shuffle Topics</span>
+            </button>
+          </div>
+
+          {/* Dynamic Suggestions Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 w-full">
-            {suggestions.map((s, idx) => {
+            {dailyData.suggestions.map((s, idx) => {
               const Icon = s.icon;
               return (
                 <button
-                  key={idx}
+                  key={`${s.id}_${shuffleCount}_${idx}`}
                   onClick={() => onSelectSuggestion(s.prompt)}
-                  className="group relative p-4 rounded-2xl bg-zinc-900/90 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-500 text-left transition-all duration-200 shadow-lg active:scale-[0.98]"
+                  className="group relative p-4 rounded-2xl bg-zinc-900/90 hover:bg-zinc-850 border border-zinc-800 hover:border-zinc-600 text-left transition-all duration-200 shadow-md hover:shadow-lg active:scale-[0.98] flex flex-col justify-between"
                 >
-                  <div className="flex items-start justify-between mb-2">
-                    <Icon className="w-5 h-5 text-zinc-200 group-hover:text-white transition-colors" />
-                    <ArrowRight className="w-4 h-4 text-zinc-400 group-hover:text-white group-hover:translate-x-0.5 transition-all" />
+                  <div>
+                    <div className="flex items-start justify-between mb-2.5">
+                      <div className="flex items-center gap-2">
+                        <div className="p-1.5 rounded-lg bg-zinc-800 group-hover:bg-zinc-750 text-zinc-200 group-hover:text-white transition-colors">
+                          <Icon className="w-4 h-4" />
+                        </div>
+                        <span className="text-[10px] font-mono uppercase tracking-wider font-bold px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400 group-hover:text-zinc-300">
+                          {s.category}
+                        </span>
+                      </div>
+                      <ArrowRight className="w-4 h-4 text-zinc-500 group-hover:text-white group-hover:translate-x-0.5 transition-all" />
+                    </div>
+                    <h3 className="font-semibold text-zinc-100 group-hover:text-white text-sm mb-1.5 tracking-tight">
+                      {s.title}
+                    </h3>
+                    <p className="text-xs text-zinc-400 group-hover:text-zinc-300 leading-relaxed line-clamp-2">
+                      {s.desc}
+                    </p>
                   </div>
-                  <h3 className="font-semibold text-zinc-100 group-hover:text-white text-sm mb-1">{s.title}</h3>
-                  <p className="text-xs text-zinc-400 group-hover:text-zinc-300 leading-relaxed">{s.desc}</p>
                 </button>
               );
             })}
@@ -114,4 +141,5 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
     </div>
   );
 };
+
 
