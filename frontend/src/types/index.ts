@@ -25,6 +25,8 @@ export interface ChatMessage {
       url: string;
     }>;
   };
+  reactions?: Record<string, number>;
+  userReactions?: string[];
 }
 
 export interface ChatSession {

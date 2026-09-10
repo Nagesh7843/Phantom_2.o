@@ -516,6 +516,37 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ onNavigateHome }) =>
     setActiveTab('compiler');
   };
 
+  const handleReactToMessage = (messageId: string, emoji: string) => {
+    setMessages((prev) =>
+      prev.map((msg) => {
+        if (msg.id !== messageId) return msg;
+        const userReactions = msg.userReactions || [];
+        const hasReacted = userReactions.includes(emoji);
+        const updatedUserReactions = hasReacted
+          ? userReactions.filter((e) => e !== emoji)
+          : [...userReactions, emoji];
+
+        const updatedReactions = { ...(msg.reactions || {}) };
+        if (hasReacted) {
+          const newCount = (updatedReactions[emoji] || 1) - 1;
+          if (newCount <= 0) {
+            delete updatedReactions[emoji];
+          } else {
+            updatedReactions[emoji] = newCount;
+          }
+        } else {
+          updatedReactions[emoji] = (updatedReactions[emoji] || 0) + 1;
+        }
+
+        return {
+          ...msg,
+          reactions: updatedReactions,
+          userReactions: updatedUserReactions,
+        };
+      })
+    );
+  };
+
   const convertFileToBase64 = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -642,6 +673,7 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ onNavigateHome }) =>
                 onSelectSuggestion={(promptText) => {
                   handleSendMessage(promptText);
                 }}
+                onReact={handleReactToMessage}
               />
               <ChatInput
                 onSendMessage={handleSendMessage}

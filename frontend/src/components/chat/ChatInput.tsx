@@ -25,9 +25,11 @@ import {
   Globe,
   Check,
   File as GenericFileIcon,
+  Smile,
 } from 'lucide-react';
 import { scanForSecrets, redactSecrets, SecretScanResult } from '@/lib/secretGuard';
 import { SecretWarningModal } from './SecretWarningModal';
+import { EmojiPickerPopover } from './EmojiPickerPopover';
 
 interface ChatInputProps {
   onSendMessage: (text: string, file?: File | null, mode?: string | null) => void;
@@ -62,6 +64,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const [selectedMode, setSelectedMode] = useState<string | null>(null);
   const [showModeMenu, setShowModeMenu] = useState(false);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [fileAcceptFilter, setFileAcceptFilter] = useState<string>('*/*');
 
   // Secret & Sensitive Data Guard State
@@ -78,8 +81,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const recognitionRef = useRef<any>(null);
   const attachMenuRef = useRef<HTMLDivElement>(null);
   const modeMenuRef = useRef<HTMLDivElement>(null);
+  const emojiPickerRef = useRef<HTMLDivElement>(null);
 
-  // Close dropup menus when clicking outside
+  // Close dropup menus when clicking outside or pressing Escape
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (attachMenuRef.current && !attachMenuRef.current.contains(event.target as Node)) {
@@ -88,9 +92,23 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       if (modeMenuRef.current && !modeMenuRef.current.contains(event.target as Node)) {
         setShowModeMenu(false);
       }
+      if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target as Node)) {
+        setShowEmojiPicker(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setShowAttachMenu(false);
+        setShowModeMenu(false);
+        setShowEmojiPicker(false);
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
   }, []);
 
   // Live Secret Scanner on text change
@@ -262,6 +280,22 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const handleProceedAnyway = () => {
     setShowSecretModal(false);
     handleSubmit(undefined, true);
+  };
+
+  const handleInsertEmoji = (emoji: string) => {
+    if (textareaRef.current) {
+      const textarea = textareaRef.current;
+      const start = textarea.selectionStart ?? text.length;
+      const end = textarea.selectionEnd ?? text.length;
+      const updatedText = text.substring(0, start) + emoji + text.substring(end);
+      setText(updatedText);
+      setTimeout(() => {
+        textarea.focus();
+        textarea.setSelectionRange(start + emoji.length, start + emoji.length);
+      }, 0);
+    } else {
+      setText((prev) => prev + emoji);
+    }
   };
 
   const handleSubmit = (e?: React.FormEvent, bypassSecretCheck = false) => {
@@ -613,7 +647,38 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               )}
             </div>
 
-            {/* 3. Authenticated Only Tools (Web Search, Voice Input, Voice Mode) */}
+            {/* 3. Emoji Picker Popover Toggle Button */}
+            <div className="relative" ref={emojiPickerRef}>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowEmojiPicker(!showEmojiPicker);
+                  setShowAttachMenu(false);
+                  setShowModeMenu(false);
+                }}
+                className={`p-1.5 rounded-lg transition-all flex items-center gap-1 cursor-pointer ${
+                  showEmojiPicker
+                    ? 'bg-zinc-800 text-amber-400 border border-zinc-600 shadow-sm'
+                    : 'text-zinc-400 hover:text-white hover:bg-zinc-850'
+                }`}
+                title="Insert emojis into your message"
+                aria-label="Insert Emoji"
+              >
+                <Smile className="w-4 h-4" />
+              </button>
+
+              {/* Emoji Picker Popover */}
+              {showEmojiPicker && (
+                <div className="absolute bottom-full left-0 mb-2 z-50">
+                  <EmojiPickerPopover
+                    onSelectEmoji={handleInsertEmoji}
+                    onClose={() => setShowEmojiPicker(false)}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* 4. Authenticated Only Tools (Web Search, Voice Input, Voice Mode) */}
             {isAuthenticated && (
               <>
                 {/* Web Search Toggle Button */}

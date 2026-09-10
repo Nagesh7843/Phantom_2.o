@@ -15,8 +15,11 @@ import {
   ExternalLink,
   ChevronDown,
   ChevronUp,
+  SmilePlus,
+  Plus,
 } from 'lucide-react';
 import { ChatMessage, Role } from '@/types';
+import { EmojiPickerPopover } from './EmojiPickerPopover';
 
 interface MessageItemProps {
   message: ChatMessage;
@@ -25,6 +28,7 @@ interface MessageItemProps {
   onSendToIDE?: (code: string, language: string) => void;
   onEditMessage?: (text: string) => void;
   onRetry?: () => void;
+  onReact?: (messageId: string, emoji: string) => void;
 }
 
 export const MessageItem: React.FC<MessageItemProps> = ({
@@ -34,10 +38,59 @@ export const MessageItem: React.FC<MessageItemProps> = ({
   onSendToIDE,
   onEditMessage,
   onRetry,
+  onReact,
 }) => {
   const [copied, setCopied] = useState(false);
   const [copiedCodeId, setCopiedCodeId] = useState<string | null>(null);
   const [showCitations, setShowCitations] = useState(false);
+  const [reactions, setReactions] = useState<Record<string, number>>(message.reactions || {});
+  const [userReactions, setUserReactions] = useState<string[]>(message.userReactions || []);
+  const [showReactionMenu, setShowReactionMenu] = useState(false);
+  const [showFullPicker, setShowFullPicker] = useState(false);
+
+  const reactionMenuRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (reactionMenuRef.current && !reactionMenuRef.current.contains(e.target as Node)) {
+        setShowReactionMenu(false);
+        setShowFullPicker(false);
+      }
+    };
+    if (showReactionMenu || showFullPicker) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showReactionMenu, showFullPicker]);
+
+  const QUICK_REACTIONS = ['👍', '❤️', '🔥', '🚀', '💡', '😂', '🎉'];
+
+  const handleToggleReaction = (emoji: string) => {
+    const hasReacted = userReactions.includes(emoji);
+    const updatedUserReactions = hasReacted
+      ? userReactions.filter((e) => e !== emoji)
+      : [...userReactions, emoji];
+
+    const updatedReactions = { ...reactions };
+    if (hasReacted) {
+      const newCount = (updatedReactions[emoji] || 1) - 1;
+      if (newCount <= 0) {
+        delete updatedReactions[emoji];
+      } else {
+        updatedReactions[emoji] = newCount;
+      }
+    } else {
+      updatedReactions[emoji] = (updatedReactions[emoji] || 0) + 1;
+    }
+
+    setUserReactions(updatedUserReactions);
+    setReactions(updatedReactions);
+    setShowReactionMenu(false);
+    setShowFullPicker(false);
+    onReact?.(message.id, emoji);
+  };
 
   const isUser = message.role === 'user';
   const textContent =
@@ -264,9 +317,105 @@ export const MessageItem: React.FC<MessageItemProps> = ({
           )}
         </div>
 
+        {/* Emoji Reactions Badges */}
+        {Object.keys(reactions).length > 0 && (
+          <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+            {Object.entries(reactions).map(([emoji, count]) => {
+              const hasReacted = userReactions.includes(emoji);
+              return (
+                <button
+                  key={emoji}
+                  type="button"
+                  onClick={() => handleToggleReaction(emoji)}
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium transition-all cursor-pointer ${
+                    hasReacted
+                      ? 'bg-zinc-800 text-white border border-zinc-600 shadow-sm'
+                      : 'bg-zinc-900/90 text-zinc-300 border border-zinc-800 hover:bg-zinc-850 hover:border-zinc-700'
+                  }`}
+                  title={`${count} reaction${count > 1 ? 's' : ''} with ${emoji} (click to toggle)`}
+                >
+                  <span className="text-sm select-none">{emoji}</span>
+                  <span className="text-[11px] font-mono text-zinc-300">{count}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         {/* Action Toolbar */}
         {!message.typing && (
-          <div className="flex items-center gap-1 mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity text-zinc-400">
+          <div className="relative flex items-center gap-1 mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity text-zinc-400">
+            {/* Quick Emoji Reaction Trigger */}
+            <div className="relative" ref={reactionMenuRef}>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowReactionMenu(!showReactionMenu);
+                  setShowFullPicker(false);
+                }}
+                className={`p-1.5 rounded-lg transition-colors ${
+                  showReactionMenu || showFullPicker
+                    ? 'bg-zinc-800 text-amber-400'
+                    : 'hover:bg-zinc-900 hover:text-white'
+                }`}
+                title="Add emoji reaction"
+              >
+                <SmilePlus className="w-3.5 h-3.5" />
+              </button>
+
+              {/* Floating Quick Reaction Toolbar */}
+              {showReactionMenu && (
+                <div
+                  className={`absolute bottom-full mb-1.5 p-1 rounded-2xl bg-zinc-950/95 border border-zinc-700 shadow-2xl backdrop-blur-xl z-50 flex items-center gap-1 animate-fade-in ${
+                    isUser ? 'right-0' : 'left-0'
+                  }`}
+                >
+                  {QUICK_REACTIONS.map((emoji) => {
+                    const isSelected = userReactions.includes(emoji);
+                    return (
+                      <button
+                        key={emoji}
+                        type="button"
+                        onClick={() => handleToggleReaction(emoji)}
+                        className={`w-7 h-7 rounded-xl flex items-center justify-center text-sm hover:scale-125 active:scale-95 transition-all cursor-pointer ${
+                          isSelected ? 'bg-zinc-800 border border-zinc-600' : 'hover:bg-zinc-850'
+                        }`}
+                        title={`React with ${emoji}`}
+                      >
+                        {emoji}
+                      </button>
+                    );
+                  })}
+                  <div className="w-[1px] h-4 bg-zinc-800 my-auto" />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowFullPicker(true);
+                      setShowReactionMenu(false);
+                    }}
+                    className="w-7 h-7 rounded-xl flex items-center justify-center text-xs hover:bg-zinc-850 hover:text-white text-zinc-400 transition-colors"
+                    title="More emojis..."
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+
+              {/* Full Emoji Picker Popover for Reactions */}
+              {showFullPicker && (
+                <div
+                  className={`absolute bottom-full mb-2 z-50 ${
+                    isUser ? 'right-0' : 'left-0'
+                  }`}
+                >
+                  <EmojiPickerPopover
+                    onSelectEmoji={(emoji) => handleToggleReaction(emoji)}
+                    onClose={() => setShowFullPicker(false)}
+                  />
+                </div>
+              )}
+            </div>
+
             <button
               onClick={() => onSpeak(textContent)}
               className="p-1.5 rounded-lg hover:bg-zinc-900 hover:text-white transition-colors"

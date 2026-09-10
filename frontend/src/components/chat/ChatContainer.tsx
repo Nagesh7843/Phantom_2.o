@@ -33,6 +33,7 @@ interface ChatContainerProps {
   onEditMessage?: (text: string) => void;
   onRetry?: () => void;
   onSelectSuggestion: (text: string) => void;
+  onReact?: (messageId: string, emoji: string) => void;
 }
 
 export const ChatContainer: React.FC<ChatContainerProps> = ({
@@ -43,6 +44,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
   onEditMessage,
   onRetry,
   onSelectSuggestion,
+  onReact,
 }) => {
   const bottomRef = useRef<HTMLDivElement>(null);
   const [suggestions, setSuggestions] = useState<DynamicSuggestion[]>([]);
@@ -180,6 +182,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
               onSendToIDE={onSendToIDE}
               onEditMessage={onEditMessage}
               onRetry={onRetry}
+              onReact={onReact}
             />
           ))}
           <div ref={bottomRef} />
