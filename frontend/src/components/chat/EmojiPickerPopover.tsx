@@ -337,9 +337,9 @@ export const EmojiPickerPopover: React.FC<EmojiPickerPopoverProps> = ({
                     const match = EMOJI_DATABASE.find((e) => e.emoji === emoji);
                     setHoveredEmoji(match || { emoji, name: 'Emoji', category: 'recent', keywords: [] });
                   }}
-                  className="w-8 h-8 rounded-lg hover:bg-zinc-800 hover:scale-110 active:scale-95 text-lg flex items-center justify-center transition-all cursor-pointer select-none"
+                  className="w-8 h-8 rounded-lg hover:bg-zinc-800 hover:scale-110 active:scale-95 text-lg font-emoji flex items-center justify-center transition-all cursor-pointer select-none leading-none"
                 >
-                  {emoji}
+                  <span className="font-emoji select-none">{emoji}</span>
                 </button>
               ))}
             </div>
@@ -365,10 +365,10 @@ export const EmojiPickerPopover: React.FC<EmojiPickerPopoverProps> = ({
                   type="button"
                   onClick={() => handlePick(item.emoji)}
                   onMouseEnter={() => setHoveredEmoji(item)}
-                  className="w-8 h-8 rounded-lg hover:bg-zinc-800 hover:scale-110 active:scale-95 text-lg flex items-center justify-center transition-all cursor-pointer select-none"
+                  className="w-8 h-8 rounded-lg hover:bg-zinc-800 hover:scale-110 active:scale-95 text-lg font-emoji flex items-center justify-center transition-all cursor-pointer select-none leading-none"
                   title={item.name}
                 >
-                  {item.emoji}
+                  <span className="font-emoji select-none">{item.emoji}</span>
                 </button>
               ))}
             </div>

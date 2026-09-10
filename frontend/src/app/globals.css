@@ -27,7 +27,20 @@
     background-color: var(--background);
     color: var(--foreground);
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+    font-variant-emoji: emoji;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
     transition: background-color 0.2s ease, color 0.2s ease;
+  }
+
+  .font-emoji, .emoji {
+    font-family: "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji", "Android Emoji", sans-serif !important;
+    font-variant-emoji: emoji !important;
+    font-style: normal !important;
+    line-height: 1.15;
+    display: inline-block;
+    vertical-align: -0.05em;
   }
 
   /* Full Application Light Theme Overrides */

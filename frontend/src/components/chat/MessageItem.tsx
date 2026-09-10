@@ -334,8 +334,8 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                   }`}
                   title={`${count} reaction${count > 1 ? 's' : ''} with ${emoji} (click to toggle)`}
                 >
-                  <span className="text-sm select-none">{emoji}</span>
-                  <span className="text-[11px] font-mono text-zinc-300">{count}</span>
+                  <span className="text-base font-emoji select-none leading-none">{emoji}</span>
+                  <span className="text-[11px] font-mono text-zinc-300 font-semibold">{count}</span>
                 </button>
               );
             })}
@@ -377,12 +377,12 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                         key={emoji}
                         type="button"
                         onClick={() => handleToggleReaction(emoji)}
-                        className={`w-7 h-7 rounded-xl flex items-center justify-center text-sm hover:scale-125 active:scale-95 transition-all cursor-pointer ${
+                        className={`w-7 h-7 rounded-xl flex items-center justify-center text-base font-emoji hover:scale-125 active:scale-95 transition-all cursor-pointer leading-none ${
                           isSelected ? 'bg-zinc-800 border border-zinc-600' : 'hover:bg-zinc-850'
                         }`}
                         title={`React with ${emoji}`}
                       >
-                        {emoji}
+                        <span className="font-emoji select-none">{emoji}</span>
                       </button>
                     );
                   })}
