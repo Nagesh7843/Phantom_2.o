@@ -13,6 +13,22 @@ import {
   PortStatus,
 } from '@/types';
 
+export function fixMojibake(str: string): string {
+  if (!str) return '';
+  if (/[\u00C0-\u00FF][\u0080-\u00BF]/.test(str)) {
+    try {
+      const bytes = new Uint8Array(str.length);
+      for (let i = 0; i < str.length; i++) {
+        bytes[i] = str.charCodeAt(i) & 0xff;
+      }
+      return new TextDecoder('utf-8').decode(bytes);
+    } catch {
+      return str;
+    }
+  }
+  return str;
+}
+
 const API_BASE = ''; // Uses Next.js rewrites to proxy to Flask /api
 
 async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
@@ -243,7 +259,7 @@ export const api = {
                 onSearchMetadata?.(data.search_metadata);
               }
               if (data.chunk) {
-                onChunk(data.chunk, activeSessionId, activeSessionTitle);
+                onChunk(fixMojibake(data.chunk), activeSessionId, activeSessionTitle);
               }
               if (data.done) {
                 notifyDone();

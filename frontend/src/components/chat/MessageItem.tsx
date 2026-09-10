@@ -31,6 +31,22 @@ interface MessageItemProps {
   onReact?: (messageId: string, emoji: string) => void;
 }
 
+function fixMojibake(str: string): string {
+  if (!str) return '';
+  if (/[\u00C0-\u00FF][\u0080-\u00BF]/.test(str)) {
+    try {
+      const bytes = new Uint8Array(str.length);
+      for (let i = 0; i < str.length; i++) {
+        bytes[i] = str.charCodeAt(i) & 0xff;
+      }
+      return new TextDecoder('utf-8').decode(bytes);
+    } catch {
+      return str;
+    }
+  }
+  return str;
+}
+
 export const MessageItem: React.FC<MessageItemProps> = ({
   message,
   userAvatar,
@@ -93,8 +109,9 @@ export const MessageItem: React.FC<MessageItemProps> = ({
   };
 
   const isUser = message.role === 'user';
-  const textContent =
+  const rawText =
     message.parts.map((p) => p.text || '').join('\n').trim() || '';
+  const textContent = fixMojibake(rawText);
   const hasImageAttachment = message.parts.some((p) => p.inlineData);
   const hasCitations = Boolean(
     message.searchMetadata?.citations && message.searchMetadata.citations.length > 0

@@ -475,6 +475,7 @@ def execute_ai_completion(messages_for_gemini: list, instruction_text: str) -> t
                 model_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={GEMINI_API_KEY}"
                 resp = requests.post(model_url, json=gemini_payload, timeout=(3, 10))
                 if resp.status_code == 200:
+                    resp.encoding = 'utf-8'
                     raw = resp.json()
                     text = _extract_text_from_provider(raw, 'gemini')
                     if text:
@@ -517,6 +518,7 @@ def execute_ai_completion(messages_for_gemini: list, instruction_text: str) -> t
             }
             resp = requests.post("https://api.openrouter.ai/v1/chat/completions", json=or_payload, headers=or_headers, timeout=25)
             if resp.status_code == 200:
+                resp.encoding = 'utf-8'
                 raw = resp.json()
                 text = _extract_text_from_provider(raw, 'openrouter')
                 if text:
@@ -541,6 +543,7 @@ def execute_ai_completion(messages_for_gemini: list, instruction_text: str) -> t
             }
             resp = requests.post("https://api.openai.com/v1/chat/completions", json=oa_payload, headers=oa_headers, timeout=25)
             if resp.status_code == 200:
+                resp.encoding = 'utf-8'
                 raw = resp.json()
                 text = _extract_text_from_provider(raw, 'openai')
                 if text:
@@ -566,6 +569,7 @@ def execute_ai_completion(messages_for_gemini: list, instruction_text: str) -> t
             }
             resp = requests.post(hf_url, json=hf_payload, headers=hf_headers, timeout=25)
             if resp.status_code == 200:
+                resp.encoding = 'utf-8'
                 raw = resp.json()
                 text = _extract_text_from_provider(raw, 'huggingface')
                 if text:
@@ -1424,10 +1428,10 @@ def chat_stream_api():
                 except Exception:
                     pass
 
-            yield f"data: {json.dumps({'chunk': markdown_img, 'session_id': current_session_id, 'session_title': smart_session_title})}\n\n"
-            yield f"data: {json.dumps({'done': True, 'session_id': current_session_id, 'session_title': smart_session_title})}\n\n"
+            yield f"data: {json.dumps({'chunk': markdown_img, 'session_id': current_session_id, 'session_title': smart_session_title}, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps({'done': True, 'session_id': current_session_id, 'session_title': smart_session_title}, ensure_ascii=False)}\n\n"
 
-        return Response(generate_image_stream(), mimetype='text/event-stream')
+        return Response(generate_image_stream(), content_type='text/event-stream; charset=utf-8')
 
     is_voice_mode = bool(client_payload.get('is_voice_mode', False) or client_payload.get('voice_mode', False))
     if is_voice_mode:
@@ -1460,7 +1464,7 @@ Do not use special formatting characters like '*' or '#' in titles. Do not repea
     def event_stream():
         full_response_accumulated = []
         if search_citations:
-            yield f"data: {json.dumps({'search_metadata': {'enabled': True, 'query': new_user_message_content.strip()[:60], 'citations': search_citations}, 'session_id': current_session_id, 'session_title': smart_session_title})}\n\n"
+            yield f"data: {json.dumps({'search_metadata': {'enabled': True, 'query': new_user_message_content.strip()[:60], 'citations': search_citations}, 'session_id': current_session_id, 'session_title': smart_session_title}, ensure_ascii=False)}\n\n"
 
         stream_models = [
             'gemini-2.5-flash',
@@ -1476,20 +1480,22 @@ Do not use special formatting characters like '*' or '#' in titles. Do not repea
                     resp = requests.post(stream_url, json=gemini_payload, stream=True, timeout=(3, 12))
 
                     if resp.status_code == 200:
-                        for line in resp.iter_lines(decode_unicode=True):
-                            if line and line.startswith('data: '):
-                                data_str = line[6:]
-                                try:
-                                    chunk_json = json.loads(data_str)
-                                    candidates = chunk_json.get('candidates', [])
-                                    if candidates and candidates[0].get('content'):
-                                        parts = candidates[0]['content'].get('parts', [])
-                                        if parts and parts[0].get('text'):
-                                            text_chunk = parts[0]['text']
-                                            full_response_accumulated.append(text_chunk)
-                                            yield f"data: {json.dumps({'chunk': text_chunk, 'session_id': current_session_id, 'session_title': smart_session_title})}\n\n"
-                                except Exception:
-                                    continue
+                        for raw_line in resp.iter_lines(decode_unicode=False):
+                            if raw_line:
+                                line = raw_line.decode('utf-8', errors='replace') if isinstance(raw_line, (bytes, bytearray)) else str(raw_line)
+                                if line.startswith('data: '):
+                                    data_str = line[6:].strip()
+                                    try:
+                                        chunk_json = json.loads(data_str)
+                                        candidates = chunk_json.get('candidates', [])
+                                        if candidates and candidates[0].get('content'):
+                                            parts = candidates[0]['content'].get('parts', [])
+                                            if parts and parts[0].get('text'):
+                                                text_chunk = parts[0]['text']
+                                                full_response_accumulated.append(text_chunk)
+                                                yield f"data: {json.dumps({'chunk': text_chunk, 'session_id': current_session_id, 'session_title': smart_session_title}, ensure_ascii=False)}\n\n"
+                                    except Exception:
+                                        continue
                         stream_success = True
                         break
                     elif resp.status_code in (400, 401, 403):
@@ -1508,10 +1514,10 @@ Do not use special formatting characters like '*' or '#' in titles. Do not repea
             response_text, provider_used, _ = execute_ai_completion(messages_for_gemini, instruction_text)
             if response_text:
                 full_response_accumulated.append(response_text)
-                yield f"data: {json.dumps({'chunk': response_text, 'session_id': current_session_id, 'session_title': smart_session_title})}\n\n"
+                yield f"data: {json.dumps({'chunk': response_text, 'session_id': current_session_id, 'session_title': smart_session_title}, ensure_ascii=False)}\n\n"
             else:
                 err_msg = "AI service is currently busy. Please retry in a moment."
-                yield f"data: {json.dumps({'chunk': err_msg, 'session_id': current_session_id, 'session_title': smart_session_title})}\n\n"
+                yield f"data: {json.dumps({'chunk': err_msg, 'session_id': current_session_id, 'session_title': smart_session_title}, ensure_ascii=False)}\n\n"
 
         final_text = "".join(full_response_accumulated).strip()
         if final_text:
@@ -1534,9 +1540,9 @@ Do not use special formatting characters like '*' or '#' in titles. Do not repea
                 except Exception as e:
                     app.logger.error(f"Failed to save streamed response to DB: {e}")
 
-        yield f"data: {json.dumps({'done': True, 'session_id': current_session_id, 'session_title': smart_session_title})}\n\n"
+        yield f"data: {json.dumps({'done': True, 'session_id': current_session_id, 'session_title': smart_session_title}, ensure_ascii=False)}\n\n"
 
-    sse_response = Response(event_stream(), mimetype='text/event-stream')
+    sse_response = Response(event_stream(), content_type='text/event-stream; charset=utf-8')
     sse_response.headers['Cache-Control'] = 'no-cache, no-transform'
     sse_response.headers['X-Accel-Buffering'] = 'no'
     sse_response.headers['Connection'] = 'keep-alive'
