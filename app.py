@@ -496,9 +496,11 @@ def execute_ai_completion(messages_for_gemini: list, instruction_text: str) -> t
             "contents": messages_for_gemini
         }
         gemini_models = [
-            'gemini-2.5-flash',
-            'gemini-2.0-flash',
-            'gemini-1.5-flash'
+            'gemini-3.5-flash',
+            'gemini-flash-latest',
+            'gemini-3.5-flash-lite',
+            'gemini-flash-lite-latest',
+            'gemini-2.5-flash'
         ]
         for model_name in gemini_models:
             try:
@@ -1498,9 +1500,11 @@ Do not use special formatting characters like '*' or '#' in titles. Do not repea
             yield f"data: {json.dumps({'search_metadata': {'enabled': True, 'query': new_user_message_content.strip()[:60], 'citations': search_citations}, 'session_id': current_session_id, 'session_title': smart_session_title}, ensure_ascii=False)}\n\n"
 
         stream_models = [
-            'gemini-2.5-flash',
-            'gemini-2.0-flash',
-            'gemini-1.5-flash'
+            'gemini-3.5-flash',
+            'gemini-flash-latest',
+            'gemini-3.5-flash-lite',
+            'gemini-flash-lite-latest',
+            'gemini-2.5-flash'
         ]
 
         stream_success = False
