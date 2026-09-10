@@ -26,6 +26,36 @@ import random
 
 def remove_stars_and_hashes(text: str) -> str:
     return re.sub(r"[\*\#]", "", text)
+
+CP1252_REVERSE_MAP = {
+    0x20AC: 0x80, 0x201A: 0x82, 0x0192: 0x83, 0x201E: 0x84,
+    0x2026: 0x85, 0x2020: 0x86, 0x2021: 0x87, 0x02C6: 0x88,
+    0x2030: 0x89, 0x0160: 0x8A, 0x2039: 0x8B, 0x0152: 0x8C,
+    0x017D: 0x8E, 0x2018: 0x91, 0x2019: 0x92, 0x201C: 0x93,
+    0x201D: 0x94, 0x2022: 0x95, 0x2013: 0x96, 0x2014: 0x97,
+    0x02DC: 0x98, 0x2122: 0x99, 0x0161: 0x9A, 0x203A: 0x9B,
+    0x0153: 0x9C, 0x017E: 0x9E, 0x0178: 0x9F
+}
+
+def fix_mojibake(text: str) -> str:
+    """Repair any misdecoded Windows-1252 / latin-1 byte sequence into clean UTF-8 emojis."""
+    if not text:
+        return ""
+    if not any(0xC0 <= ord(c) <= 0xFF for c in text):
+        return text
+    try:
+        raw_bytes = bytearray()
+        for ch in text:
+            code = ord(ch)
+            if code in CP1252_REVERSE_MAP:
+                raw_bytes.append(CP1252_REVERSE_MAP[code])
+            elif code <= 0xFF:
+                raw_bytes.append(code)
+            else:
+                raw_bytes.extend(ch.encode('utf-8'))
+        return raw_bytes.decode('utf-8', errors='replace')
+    except Exception:
+        return text
 # Load environment variables from .env file at the very beginning
 load_dotenv()
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://127.0.0.1:3000').rstrip('/')
@@ -1491,7 +1521,8 @@ Do not use special formatting characters like '*' or '#' in titles. Do not repea
                                         if candidates and candidates[0].get('content'):
                                             parts = candidates[0]['content'].get('parts', [])
                                             if parts and parts[0].get('text'):
-                                                text_chunk = parts[0]['text']
+                                                raw_chunk = parts[0]['text']
+                                                text_chunk = fix_mojibake(raw_chunk)
                                                 full_response_accumulated.append(text_chunk)
                                                 yield f"data: {json.dumps({'chunk': text_chunk, 'session_id': current_session_id, 'session_title': smart_session_title}, ensure_ascii=False)}\n\n"
                                     except Exception:
@@ -1513,13 +1544,14 @@ Do not use special formatting characters like '*' or '#' in titles. Do not repea
             # Fallback to non-streaming execution across models
             response_text, provider_used, _ = execute_ai_completion(messages_for_gemini, instruction_text)
             if response_text:
-                full_response_accumulated.append(response_text)
-                yield f"data: {json.dumps({'chunk': response_text, 'session_id': current_session_id, 'session_title': smart_session_title}, ensure_ascii=False)}\n\n"
+                clean_response = fix_mojibake(response_text)
+                full_response_accumulated.append(clean_response)
+                yield f"data: {json.dumps({'chunk': clean_response, 'session_id': current_session_id, 'session_title': smart_session_title}, ensure_ascii=False)}\n\n"
             else:
                 err_msg = "AI service is currently busy. Please retry in a moment."
                 yield f"data: {json.dumps({'chunk': err_msg, 'session_id': current_session_id, 'session_title': smart_session_title}, ensure_ascii=False)}\n\n"
 
-        final_text = "".join(full_response_accumulated).strip()
+        final_text = fix_mojibake("".join(full_response_accumulated)).strip()
         if final_text:
             if db_layer:
                 try:
