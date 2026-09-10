@@ -11,7 +11,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { api } from '@/lib/api';
-import { applyMaleVoiceSettings } from '@/lib/voiceUtils';
+import { applyMaleVoiceSettings, cleanTextForSpeech } from '@/lib/voiceUtils';
 
 interface VoiceChatModalProps {
   isOpen: boolean;
@@ -167,6 +167,9 @@ export const VoiceChatModal: React.FC<VoiceChatModalProps> = ({
       if (!AudioCtx) return;
 
       const audioCtx = new AudioCtx();
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume().catch(() => {});
+      }
       audioContextRef.current = audioCtx;
       const analyser = audioCtx.createAnalyser();
       analyser.fftSize = 64;
@@ -338,11 +341,15 @@ export const VoiceChatModal: React.FC<VoiceChatModalProps> = ({
         if (isMountedRef.current && isOpenRef.current) {
           setVoiceState('idle');
           voiceStateRef.current = 'idle';
+          if (synthResumeTimerRef.current) {
+            clearInterval(synthResumeTimerRef.current);
+            synthResumeTimerRef.current = null;
+          }
           setTimeout(() => {
             if (isMountedRef.current && isOpenRef.current && voiceStateRef.current === 'idle') {
               startListening();
             }
-          }, 300);
+          }, 350);
         }
       }
       return;
@@ -354,15 +361,7 @@ export const VoiceChatModal: React.FC<VoiceChatModalProps> = ({
       return;
     }
 
-    const clean = nextSentence
-      .replace(/```[\s\S]*?```/g, '')
-      .replace(/`([^`]+)`/g, '$1')
-      .replace(/https?:\/\/\S+/g, '')
-      .replace(/[*#_~[\]()<>]/g, '')
-      .replace(/\n+/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-
+    const clean = cleanTextForSpeech(nextSentence);
     if (!clean) {
       processSpeechQueue();
       return;
@@ -388,18 +387,45 @@ export const VoiceChatModal: React.FC<VoiceChatModalProps> = ({
       const voices = window.speechSynthesis.getVoices();
       applyMaleVoiceSettings(utterance, voices, userVoice, language);
 
-      utterance.onend = () => {
+      let watchdogTimer: any = null;
+
+      const cleanupCurrentUtterance = () => {
+        if (watchdogTimer) {
+          clearTimeout(watchdogTimer);
+          watchdogTimer = null;
+        }
         activeUtteranceRef.current = null;
         isSpeakingQueueRef.current = false;
+      };
+
+      utterance.onend = () => {
+        cleanupCurrentUtterance();
         processSpeechQueue();
       };
 
       utterance.onerror = (e) => {
-        console.warn('Speech chunk note:', e);
-        activeUtteranceRef.current = null;
-        isSpeakingQueueRef.current = false;
+        console.warn('Speech chunk status:', e);
+        cleanupCurrentUtterance();
         processSpeechQueue();
       };
+
+      // Watchdog timeout in case Chromium fails to fire onend
+      const expectedDurationMs = Math.max(5000, clean.length * 150);
+      watchdogTimer = setTimeout(() => {
+        if (isSpeakingQueueRef.current && activeUtteranceRef.current === utterance) {
+          cleanupCurrentUtterance();
+          processSpeechQueue();
+        }
+      }, expectedDurationMs);
+
+      // Keepalive pulse to prevent Chromium 15s pause bug
+      if (!synthResumeTimerRef.current) {
+        synthResumeTimerRef.current = setInterval(() => {
+          if (typeof window !== 'undefined' && 'speechSynthesis' in window && window.speechSynthesis.speaking) {
+            window.speechSynthesis.resume();
+          }
+        }, 5000);
+      }
 
       window.speechSynthesis.speak(utterance);
     } catch (err) {

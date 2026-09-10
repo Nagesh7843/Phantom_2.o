@@ -28,6 +28,7 @@ import {
   Smile,
 } from 'lucide-react';
 import { scanForSecrets, redactSecrets, SecretScanResult } from '@/lib/secretGuard';
+import { mapLanguageToCode } from '@/lib/voiceUtils';
 import { SecretWarningModal } from './SecretWarningModal';
 import { EmojiPickerPopover } from './EmojiPickerPopover';
 
@@ -153,7 +154,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       const recognition = new SpeechRecognition();
       recognition.continuous = true;
       recognition.interimResults = true;
-      recognition.lang = 'en-US';
+      recognition.lang = mapLanguageToCode(languageName);
 
       let baseText = text ? text.trim() + ' ' : '';
 

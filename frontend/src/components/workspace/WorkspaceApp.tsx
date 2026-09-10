@@ -16,7 +16,7 @@ import { PluginsModal } from '@/components/modals/PluginsModal';
 import { VoiceChatModal } from '@/components/modals/VoiceChatModal';
 import { PhantomIconSvg, SidebarExpandIconSvg } from '@/components/common/PhantomLogo';
 import { api } from '@/lib/api';
-import { applyMaleVoiceSettings } from '@/lib/voiceUtils';
+import { applyMaleVoiceSettings, cleanTextForSpeech } from '@/lib/voiceUtils';
 import { ChatMessage, ChatSession, UserProfile, UserSettings } from '@/types';
 import { ArrowLeft, Home as HomeIcon, User } from 'lucide-react';
 
@@ -486,27 +486,58 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ onNavigateHome }) =>
   };
 
   // Text-To-Speech (TTS)
+  const activeTtsUtterance = useRef<SpeechSynthesisUtterance | null>(null);
+  const ttsResumeTimer = useRef<any>(null);
+
   const handleSpeak = (text: string) => {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
     try {
+      if (ttsResumeTimer.current) {
+        clearInterval(ttsResumeTimer.current);
+        ttsResumeTimer.current = null;
+      }
       window.speechSynthesis.cancel();
       if (window.speechSynthesis.paused) {
         window.speechSynthesis.resume();
       }
-      const cleanText = text
-        .replace(/```[\s\S]*?```/g, 'Code block omitted in speech.')
-        .replace(/[`*#_~[\]()]/g, '')
-        .replace(/\s+/g, ' ')
-        .trim();
 
+      const cleanText = cleanTextForSpeech(text);
       if (!cleanText) return;
 
       const utterance = new SpeechSynthesisUtterance(cleanText);
+      activeTtsUtterance.current = utterance;
+
       const voices = window.speechSynthesis.getVoices();
       applyMaleVoiceSettings(utterance, voices, settings.voice, settings.language || 'en-US');
+
+      utterance.onend = () => {
+        activeTtsUtterance.current = null;
+        if (ttsResumeTimer.current) {
+          clearInterval(ttsResumeTimer.current);
+          ttsResumeTimer.current = null;
+        }
+      };
+
+      utterance.onerror = (e) => {
+        console.warn('TTS status:', e);
+        activeTtsUtterance.current = null;
+        if (ttsResumeTimer.current) {
+          clearInterval(ttsResumeTimer.current);
+          ttsResumeTimer.current = null;
+        }
+      };
+
+      // Chromium keep-alive pulse for speech synthesis
+      ttsResumeTimer.current = setInterval(() => {
+        if (typeof window !== 'undefined' && 'speechSynthesis' in window && window.speechSynthesis.speaking) {
+          window.speechSynthesis.resume();
+        }
+      }, 5000);
+
       window.speechSynthesis.speak(utterance);
     } catch (e) {
-      console.warn('TTS error:', e);
+      console.warn('TTS execution error:', e);
+      activeTtsUtterance.current = null;
     }
   };
 
