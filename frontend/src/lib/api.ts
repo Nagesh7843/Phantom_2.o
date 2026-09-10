@@ -115,14 +115,25 @@ export const api = {
   },
 
   // Scheduled Tasks API
-  getScheduledTasks: async (): Promise<{ tasks: any[] }> => {
-    return request<{ tasks: any[] }>('/api/scheduled/tasks');
+  getScheduledTasks: async (): Promise<{ success: boolean; tasks: any[] }> => {
+    return request<{ success: boolean; tasks: any[] }>('/api/scheduled/tasks');
   },
 
   saveScheduledTask: async (task: any): Promise<{ success: boolean; task_id: string }> => {
     return request<{ success: boolean; task_id: string }>('/api/scheduled/tasks', {
       method: 'POST',
       body: JSON.stringify(task),
+    });
+  },
+
+  toggleScheduledTask: async (
+    taskId: string,
+    active: boolean,
+    nextRun?: string
+  ): Promise<{ success: boolean }> => {
+    return request<{ success: boolean }>(`/api/scheduled/tasks/${taskId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ active, nextRun }),
     });
   },
 
@@ -471,6 +482,13 @@ export const api = {
     return request<{ success: boolean }>(`/api/projects/${projectId}`, {
       method: 'DELETE',
     });
+  },
+
+  logout: async (): Promise<any> => {
+    try {
+      await fetch('/logout', { method: 'GET', credentials: 'include' });
+    } catch {}
+    return { success: true };
   },
 
   // Dynamic Prompt Suggestions API (Live Web Search & Trending Tech)

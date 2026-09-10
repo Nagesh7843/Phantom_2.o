@@ -18,19 +18,32 @@ interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
   onAuthSuccess: (profile: UserProfile) => void;
+  initialEmail?: string;
+  initialMode?: 'login' | 'register';
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({
   isOpen,
   onClose,
   onAuthSuccess,
+  initialEmail = '',
+  initialMode = 'login',
 }) => {
-  const [tab, setTab] = useState<'login' | 'register'>('login');
+  const [tab, setTab] = useState<'login' | 'register'>(initialMode);
   const [displayName, setDisplayName] = useState('');
-  const [username, setUsername] = useState('');
+  const [username, setUsername] = useState(initialEmail);
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+
+  React.useEffect(() => {
+    if (isOpen) {
+      if (initialEmail) setUsername(initialEmail);
+      if (initialMode) setTab(initialMode);
+      setPassword('');
+      setErrorMsg('');
+    }
+  }, [isOpen, initialEmail, initialMode]);
 
   React.useEffect(() => {
     if (typeof window !== 'undefined') {

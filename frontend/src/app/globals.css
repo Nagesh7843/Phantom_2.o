@@ -468,4 +468,82 @@ body.theme-light .card-glow-hover:hover {
   box-shadow: 0 12px 30px -10px rgba(0, 0, 0, 0.08);
 }
 
+/* ========================================================================= */
+/* MOBILE RELIABILITY & SAFE AREA UTILITIES                                  */
+/* ========================================================================= */
+
+/* Safe area padding utilities for notched iPhones and Android displays */
+.pb-safe {
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px));
+}
+.pt-safe {
+  padding-top: max(0.5rem, env(safe-area-inset-top, 0px));
+}
+.mb-safe {
+  margin-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px));
+}
+.px-safe {
+  padding-left: max(0.75rem, env(safe-area-inset-left, 0px));
+  padding-right: max(0.75rem, env(safe-area-inset-right, 0px));
+}
+
+/* Eliminate tap delay and unwanted highlights on touch screens */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Prevent unwanted iOS Safari auto-zooming on focus while keeping sleek design */
+@media (max-width: 768px) {
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="search"],
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* Momentum scrolling on iOS mobile devices */
+.overflow-y-auto,
+.overflow-x-auto,
+.overflow-auto {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Contain touch overscroll bounce for clean native app feel */
+.overscroll-contain {
+  overscroll-behavior: contain;
+}
+
+/* Custom sleek slim scrollbars */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 9999px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+body.theme-light .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+}
+body.theme-light .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+
 

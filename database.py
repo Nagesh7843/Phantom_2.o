@@ -171,12 +171,23 @@ def init_database():
                         last_updated TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
                     );
 
+                    CREATE TABLE IF NOT EXISTS user_settings (
+                        user_id VARCHAR(64) PRIMARY KEY,
+                        theme VARCHAR(64) DEFAULT 'theme-dark',
+                        language VARCHAR(64) DEFAULT 'English',
+                        voice VARCHAR(128) DEFAULT '',
+                        auto_speak BOOLEAN DEFAULT TRUE,
+                        settings_json TEXT DEFAULT '{}',
+                        last_updated TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                    );
+
                     CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON chat_sessions(user_id);
                     CREATE INDEX IF NOT EXISTS idx_sessions_pinned ON chat_sessions(user_id, is_pinned);
                     CREATE INDEX IF NOT EXISTS idx_messages_session_id ON messages(session_id);
                     CREATE INDEX IF NOT EXISTS idx_projects_user_id ON projects(user_id);
                     CREATE INDEX IF NOT EXISTS idx_invoices_user_id ON invoices(user_id);
                     CREATE INDEX IF NOT EXISTS idx_scheduled_user_id ON scheduled_tasks(user_id);
+                    CREATE INDEX IF NOT EXISTS idx_settings_user_id ON user_settings(user_id);
                 """)
             test_conn.close()
             
@@ -279,6 +290,16 @@ def init_database():
                 CREATE TABLE IF NOT EXISTS user_plugins (
                     user_id TEXT PRIMARY KEY,
                     plugins_config TEXT NOT NULL,
+                    last_updated TEXT
+                );
+
+                CREATE TABLE IF NOT EXISTS user_settings (
+                    user_id TEXT PRIMARY KEY,
+                    theme TEXT DEFAULT 'theme-dark',
+                    language TEXT DEFAULT 'English',
+                    voice TEXT DEFAULT '',
+                    auto_speak INTEGER DEFAULT 1,
+                    settings_json TEXT DEFAULT '{}',
                     last_updated TEXT
                 );
             """)
@@ -944,7 +965,7 @@ def delete_project(project_id, user_id):
 
 # --- SCHEDULED TASKS & CRON AUTOMATIONS ---
 def get_scheduled_tasks(user_id):
-    """Retrieve all scheduled tasks for the user."""
+    """Retrieve all scheduled tasks for the user. If none exist yet, seed default templates into the DB."""
     if _active_db_type == DB_TYPE_POSTGRES and _pg_pool:
         conn = _pg_pool.getconn()
         try:
@@ -959,6 +980,37 @@ def get_scheduled_tasks(user_id):
                     d['active'] = bool(d.get('active', True))
                     d['push_enabled'] = bool(d.get('push_enabled', True))
                     tasks.append(d)
+                
+                if len(tasks) == 0:
+                    # Seed initial defaults into PostgreSQL database
+                    default_tasks = [
+                        {
+                            'id': f"task_briefing_{user_id[:8]}",
+                            'name': 'Daily Developer Morning Briefing',
+                            'schedule': 'Every day at 09:00 AM UTC',
+                            'prompt': 'Summarize today top AI engineering news, GitHub trending repos in Python & Rust, and compile priority checklist.',
+                            'target': 'chat',
+                            'active': True,
+                            'push_enabled': True,
+                            'last_run': 'Today at 09:00 AM',
+                            'next_run': 'Tomorrow at 09:00 AM'
+                        },
+                        {
+                            'id': f"task_audit_{user_id[:8]}",
+                            'name': 'Nightly Code Health & Security Audit',
+                            'schedule': 'Daily at 12:00 AM UTC',
+                            'prompt': 'Scan active workspace code for deprecated dependencies, potential security exploits, and performance bottlenecks.',
+                            'target': 'compiler',
+                            'active': True,
+                            'push_enabled': True,
+                            'last_run': 'Yesterday at 12:00 AM',
+                            'next_run': 'Tonight at 12:00 AM'
+                        }
+                    ]
+                    for t in default_tasks:
+                        save_scheduled_task(t, user_id)
+                    return default_tasks
+
                 return tasks
         finally:
             _pg_pool.putconn(conn)
@@ -974,6 +1026,37 @@ def get_scheduled_tasks(user_id):
                 d['active'] = bool(d.get('active', 1))
                 d['push_enabled'] = bool(d.get('push_enabled', 1))
                 tasks.append(d)
+            
+            if len(tasks) == 0:
+                # Seed initial defaults into local SQLite database
+                default_tasks = [
+                    {
+                        'id': f"task_briefing_{user_id[:8]}",
+                        'name': 'Daily Developer Morning Briefing',
+                        'schedule': 'Every day at 09:00 AM UTC',
+                        'prompt': 'Summarize today top AI engineering news, GitHub trending repos in Python & Rust, and compile priority checklist.',
+                        'target': 'chat',
+                        'active': True,
+                        'push_enabled': True,
+                        'last_run': 'Today at 09:00 AM',
+                        'next_run': 'Tomorrow at 09:00 AM'
+                    },
+                    {
+                        'id': f"task_audit_{user_id[:8]}",
+                        'name': 'Nightly Code Health & Security Audit',
+                        'schedule': 'Daily at 12:00 AM UTC',
+                        'prompt': 'Scan active workspace code for deprecated dependencies, potential security exploits, and performance bottlenecks.',
+                        'target': 'compiler',
+                        'active': True,
+                        'push_enabled': True,
+                        'last_run': 'Yesterday at 12:00 AM',
+                        'next_run': 'Tonight at 12:00 AM'
+                    }
+                ]
+                for t in default_tasks:
+                    save_scheduled_task(t, user_id)
+                return default_tasks
+
             return tasks
 
 def save_scheduled_task(task_data, user_id):
@@ -1181,6 +1264,171 @@ def save_user_image(user_id, session_id, original_prompt, enhanced_prompt, image
             """, (img_id, user_id, session_id, original_prompt, enhanced_prompt, image_url, now.isoformat()))
             conn.commit()
             return img_id
+
+# --- USER SETTINGS PERSISTENCE (PostgreSQL & SQLite) ---
+def get_user_settings(user_id):
+    """Retrieve saved user settings from PostgreSQL/SQLite."""
+    import json
+    if not user_id:
+        return {
+            "theme": "theme-dark",
+            "language": "en-US",
+            "voice": "",
+            "autoSpeak": True
+        }
+
+    default_settings = {
+        "theme": "theme-dark",
+        "language": "en-US",
+        "voice": "",
+        "autoSpeak": True
+    }
+
+    if _active_db_type == DB_TYPE_POSTGRES and _pg_pool:
+        conn = _pg_pool.getconn()
+        try:
+            with conn.cursor(cursor_factory=extras.RealDictCursor) as cur:
+                cur.execute("SELECT * FROM user_settings WHERE user_id = %s", (user_id,))
+                row = cur.fetchone()
+                if row:
+                    res = dict(row)
+                    extra = {}
+                    if res.get('settings_json'):
+                        try:
+                            extra = json.loads(res['settings_json'])
+                        except Exception:
+                            pass
+                    return {
+                        "theme": res.get('theme') or default_settings['theme'],
+                        "language": res.get('language') or default_settings['language'],
+                        "voice": res.get('voice') or default_settings['voice'],
+                        "autoSpeak": bool(res.get('auto_speak', True)),
+                        **extra
+                    }
+                # Check user profile fallback
+                cur.execute("SELECT theme, language, voice FROM users WHERE id = %s OR google_id = %s", (user_id, user_id))
+                u = cur.fetchone()
+                if u:
+                    return {
+                        "theme": u.get('theme') or default_settings['theme'],
+                        "language": u.get('language') or default_settings['language'],
+                        "voice": u.get('voice') or default_settings['voice'],
+                        "autoSpeak": True
+                    }
+                return default_settings
+        finally:
+            _pg_pool.putconn(conn)
+    else:
+        with sqlite3.connect(_sqlite_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cur = conn.cursor()
+            cur.execute("SELECT * FROM user_settings WHERE user_id = ?", (user_id,))
+            row = cur.fetchone()
+            if row:
+                res = dict(row)
+                extra = {}
+                if res.get('settings_json'):
+                    try:
+                        extra = json.loads(res['settings_json'])
+                    except Exception:
+                        pass
+                return {
+                    "theme": res.get('theme') or default_settings['theme'],
+                    "language": res.get('language') or default_settings['language'],
+                    "voice": res.get('voice') or default_settings['voice'],
+                    "autoSpeak": bool(res.get('auto_speak', 1)),
+                    **extra
+                }
+            cur.execute("SELECT theme, language, voice FROM users WHERE id = ? OR google_id = ?", (user_id, user_id))
+            u = cur.fetchone()
+            if u:
+                return {
+                    "theme": u['theme'] or default_settings['theme'],
+                    "language": u['language'] or default_settings['language'],
+                    "voice": u['voice'] or default_settings['voice'],
+                    "autoSpeak": True
+                }
+            return default_settings
+
+def save_user_settings(user_id, settings_dict):
+    """Save user settings to PostgreSQL/SQLite and synchronize user profile."""
+    import json
+    if not user_id:
+        return settings_dict
+
+    theme = settings_dict.get('theme', 'theme-dark')
+    language = settings_dict.get('language', 'en-US')
+    voice = settings_dict.get('voice', '')
+    auto_speak = bool(settings_dict.get('autoSpeak', settings_dict.get('auto_speak', True)))
+    
+    # Store complete settings dict as JSON for full customization retention
+    settings_json = json.dumps(settings_dict)
+
+    if _active_db_type == DB_TYPE_POSTGRES and _pg_pool:
+        conn = _pg_pool.getconn()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO user_settings (user_id, theme, language, voice, auto_speak, settings_json, last_updated)
+                    VALUES (%s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+                    ON CONFLICT (user_id) DO UPDATE SET
+                        theme = EXCLUDED.theme,
+                        language = EXCLUDED.language,
+                        voice = EXCLUDED.voice,
+                        auto_speak = EXCLUDED.auto_speak,
+                        settings_json = EXCLUDED.settings_json,
+                        last_updated = CURRENT_TIMESTAMP;
+                """, (user_id, theme, language, voice, auto_speak, settings_json))
+                
+                # Also update users table if user exists
+                cur.execute("""
+                    UPDATE users SET
+                        theme = %s,
+                        language = %s,
+                        voice = %s
+                    WHERE id = %s OR google_id = %s;
+                """, (theme, language, voice, user_id, user_id))
+            conn.commit()
+            print(f"[OK] Saved settings for user {user_id} into PostgreSQL.")
+            return {
+                "theme": theme,
+                "language": language,
+                "voice": voice,
+                "autoSpeak": auto_speak,
+                **settings_dict
+            }
+        finally:
+            _pg_pool.putconn(conn)
+    else:
+        with sqlite3.connect(_sqlite_path) as conn:
+            now_iso = datetime.now(timezone.utc).isoformat()
+            conn.execute("""
+                INSERT INTO user_settings (user_id, theme, language, voice, auto_speak, settings_json, last_updated)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(user_id) DO UPDATE SET
+                    theme = excluded.theme,
+                    language = excluded.language,
+                    voice = excluded.voice,
+                    auto_speak = excluded.auto_speak,
+                    settings_json = excluded.settings_json,
+                    last_updated = excluded.last_updated;
+            """, (user_id, theme, language, voice, 1 if auto_speak else 0, settings_json, now_iso))
+            conn.execute("""
+                UPDATE users SET
+                    theme = ?,
+                    language = ?,
+                    voice = ?
+                WHERE id = ? OR google_id = ?;
+            """, (theme, language, voice, user_id, user_id))
+            conn.commit()
+            print(f"[OK] Saved settings for user {user_id} into local SQLite.")
+            return {
+                "theme": theme,
+                "language": language,
+                "voice": voice,
+                "autoSpeak": auto_speak,
+                **settings_dict
+            }
 
 # Auto-initialize database on load
 init_database()

@@ -327,15 +327,36 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // =====================================================================
     // --- SPEECH & THEME ---
-    // =====================================================================
+    function isMaleVoice(voice) {
+        if (!voice || !voice.name) return false;
+        const name = voice.name.toLowerCase();
+        const femaleExclusions = ['female', 'woman', 'girl', 'zira', 'samantha', 'victoria', 'karen', 'moira', 'fiona', 'veena', 'tessa', 'hazel', 'susan', 'heera', 'eva', 'jenny', 'aria', 'sonia', 'natasha', 'libby', 'clara', 'mia', 'ana', 'elena'];
+        for (const fem of femaleExclusions) {
+            if (name.includes(fem)) return false;
+        }
+        const maleNames = ['ryan', 'guy', 'christopher', 'eric', 'andrew', 'brian', 'steffan', 'roger', 'david', 'mark', 'george', 'james', 'alex', 'daniel', 'fred', 'oliver', 'male', 'man'];
+        for (const m of maleNames) {
+            if (name.includes(m)) return true;
+        }
+        return false;
+    }
+
     function populateVoiceList() {
         if (!voiceSelect || !synth) return;
         availableVoices = synth.getVoices();
         const currentVal = voiceSelect.value;
-        voiceSelect.innerHTML = '';
-        availableVoices.forEach(voice => {
+        voiceSelect.innerHTML = '<option value="">Default Male Voice (Phantom Natural)</option>';
+        
+        const sorted = [...availableVoices].sort((a, b) => {
+            const aMale = isMaleVoice(a) ? 1 : 0;
+            const bMale = isMaleVoice(b) ? 1 : 0;
+            return bMale - aMale;
+        });
+
+        sorted.forEach(voice => {
             const option = document.createElement('option');
-            option.textContent = `${voice.name} (${voice.lang})`;
+            const male = isMaleVoice(voice);
+            option.textContent = `${male ? '♂ [Male] ' : '♀ [Voice] '}${voice.name} (${voice.lang})`;
             option.value = voice.name;
             voiceSelect.appendChild(option);
         });
@@ -346,14 +367,28 @@ document.addEventListener('DOMContentLoaded', () => {
         synth.onvoiceschanged = populateVoiceList;
     }
 
-    // FIX: Consolidated to a single speakText function
+    // Consolidated speakText function with default Male voice
     function speakText(text, force = false) {
         if (!text || !synth) return;
         if (!force && !autoSpeak) return;
         const utterance = new SpeechSynthesisUtterance(text);
+        utterance.rate = 1.02;
         if (voiceSelect && voiceSelect.value) {
             const selectedVoice = availableVoices.find(voice => voice.name === voiceSelect.value);
-            if (selectedVoice) utterance.voice = selectedVoice;
+            if (selectedVoice) {
+                utterance.voice = selectedVoice;
+                utterance.pitch = isMaleVoice(selectedVoice) ? 0.95 : 1.0;
+            }
+        } else {
+            // Find default male voice
+            const defaultMale = availableVoices.find(v => isMaleVoice(v) && (v.name.includes('Natural') || v.name.includes('Google') || v.name.includes('Neural'))) 
+                || availableVoices.find(v => isMaleVoice(v));
+            if (defaultMale) {
+                utterance.voice = defaultMale;
+                utterance.pitch = 0.95;
+            } else {
+                utterance.pitch = 0.88;
+            }
         }
         try {
             synth.cancel();

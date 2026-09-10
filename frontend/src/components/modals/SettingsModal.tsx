@@ -38,6 +38,7 @@ import {
 import { UserSettings, UserProfile, SubscriptionTier, SubscriptionInfo } from '@/types';
 import { PhantomLogo, PhantomIconSvg } from '../common/PhantomLogo';
 import { api } from '@/lib/api';
+import { isMaleVoice, findBestMaleVoice, applyMaleVoiceSettings } from '@/lib/voiceUtils';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -119,6 +120,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [voice, setVoice] = useState(settings.voice || '');
   const [autoSpeak, setAutoSpeak] = useState(settings.autoSpeak || false);
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [isPlayingPreview, setIsPlayingPreview] = useState(false);
 
   // Extra Mock Settings for complete ChatGPT-like capability
   const [soundEnabled, setSoundEnabled] = useState(true);
@@ -145,6 +147,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       window.speechSynthesis.onvoiceschanged = loadVoices;
     }
   }, []);
+
+  const handleTestVoice = () => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+    try {
+      window.speechSynthesis.cancel();
+      setIsPlayingPreview(true);
+      const sampleText = "Hello! I am Phantom AI, configured with natural male voice synthesis.";
+      const utterance = new SpeechSynthesisUtterance(sampleText);
+      applyMaleVoiceSettings(utterance, availableVoices, voice, language);
+      utterance.onend = () => setIsPlayingPreview(false);
+      utterance.onerror = () => setIsPlayingPreview(false);
+      window.speechSynthesis.speak(utterance);
+    } catch {
+      setIsPlayingPreview(false);
+    }
+  };
 
   // Fetch subscription info from backend
   const loadSubscription = async () => {
@@ -451,21 +469,51 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   />
                 </div>
 
-                {availableVoices.length > 0 && (
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-zinc-200">Voice Synthesis Model</label>
+                <div className="p-3.5 rounded-2xl bg-zinc-900/60 border border-zinc-800 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-xs font-bold text-zinc-200">Voice Synthesis Model</span>
+                      <p className="text-[11px] text-zinc-400">Default voice is configured to high-clarity natural Male voice</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleTestVoice}
+                      disabled={isPlayingPreview}
+                      className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-xs text-white font-medium flex items-center gap-1.5 transition-all disabled:opacity-50"
+                    >
+                      <Volume2 className={`w-3.5 h-3.5 ${isPlayingPreview ? 'animate-pulse text-cyan-400' : 'text-zinc-300'}`} />
+                      <span>{isPlayingPreview ? 'Playing...' : 'Test Voice'}</span>
+                    </button>
+                  </div>
+
+                  {availableVoices.length > 0 ? (
                     <select
                       value={voice}
                       onChange={(e) => setVoice(e.target.value)}
-                      className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-2.5 text-xs text-white focus:outline-none"
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-zinc-600 font-sans"
                     >
-                      <option value="">Default System Voice</option>
-                      {availableVoices.map((v) => (
-                        <option key={v.name} value={v.name}>{v.name} ({v.lang})</option>
-                      ))}
+                      <option value="">Default Male Voice (Phantom Natural Male)</option>
+                      {/* Sort: Male voices first, then others */}
+                      {[...availableVoices]
+                        .sort((a, b) => {
+                          const aMale = isMaleVoice(a) ? 1 : 0;
+                          const bMale = isMaleVoice(b) ? 1 : 0;
+                          return bMale - aMale;
+                        })
+                        .map((v) => {
+                          const male = isMaleVoice(v);
+                          return (
+                            <option key={v.name} value={v.name}>
+                              {male ? '♂ [Male] ' : '♀ [Voice] '}
+                              {v.name} ({v.lang})
+                            </option>
+                          );
+                        })}
                     </select>
-                  </div>
-                )}
+                  ) : (
+                    <p className="text-xs text-zinc-500 italic">No system synthesis voices detected in browser.</p>
+                  )}
+                </div>
               </div>
             )}
 

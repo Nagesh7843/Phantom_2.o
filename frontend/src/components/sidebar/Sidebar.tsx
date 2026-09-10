@@ -136,6 +136,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
       ? (userProfile.user.displayName || userProfile.user.email)![0].toUpperCase()
       : null;
 
+  // Hide the sidebar component completely when without login
+  if (!isAuthenticated) {
+    return null;
+  }
+
   return (
     <React.Fragment>
       {/* Mobile Backdrop */}

@@ -31,6 +31,7 @@ load_dotenv()
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://127.0.0.1:3000').rstrip('/')
 try:
     import database as db_layer
+    db_layer.init_database()
 except Exception as _dbe:
     db_layer = None
     print(f"[NOTE] Database layer import note: {_dbe}")
@@ -201,12 +202,11 @@ _last_mongo_connect_success = False
 def _try_connect_mongo(timeout_ms: int = None):
     global mongo_client, mongo_db, users_collection, chat_sessions_collection, messages_collection, _last_mongo_connect_fail, _last_mongo_connect_success
 
-    # If called from an API request (timeout_ms is set) and we failed recently (within 10s), skip to avoid blocking requests
-    if timeout_ms is not None and (time.time() - _last_mongo_connect_fail < 10):
+    if not safe_mongo_uri or not MONGO_DB_NAME:
         return False
 
-    if not safe_mongo_uri or not MONGO_DB_NAME:
-        print("[WARNING] MONGO_URI or MONGO_DB_NAME not configured in environment.")
+    # If called from an API request (timeout_ms is set) and we failed recently (within 10s), skip to avoid blocking requests
+    if timeout_ms is not None and (time.time() - _last_mongo_connect_fail < 10):
         return False
 
     try:
@@ -220,12 +220,10 @@ def _try_connect_mongo(timeout_ms: int = None):
         if allow_invalid_tls:
             client_kwargs['tlsAllowInvalidCertificates'] = True
             client_kwargs['tlsInsecure'] = True
-            print("DEBUG: MONGO_ALLOW_INVALID_TLS is TRUE. Bypassing SSL certificate validation.")
 
         # Timeout configuration (default 5000ms, or fast 2000ms for API fast-fail checks)
         client_kwargs['serverSelectionTimeoutMS'] = int(timeout_ms) if timeout_ms is not None else int(os.getenv("MONGO_CONNECT_TIMEOUT", "5000"))
 
-        print(f"DEBUG: Attempting Mongo connection (PyMongo v{pymongo_version}, certifi: {certifi.where()})...")
         mongo_client = MongoClient(safe_mongo_uri, **client_kwargs)
         mongo_client.server_info()  # force connection check
 
@@ -255,35 +253,27 @@ def _try_connect_mongo(timeout_ms: int = None):
 
 
 def init_mongo_background(retry_interval=30):
-    """Start a background loop that tries to connect to MongoDB without blocking app startup.
+    """Start a background loop that tries to connect to MongoDB only when MONGO_URI is explicitly configured."""
+    if not safe_mongo_uri or not MONGO_DB_NAME:
+        return
 
-    It will keep retrying every `retry_interval` seconds until successful. Runs as a daemon thread.
-    """
     # If already connected, nothing to do
     if _try_connect_mongo():
         return
 
     while True:
-        app.logger.info("MongoDB not connected — retrying in %ss..." % retry_interval)
         time.sleep(retry_interval)
         if _try_connect_mongo():
             break
 
 
-# Start background initializer so the Flask app can start even if Mongo is unreachable.
-try:
-    # Only start the background thread in the actual serving process.
-    # When Flask's reloader is enabled, the parent process spawns a child and
-    # sets the WERKZEUG_RUN_MAIN env var to "true" in the child. Starting the
-    # thread only when WERKZEUG_RUN_MAIN is None (no reloader) or "true"
-    # (the reloader child) avoids duplicate threads and socket/FD errors on
-    # Windows when the reloader restarts the process.
-    if os.environ.get("WERKZEUG_RUN_MAIN") == "true" or os.environ.get("WERKZEUG_RUN_MAIN") is None:
-        threading.Thread(target=init_mongo_background, args=(30,), daemon=True).start()
-    else:
-        app.logger.debug("Skipping MongoDB background thread in reloader parent process.")
-except Exception as e:
-    app.logger.error(f"Failed to start MongoDB background thread: {e}")
+# Only start Mongo background thread if MONGO_URI is explicitly configured in .env
+if safe_mongo_uri and MONGO_DB_NAME:
+    try:
+        if os.environ.get("WERKZEUG_RUN_MAIN") == "true" or os.environ.get("WERKZEUG_RUN_MAIN") is None:
+            threading.Thread(target=init_mongo_background, args=(30,), daemon=True).start()
+    except Exception as e:
+        app.logger.error(f"Failed to start MongoDB background thread: {e}")
 
 
 # --- Outbound rate limiter (simple in-memory token bucket) ---
@@ -468,7 +458,7 @@ def execute_ai_completion(messages_for_gemini: list, instruction_text: str) -> t
     Returns tuple of (response_text, provider_name, raw_response_dict).
     """
     # 1. Google Gemini Primary (Multi-Model Resilient Fallback)
-    if GEMINI_API_KEY:
+    if GEMINI_API_KEY and len(GEMINI_API_KEY.strip()) > 10:
         gemini_payload = {
             "systemInstruction": {
                 "parts": [{"text": instruction_text}]
@@ -476,28 +466,29 @@ def execute_ai_completion(messages_for_gemini: list, instruction_text: str) -> t
             "contents": messages_for_gemini
         }
         gemini_models = [
-            'gemini-flash-latest',
-            'gemini-3.5-flash',
-            'gemini-3.7-flash',
-            'gemini-flash-lite-latest',
-            'gemini-2.5-flash'
+            'gemini-2.5-flash',
+            'gemini-2.0-flash',
+            'gemini-1.5-flash'
         ]
         for model_name in gemini_models:
             try:
                 model_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={GEMINI_API_KEY}"
-                resp = requests.post(model_url, json=gemini_payload, timeout=20)
+                resp = requests.post(model_url, json=gemini_payload, timeout=(3, 10))
                 if resp.status_code == 200:
                     raw = resp.json()
                     text = _extract_text_from_provider(raw, 'gemini')
                     if text:
                         return text, 'gemini', raw
+                elif resp.status_code in (400, 401, 403):
+                    print(f"[NOTE] Gemini API Key authorization notice ({resp.status_code}). Switching to fallback provider...")
+                    break
                 elif resp.status_code == 429:
                     print(f"[NOTE] Model {model_name} rate-limited (429). Switching to next available model...")
                     continue
                 else:
                     print(f"[NOTE] Gemini ({model_name}) returned status {resp.status_code}: {resp.text[:100]}")
             except Exception as e:
-                print(f"[NOTE] Gemini ({model_name}) connection error: {e}")
+                print(f"[NOTE] Gemini ({model_name}) connection notice: {e}")
 
     # Convert Gemini format to OpenAI/OpenRouter chat format
     chat_messages = [{"role": "system", "content": instruction_text}]
@@ -583,10 +574,9 @@ def execute_ai_completion(messages_for_gemini: list, instruction_text: str) -> t
         except Exception as e:
             print(f"[NOTE] HuggingFace connection error: {e}")
 
-    # 5. System Fallback Notice (Graceful degraded mode message)
+    # 5. Clean Internal Server Fallback
     fallback_msg = (
-        "Phantom 2.o Engine Notice: External AI service connection is currently unavailable or API key quotas are depleted.\n\n"
-        "To restore active model responses, please check your `.env` configuration and provide a valid GEMINI_API_KEY, OPENROUTER_API_KEY, or OPENAI_API_KEY."
+        "I apologize, but I am currently encountering an internal server issue while processing your request. Please try again in a few moments."
     )
     return fallback_msg, 'phantom_system', None
 
@@ -1077,13 +1067,13 @@ def login_user():
         app.logger.error(f"Error during login: {str(e)}", exc_info=True)
         return jsonify({"error": f"Login failed: {str(e)}"}), 500
 
-# --- NEW: API for updating user profile and settings ---
+# --- API for updating user profile and settings in PostgreSQL ---
 @app.route('/api/update_profile', methods=['PUT'])
 def update_profile():
-    if not session.get('user'):
-        return jsonify({"error": "Unauthorized"}), 401
+    user_id = get_current_user_id()
+    if not user_id:
+        user_id = session.get('guest_id', 'guest_default')
 
-    user_id = session.get('google_id') or session.get('user_id') or session.get('user', {}).get('sub')
     data = request.get_json(silent=True) or {}
     
     try:
@@ -1094,16 +1084,20 @@ def update_profile():
             update_fields['email'] = data['email']
         if 'theme' in data:
             update_fields['theme'] = data['theme']
+            session['user_theme'] = data['theme']
         if 'language' in data:
             update_fields['language'] = data['language']
+            session['user_language'] = data['language']
         if 'voice' in data:
             update_fields['voice'] = data['voice']
+            session['user_voice'] = data['voice']
 
-        if not update_fields:
+        if not update_fields and not data:
             return jsonify({"error": "No fields to update."}), 400
 
         if db_layer:
             db_layer.update_user_profile(user_id, update_fields)
+            db_layer.save_user_settings(user_id, data)
 
         if users_collection is not None:
             query_filter = {'_id': ObjectId(user_id)} if ObjectId.is_valid(user_id) else {'google_id': user_id}
@@ -1113,23 +1107,20 @@ def update_profile():
             session['user_display_name'] = update_fields['display_name']
         if 'email' in update_fields:
             session['user_email'] = update_fields['email']
-        if 'theme' in update_fields:
-            session['user_theme'] = update_fields['theme']
-        if 'language' in update_fields:
-            session['user_language'] = update_fields['language']
-        if 'voice' in update_fields:
-            session['user_voice'] = update_fields['voice']
+
+        saved_settings = db_layer.get_user_settings(user_id) if db_layer else {}
 
         return jsonify({
-            "message": "Profile updated successfully",
+            "message": "Profile and settings updated successfully in PostgreSQL",
             "user": {
-                "displayName": session.get('user_display_name'),
-                "email": session.get('user_email'),
+                "displayName": session.get('user_display_name', 'User'),
+                "email": session.get('user_email', ''),
                 "pictureUrl": session.get('user_picture'),
-                "theme": session.get('user_theme'),
-                "language": session.get('user_language'),
-                "voice": session.get('user_voice')
-            }
+                "theme": saved_settings.get('theme', session.get('user_theme', 'theme-dark')),
+                "language": saved_settings.get('language', session.get('user_language', 'en-US')),
+                "voice": saved_settings.get('voice', session.get('user_voice', ''))
+            },
+            "settings": saved_settings
         }), 200
     except Exception as element:
         app.logger.error(f"Error updating profile for user {user_id}: {element}", exc_info=True)
@@ -1138,40 +1129,64 @@ def update_profile():
 
 @app.route('/api/user/profile', methods=['GET'])
 def get_user_profile():
-    user = session.get('user')
-    if not user:
+    user_id = get_current_user_id()
+    if not user_id:
+        user_id = session.get('guest_id', 'guest_default')
+        settings = db_layer.get_user_settings(user_id) if db_layer else {}
         return jsonify({
             "authenticated": False,
             "user": {
                 "displayName": "Guest User",
                 "email": "guest@phantom.local",
                 "pictureUrl": None,
-                "theme": "theme-dark",
-                "language": "en-US",
-                "voice": ""
-            }
+                "theme": settings.get('theme', session.get('user_theme', 'theme-dark')),
+                "language": settings.get('language', session.get('user_language', 'en-US')),
+                "voice": settings.get('voice', session.get('user_voice', '')),
+                "autoSpeak": settings.get('autoSpeak', True)
+            },
+            "settings": settings
         }), 200
+
+    user_db = db_layer.get_user_by_id(user_id) if db_layer else None
+    user_settings_data = db_layer.get_user_settings(user_id) if db_layer else {}
+
+    display_name = (user_db and user_db.get('display_name')) or session.get('user_display_name', 'User')
+    email = (user_db and user_db.get('email')) or session.get('user_email', '')
+    picture_url = (user_db and user_db.get('picture_url')) or session.get('user_picture')
+    theme = user_settings_data.get('theme') or (user_db and user_db.get('theme')) or session.get('user_theme', 'theme-dark')
+    language = user_settings_data.get('language') or (user_db and user_db.get('language')) or session.get('user_language', 'en-US')
+    voice = user_settings_data.get('voice') or (user_db and user_db.get('voice')) or session.get('user_voice', '')
 
     return jsonify({
         "authenticated": True,
         "user": {
-            "displayName": session.get('user_display_name', 'User'),
-            "email": session.get('user_email', ''),
-            "pictureUrl": session.get('user_picture'),
-            "theme": session.get('user_theme', 'theme-dark'),
-            "language": session.get('user_language', 'en-US'),
-            "voice": session.get('user_voice', '')
-        }
+            "displayName": display_name,
+            "email": email,
+            "pictureUrl": picture_url,
+            "theme": theme,
+            "language": language,
+            "voice": voice,
+            "autoSpeak": user_settings_data.get('autoSpeak', True),
+            "subscription_tier": (user_db and user_db.get('subscription_tier')) or 'pro'
+        },
+        "settings": user_settings_data
     }), 200
 
 
-@app.route('/api/user/settings', methods=['GET', 'PUT'])
-def user_settings():
+@app.route('/api/user/settings', methods=['GET', 'PUT', 'POST'])
+def user_settings_api():
+    user_id = get_current_user_id()
+    if not user_id:
+        user_id = session.get('guest_id', 'guest_default')
+
     if request.method == 'GET':
+        settings = db_layer.get_user_settings(user_id) if db_layer else {}
         return jsonify({
-            "theme": session.get('user_theme', 'theme-dark'),
-            "language": session.get('user_language', 'en-US'),
-            "voice": session.get('user_voice', '')
+            "theme": settings.get('theme', session.get('user_theme', 'theme-dark')),
+            "language": settings.get('language', session.get('user_language', 'en-US')),
+            "voice": settings.get('voice', session.get('user_voice', '')),
+            "autoSpeak": settings.get('autoSpeak', True),
+            "settings": settings
         }), 200
     
     data = request.get_json(silent=True) or {}
@@ -1182,11 +1197,19 @@ def user_settings():
     if 'voice' in data:
         session['user_voice'] = data['voice']
 
-    return jsonify({"message": "Settings updated", "settings": {
-        "theme": session.get('user_theme'),
-        "language": session.get('user_language'),
-        "voice": session.get('user_voice')
-    }}), 200
+    saved = {}
+    if db_layer:
+        saved = db_layer.save_user_settings(user_id, data)
+
+    return jsonify({
+        "message": "Settings saved to PostgreSQL database",
+        "settings": saved or {
+            "theme": session.get('user_theme', 'theme-dark'),
+            "language": session.get('user_language', 'en-US'),
+            "voice": session.get('user_voice', ''),
+            "autoSpeak": data.get('autoSpeak', True)
+        }
+    }), 200
 
 
 # --- NEW: API for getting all chat sessions for a user ---
@@ -1420,10 +1443,11 @@ Deliver direct spoken answers that sound natural when read aloud.
         instruction_text = f"""
 You are Phantom_2.o, an advanced AI assistant with real-time intelligence.
 Developer attribution rule: Only if the user explicitly asks who developed, created, made, or built you, answer clearly that you were developed by Nagesh. Do not mention or volunteer the developer name 'Nagesh' in greetings, introductions, or any other unrelated responses unless specifically asked.
-Your answers must always be well-structured, clear, precise, and professional, similar to ChatGPT's response style. 
+Your answers must always be well-structured, clear, engaging, and professional.
+Creative & Emotional Expression: Whenever the conversation involves creative writing, brainstorming, emotions, storytelling, poetry, design ideas, celebrations, greetings, or thoughtful advice, naturally and expressively incorporate fitting emojis (such as ✨, 🚀, 💡, 🎨, 🌟, 💖, 🤖, 📚, ✍️, 🔥, 🎉) to make your response lively, warm, and emotionally rich. Keep code blocks clean without syntax distortion.
 Do not use special formatting characters like '*' or '#' in titles. Do not repeat your name in your responses unless relevant.
 {f"REAL-TIME WEB SEARCH ENGINE ACTIVE (HIGH PRECISION MODE):\n{search_context_text}\nInstructions: The above citations are retrieved live from the web right now. Use these facts, links, and data to deliver an extremely factual, accurate, and up-to-date answer. Cite URLs where relevant." if search_context_text else ""}
-1. Begin with a short introduction or summary relevant to the user's query.
+1. Begin with an engaging, short introduction or summary relevant to the user's query.
 2. Present explanations in clean paragraphs with clear flow.
 3. When listing items or steps, use plain numbering (1, 2, 3...) or dashes (-).
 """
@@ -1439,43 +1463,45 @@ Do not use special formatting characters like '*' or '#' in titles. Do not repea
             yield f"data: {json.dumps({'search_metadata': {'enabled': True, 'query': new_user_message_content.strip()[:60], 'citations': search_citations}, 'session_id': current_session_id, 'session_title': smart_session_title})}\n\n"
 
         stream_models = [
-            'gemini-flash-latest',
-            'gemini-3.5-flash',
-            'gemini-3.7-flash',
-            'gemini-flash-lite-latest',
-            'gemini-2.5-flash'
+            'gemini-2.5-flash',
+            'gemini-2.0-flash',
+            'gemini-1.5-flash'
         ]
 
         stream_success = False
-        for model_name in stream_models:
-            try:
-                stream_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:streamGenerateContent?alt=sse&key={GEMINI_API_KEY}"
-                resp = requests.post(stream_url, json=gemini_payload, stream=True, timeout=25)
+        if GEMINI_API_KEY and len(GEMINI_API_KEY.strip()) > 10:
+            for model_name in stream_models:
+                try:
+                    stream_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:streamGenerateContent?alt=sse&key={GEMINI_API_KEY}"
+                    resp = requests.post(stream_url, json=gemini_payload, stream=True, timeout=(3, 12))
 
-                if resp.status_code == 200:
-                    for line in resp.iter_lines(decode_unicode=True):
-                        if line and line.startswith('data: '):
-                            data_str = line[6:]
-                            try:
-                                chunk_json = json.loads(data_str)
-                                candidates = chunk_json.get('candidates', [])
-                                if candidates and candidates[0].get('content'):
-                                    parts = candidates[0]['content'].get('parts', [])
-                                    if parts and parts[0].get('text'):
-                                        text_chunk = parts[0]['text']
-                                        full_response_accumulated.append(text_chunk)
-                                        yield f"data: {json.dumps({'chunk': text_chunk, 'session_id': current_session_id, 'session_title': smart_session_title})}\n\n"
-                            except Exception:
-                                continue
-                    stream_success = True
-                    break
-                elif resp.status_code == 429:
-                    print(f"[NOTE] Stream model {model_name} hit rate limit (429), trying next model...")
-                    continue
-                else:
-                    print(f"[NOTE] Stream model {model_name} returned status {resp.status_code}")
-            except Exception as stream_err:
-                print(f"[NOTE] Stream model {model_name} error: {stream_err}")
+                    if resp.status_code == 200:
+                        for line in resp.iter_lines(decode_unicode=True):
+                            if line and line.startswith('data: '):
+                                data_str = line[6:]
+                                try:
+                                    chunk_json = json.loads(data_str)
+                                    candidates = chunk_json.get('candidates', [])
+                                    if candidates and candidates[0].get('content'):
+                                        parts = candidates[0]['content'].get('parts', [])
+                                        if parts and parts[0].get('text'):
+                                            text_chunk = parts[0]['text']
+                                            full_response_accumulated.append(text_chunk)
+                                            yield f"data: {json.dumps({'chunk': text_chunk, 'session_id': current_session_id, 'session_title': smart_session_title})}\n\n"
+                                except Exception:
+                                    continue
+                        stream_success = True
+                        break
+                    elif resp.status_code in (400, 401, 403):
+                        print(f"[NOTE] Stream Gemini authorization notice ({resp.status_code}). Switching to fallback provider...")
+                        break
+                    elif resp.status_code == 429:
+                        print(f"[NOTE] Stream model {model_name} hit rate limit (429), trying next model...")
+                        continue
+                    else:
+                        print(f"[NOTE] Stream model {model_name} returned status {resp.status_code}")
+                except Exception as stream_err:
+                    print(f"[NOTE] Stream model {model_name} notice: {stream_err}")
 
         if not stream_success:
             # Fallback to non-streaming execution across models
@@ -1510,7 +1536,11 @@ Do not use special formatting characters like '*' or '#' in titles. Do not repea
 
         yield f"data: {json.dumps({'done': True, 'session_id': current_session_id, 'session_title': smart_session_title})}\n\n"
 
-    return Response(event_stream(), mimetype='text/event-stream')
+    sse_response = Response(event_stream(), mimetype='text/event-stream')
+    sse_response.headers['Cache-Control'] = 'no-cache, no-transform'
+    sse_response.headers['X-Accel-Buffering'] = 'no'
+    sse_response.headers['Connection'] = 'keep-alive'
+    return sse_response
 
 
 # --- STANDARD CHAT API ---
@@ -1637,12 +1667,13 @@ def chat_api():
         instruction_text = f"""
 You are Phantom_2.o, an advanced AI assistant.
 Developer attribution rule: Only if the user explicitly asks who developed, created, made, or built you, answer clearly that you were developed by Nagesh. Do not mention or volunteer the developer name 'Nagesh' in greetings, introductions, or any other unrelated responses unless specifically asked.
-Your answers must always be well-structured, clear, and professional, similar to ChatGPT's response style. 
-Do not use any special formatting characters like '*', '#', or extra placeholders. Do not repeat your name in your responses unless relevant.
+Your answers must always be well-structured, clear, engaging, and professional.
+Creative & Emotional Expression: Whenever the conversation involves creative writing, storytelling, poetry, brainstorms, emotions, greetings, empathetic topics, or design ideas, naturally and tastefully include relevant emojis (such as ✨, 🚀, 💡, 🎨, 🌟, 💖, 🤖, 📚, ✍️, 🔥, 🎉) to make your response vivid and expressive.
+Do not use special formatting characters like '*' or '#' in titles. Do not repeat your name in your responses unless relevant.
 Respond in {language_name}.
 
 Response Guidelines:
-1. Begin with a short introduction or summary relevant to the user's query.
+1. Begin with an engaging, short introduction or summary relevant to the user's query.
 2. Present explanations in clean paragraphs with clear flow.
 3. When listing items or steps, use plain numbering (1, 2, 3...) or dashes (-) without symbols like '*' or '#'.
 """
@@ -3342,7 +3373,7 @@ if __name__ == '__main__':
     print("\n--- Starting Flask Backend Server ---")
     print("Ensure you have activated your Python virtual environment.")
     print("Ensure you have set FLASK_SECRET_KEY, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GEMINI_API_KEY in your .env file.")
-    print("Also ensure MONGO_URI and MONGO_DB_NAME are set in .env if using MongoDB.")
+    print("Database: PostgreSQL / SQLite active via database manager.")
     print("This server will run on http://127.0.0.1:5000\n")
     # use_reloader=False prevents Windows socket selector error [WinError 10038]
     app.run(debug=True, use_reloader=False, port=5000)

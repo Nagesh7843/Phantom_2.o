@@ -7,3 +7,5 @@ python-dotenv
 flask-cors
 requests
 certifi>=2024.8.30
+huggingface_hub>=0.20.0
+pillow>=10.0.0

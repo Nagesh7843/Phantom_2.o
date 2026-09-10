@@ -16,6 +16,7 @@ import { PluginsModal } from '@/components/modals/PluginsModal';
 import { VoiceChatModal } from '@/components/modals/VoiceChatModal';
 import { PhantomIconSvg, SidebarExpandIconSvg } from '@/components/common/PhantomLogo';
 import { api } from '@/lib/api';
+import { applyMaleVoiceSettings } from '@/lib/voiceUtils';
 import { ChatMessage, ChatSession, UserProfile, UserSettings } from '@/types';
 import { ArrowLeft, Home as HomeIcon, User } from 'lucide-react';
 
@@ -49,12 +50,20 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ onNavigateHome }) =>
   // Modal State
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
+  const [authInitialEmail, setAuthInitialEmail] = useState('');
+  const [authInitialMode, setAuthInitialMode] = useState<'login' | 'register'>('login');
   const [profileOpen, setProfileOpen] = useState(false);
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [scheduledOpen, setScheduledOpen] = useState(false);
   const [pluginsOpen, setPluginsOpen] = useState(false);
   const [voiceModeOpen, setVoiceModeOpen] = useState(false);
   const [backendOnline, setBackendOnline] = useState(false);
+
+  const handleOpenAuth = (initialEmail = '', mode: 'login' | 'register' = 'login') => {
+    setAuthInitialEmail(initialEmail);
+    setAuthInitialMode(mode);
+    setAuthOpen(true);
+  };
 
   // Developer Plugins & Tools State
   const [plugins, setPlugins] = useState<Record<string, boolean>>({
@@ -493,14 +502,8 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ onNavigateHome }) =>
       if (!cleanText) return;
 
       const utterance = new SpeechSynthesisUtterance(cleanText);
-      utterance.rate = 1.05;
-      utterance.pitch = 1.0;
-
-      if (settings.voice) {
-        const voices = window.speechSynthesis.getVoices();
-        const selected = voices.find((v) => v.name === settings.voice);
-        if (selected) utterance.voice = selected;
-      }
+      const voices = window.speechSynthesis.getVoices();
+      applyMaleVoiceSettings(utterance, voices, settings.voice, settings.language || 'en-US');
       window.speechSynthesis.speak(utterance);
     } catch (e) {
       console.warn('TTS error:', e);
@@ -537,43 +540,48 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ onNavigateHome }) =>
     <div className="flex flex-col h-screen bg-cyber-dark text-slate-100 overflow-hidden font-sans">
       {/* Main Container */}
       <div className="flex-1 flex overflow-hidden relative">
-        {!sidebarOpen && (
-          <button
-            onClick={() => setSidebarOpen(true)}
-            className="group absolute left-3 top-3 z-30 w-9 h-9 rounded-xl bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 text-zinc-100 hover:text-white shadow-md transition-all flex items-center justify-center cursor-pointer"
-            title="Open sidebar"
-            aria-label="Open sidebar"
-          >
-            <PhantomIconSvg className="w-5 h-5 text-zinc-100 group-hover:hidden transition-all" />
-            <SidebarExpandIconSvg className="w-5 h-5 text-white hidden group-hover:block transition-all" />
-          </button>
-        )}
+        {/* Render Left Sidebar only when logged in / authenticated */}
+        {userProfile?.authenticated && (
+          <>
+            {!sidebarOpen && (
+              <button
+                onClick={() => setSidebarOpen(true)}
+                className="group absolute left-3 top-3 z-30 w-9 h-9 rounded-xl bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 text-zinc-100 hover:text-white shadow-md transition-all flex items-center justify-center cursor-pointer"
+                title="Open sidebar"
+                aria-label="Open sidebar"
+              >
+                <PhantomIconSvg className="w-5 h-5 text-zinc-100 group-hover:hidden transition-all" />
+                <SidebarExpandIconSvg className="w-5 h-5 text-white hidden group-hover:block transition-all" />
+              </button>
+            )}
 
-        {/* Left Sidebar for Chat History */}
-        <Sidebar
-          isOpen={sidebarOpen}
-          onCloseMobile={() => setSidebarOpen(false)}
-          sessions={sessions}
-          activeSessionId={activeSessionId}
-          onSelectSession={handleSelectSession}
-          onNewChat={handleNewChat}
-          onRenameSession={handleRenameSession}
-          onDeleteSession={handleDeleteSession}
-          onTogglePinSession={handleTogglePinSession}
-          activeTab={activeTab}
-          setActiveTab={setActiveTab}
-          isAuthenticated={Boolean(userProfile?.authenticated)}
-          onOpenAuth={() => setAuthOpen(true)}
-          userProfile={userProfile}
-          onOpenSettings={() => setSettingsOpen(true)}
-          onOpenProfile={() => setProfileOpen(true)}
-          onOpenLibrary={() => setLibraryOpen(true)}
-          onOpenScheduled={() => setScheduledOpen(true)}
-          onOpenPlugins={() => setPluginsOpen(true)}
-          currentTheme={settings.theme}
-          onToggleTheme={handleToggleTheme}
-          onToggleSidebar={() => setSidebarOpen((open) => !open)}
-        />
+            {/* Left Sidebar for Chat History */}
+            <Sidebar
+              isOpen={sidebarOpen}
+              onCloseMobile={() => setSidebarOpen(false)}
+              sessions={sessions}
+              activeSessionId={activeSessionId}
+              onSelectSession={handleSelectSession}
+              onNewChat={handleNewChat}
+              onRenameSession={handleRenameSession}
+              onDeleteSession={handleDeleteSession}
+              onTogglePinSession={handleTogglePinSession}
+              activeTab={activeTab}
+              setActiveTab={setActiveTab}
+              isAuthenticated={Boolean(userProfile?.authenticated)}
+              onOpenAuth={() => handleOpenAuth()}
+              userProfile={userProfile}
+              onOpenSettings={() => setSettingsOpen(true)}
+              onOpenProfile={() => setProfileOpen(true)}
+              onOpenLibrary={() => setLibraryOpen(true)}
+              onOpenScheduled={() => setScheduledOpen(true)}
+              onOpenPlugins={() => setPluginsOpen(true)}
+              currentTheme={settings.theme}
+              onToggleTheme={handleToggleTheme}
+              onToggleSidebar={() => setSidebarOpen((open) => !open)}
+            />
+          </>
+        )}
 
         {/* Dynamic Center Area based on activeTab */}
         <main className="flex-1 flex flex-col overflow-hidden relative">
@@ -604,7 +612,7 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ onNavigateHome }) =>
                   </button>
                 ) : (
                   <button
-                    onClick={() => setAuthOpen(true)}
+                    onClick={() => handleOpenAuth()}
                     className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-white hover:bg-zinc-200 text-black font-bold text-xs shadow-mono-subtle transition-all cursor-pointer active:scale-95"
                     title="Sign in to your account"
                   >
@@ -657,7 +665,7 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ onNavigateHome }) =>
               onBackToChat={() => setActiveTab('chat')}
               isAuthenticated={Boolean(userProfile?.authenticated)}
               userProfile={userProfile}
-              onOpenAuth={() => setAuthOpen(true)}
+              onOpenAuth={() => handleOpenAuth()}
             />
           )}
 
@@ -681,6 +689,8 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ onNavigateHome }) =>
       <AuthModal
         isOpen={authOpen}
         onClose={() => setAuthOpen(false)}
+        initialEmail={authInitialEmail}
+        initialMode={authInitialMode}
         onAuthSuccess={(prof) => {
           setUserProfile(prof);
           if (prof?.authenticated) loadAllSessions(prof);
@@ -691,6 +701,7 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ onNavigateHome }) =>
         isOpen={profileOpen}
         onClose={() => setProfileOpen(false)}
         profile={userProfile}
+        onOpenAuth={(email, mode) => handleOpenAuth(email, mode)}
         onProfileUpdated={(prof) => {
           setUserProfile(prof);
           if (prof?.authenticated) {

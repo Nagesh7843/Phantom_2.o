@@ -11,6 +11,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { applyMaleVoiceSettings } from '@/lib/voiceUtils';
 
 interface VoiceChatModalProps {
   isOpen: boolean;
@@ -383,26 +384,9 @@ export const VoiceChatModal: React.FC<VoiceChatModalProps> = ({
 
       const utterance = new SpeechSynthesisUtterance(clean);
       activeUtteranceRef.current = utterance;
-      utterance.rate = 1.05;
-      utterance.pitch = 1.0;
-      utterance.lang = language || 'en-US';
 
       const voices = window.speechSynthesis.getVoices();
-      if (userVoice && voices.length > 0) {
-        const match = voices.find((v) => v.name === userVoice);
-        if (match) utterance.voice = match;
-      } else if (voices.length > 0) {
-        const preferred =
-          voices.find(
-            (v) =>
-              (v.lang.startsWith('en') || v.lang === language) &&
-              (v.name.includes('Natural') ||
-                v.name.includes('Google') ||
-                v.name.includes('Neural') ||
-                v.name.includes('Online'))
-          ) || voices.find((v) => v.lang.startsWith('en') || v.lang === language);
-        if (preferred) utterance.voice = preferred;
-      }
+      applyMaleVoiceSettings(utterance, voices, userVoice, language);
 
       utterance.onend = () => {
         activeUtteranceRef.current = null;
