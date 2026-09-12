@@ -40,8 +40,10 @@ import {
   RotateCcw,
   Gauge,
   SlidersHorizontal,
+  Archive,
+  ArchiveRestore,
 } from 'lucide-react';
-import { UserSettings, UserProfile, SubscriptionTier, SubscriptionInfo } from '@/types';
+import { UserSettings, UserProfile, SubscriptionTier, SubscriptionInfo, ChatSession } from '@/types';
 import { PhantomLogo, PhantomIconSvg } from '../common/PhantomLogo';
 import { api } from '@/lib/api';
 import {
@@ -62,6 +64,9 @@ interface SettingsModalProps {
   userProfile?: UserProfile | null;
   onLogout?: () => void;
   initialSection?: SettingsSectionId;
+  sessions?: ChatSession[];
+  onToggleArchiveSession?: (sessionId: string, isArchived?: boolean) => void;
+  onDeleteSession?: (sessionId: string) => void;
 }
 
 export type { SettingsSectionId };
@@ -118,9 +123,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   userProfile,
   onLogout,
   initialSection = 'general',
+  sessions = [],
+  onToggleArchiveSession,
+  onDeleteSession,
 }) => {
   const [activeSection, setActiveSection] = useState<SettingsSectionId>(initialSection);
   const [searchQuery, setSearchQuery] = useState('');
+  const [showArchivedManager, setShowArchivedManager] = useState(false);
 
   useEffect(() => {
     if (isOpen && initialSection) {
@@ -1174,7 +1183,75 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
             {/* 9. DATA CONTROLS */}
             {activeSection === 'data-controls' && (
-              <div className="space-y-3">
+              <div className="space-y-4">
+                {/* Archived Chats Row */}
+                {(() => {
+                  const archivedList = sessions.filter((s) => Boolean(s.is_archived));
+                  return (
+                    <div className="p-3.5 bg-zinc-900/60 border border-zinc-800 rounded-2xl space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <Archive className="w-4 h-4 text-white" />
+                            <span className="text-xs font-bold text-zinc-200">Archived Chats</span>
+                          </div>
+                          <p className="text-[11px] text-zinc-400 mt-0.5">
+                            {archivedList.length} archived {archivedList.length === 1 ? 'conversation' : 'conversations'}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setShowArchivedManager(!showArchivedManager)}
+                          className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-750 border border-zinc-700 text-xs font-semibold text-white transition-colors"
+                        >
+                          {showArchivedManager ? 'Hide List' : `Manage (${archivedList.length})`}
+                        </button>
+                      </div>
+
+                      {showArchivedManager && (
+                        <div className="pt-2 border-t border-zinc-800 space-y-2 animate-in fade-in duration-150">
+                          {archivedList.length === 0 ? (
+                            <p className="text-xs text-zinc-500 italic py-2">No archived conversations found.</p>
+                          ) : (
+                            <div className="divide-y divide-zinc-800/80 max-h-56 overflow-y-auto custom-scrollbar">
+                              {archivedList.map((item) => (
+                                <div key={item.session_id} className="py-2.5 flex items-center justify-between gap-3">
+                                  <div className="min-w-0 flex-1">
+                                    <p className="text-xs font-semibold text-zinc-200 truncate">{item.title || 'Untitled Session'}</p>
+                                    <p className="text-[10px] text-zinc-500 font-mono">
+                                      {item.last_updated ? new Date(item.last_updated).toLocaleDateString() : 'Archived'}
+                                    </p>
+                                  </div>
+                                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                                    <button
+                                      type="button"
+                                      onClick={() => onToggleArchiveSession?.(item.session_id, false)}
+                                      className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-[11px] text-emerald-400 font-medium flex items-center gap-1 transition-colors"
+                                      title="Restore to chat history"
+                                    >
+                                      <ArchiveRestore className="w-3.5 h-3.5" />
+                                      <span>Unarchive</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => onDeleteSession?.(item.session_id)}
+                                      className="p-1 rounded-lg text-zinc-500 hover:text-rose-400 hover:bg-zinc-800 transition-colors"
+                                      title="Delete permanently"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* Export Data */}
                 <div className="p-3.5 bg-zinc-900/60 border border-zinc-800 rounded-2xl flex items-center justify-between">
                   <div>
                     <span className="text-xs font-bold text-zinc-200">Export All Data</span>

@@ -33,6 +33,7 @@ export interface ChatSession {
   session_id: string;
   title: string;
   is_pinned?: boolean;
+  is_archived?: boolean;
   last_updated?: string;
   created_at?: string;
 }

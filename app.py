@@ -1951,6 +1951,40 @@ def pin_session_api(session_id):
         return jsonify({"error": "Failed to update pin status."}), 500
 
 
+# --- ARCHIVE / UNARCHIVE CHAT SESSION API ---
+@app.route('/api/session/<session_id>/archive', methods=['POST'])
+def archive_session_api(session_id):
+    user_id = get_current_user_id() or session.get('guest_id', 'guest_default')
+    data = request.get_json(silent=True) or {}
+    is_archived_val = data.get('is_archived')
+
+    try:
+        new_archived_state = False
+        if db_layer:
+            new_archived_state = db_layer.toggle_archive_session(session_id, user_id, is_archived_val)
+
+        if chat_sessions_collection is not None:
+            session_id_obj = ObjectId(session_id) if ObjectId.is_valid(session_id) else session_id
+            if is_archived_val is not None:
+                new_archived_state = bool(is_archived_val)
+            else:
+                existing = chat_sessions_collection.find_one({'_id': session_id_obj})
+                new_archived_state = not bool(existing.get('is_archived', False)) if existing else True
+            chat_sessions_collection.update_one(
+                {'_id': session_id_obj},
+                {'$set': {'is_archived': new_archived_state, 'last_updated': datetime.now(timezone.utc)}}
+            )
+
+        return jsonify({
+            "message": "Archive status updated successfully.",
+            "session_id": session_id,
+            "is_archived": new_archived_state
+        }), 200
+    except Exception as e:
+        app.logger.error(f"Error toggling archive on session {session_id}: {e}", exc_info=True)
+        return jsonify({"error": "Failed to update archive status."}), 500
+
+
 # --- SUBSCRIPTION & BILLING APIS ---
 @app.route('/api/user/subscription', methods=['GET'])
 def get_user_subscription_api():

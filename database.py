@@ -108,11 +108,13 @@ def init_database():
                         user_id VARCHAR(64) NOT NULL,
                         title VARCHAR(255) DEFAULT 'New Chat Session',
                         is_pinned BOOLEAN DEFAULT FALSE,
+                        is_archived BOOLEAN DEFAULT FALSE,
                         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                         last_updated TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
                     );
                     
                     ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS is_pinned BOOLEAN DEFAULT FALSE;
+                    ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS is_archived BOOLEAN DEFAULT FALSE;
                     
                     CREATE TABLE IF NOT EXISTS messages (
                         id VARCHAR(64) PRIMARY KEY,
@@ -760,17 +762,41 @@ def get_all_sessions(user_id):
         conn = _pg_pool.getconn()
         try:
             with conn.cursor(cursor_factory=extras.RealDictCursor) as cur:
-                cur.execute("SELECT id as session_id, title, is_pinned, last_updated, created_at FROM chat_sessions WHERE user_id = %s ORDER BY is_pinned DESC, last_updated DESC", (user_id,))
+                cur.execute("SELECT id as session_id, title, is_pinned, is_archived, last_updated, created_at FROM chat_sessions WHERE user_id = %s ORDER BY is_pinned DESC, last_updated DESC", (user_id,))
                 rows = cur.fetchall()
-                return [{**dict(r), "is_pinned": bool(r.get("is_pinned", False))} for r in rows]
+                return [
+                    {
+                        **dict(r),
+                        "is_pinned": bool(r.get("is_pinned", False)),
+                        "is_archived": bool(r.get("is_archived", False))
+                    }
+                    for r in rows
+                ]
         finally:
             _pg_pool.putconn(conn)
     else:
         with sqlite3.connect(_sqlite_path) as conn:
             conn.row_factory = sqlite3.Row
             cur = conn.cursor()
-            cur.execute("SELECT id as session_id, title, is_pinned, last_updated, created_at FROM chat_sessions WHERE user_id = ? ORDER BY is_pinned DESC, last_updated DESC", (user_id,))
-            return [{**dict(r), "is_pinned": bool(r.get("is_pinned", False))} for r in cur.fetchall()]
+            # Ensure is_archived column exists in sqlite
+            try:
+                cur.execute("SELECT id as session_id, title, is_pinned, is_archived, last_updated, created_at FROM chat_sessions WHERE user_id = ? ORDER BY is_pinned DESC, last_updated DESC", (user_id,))
+            except Exception:
+                try:
+                    conn.execute("ALTER TABLE chat_sessions ADD COLUMN is_archived INTEGER DEFAULT 0")
+                    conn.commit()
+                except Exception:
+                    pass
+                cur.execute("SELECT id as session_id, title, is_pinned, is_archived, last_updated, created_at FROM chat_sessions WHERE user_id = ? ORDER BY is_pinned DESC, last_updated DESC", (user_id,))
+            
+            return [
+                {
+                    **dict(r),
+                    "is_pinned": bool(r.get("is_pinned", False)),
+                    "is_archived": bool(r.get("is_archived", False))
+                }
+                for r in cur.fetchall()
+            ]
 
 def create_session(session_id, user_id, title="New Chat Session", is_pinned=False):
     now_iso = datetime.now(timezone.utc).isoformat()
@@ -779,8 +805,8 @@ def create_session(session_id, user_id, title="New Chat Session", is_pinned=Fals
         try:
             with conn.cursor() as cur:
                 cur.execute("""
-                    INSERT INTO chat_sessions (id, user_id, title, is_pinned, created_at, last_updated)
-                    VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                    INSERT INTO chat_sessions (id, user_id, title, is_pinned, is_archived, created_at, last_updated)
+                    VALUES (%s, %s, %s, %s, FALSE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                     ON CONFLICT (id) DO UPDATE SET last_updated = CURRENT_TIMESTAMP
                 """, (session_id, user_id, title, bool(is_pinned)))
             conn.commit()
@@ -789,8 +815,8 @@ def create_session(session_id, user_id, title="New Chat Session", is_pinned=Fals
     else:
         with sqlite3.connect(_sqlite_path) as conn:
             conn.execute("""
-                INSERT INTO chat_sessions (id, user_id, title, is_pinned, created_at, last_updated)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO chat_sessions (id, user_id, title, is_pinned, is_archived, created_at, last_updated)
+                VALUES (?, ?, ?, ?, 0, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET last_updated = ?
             """, (session_id, user_id, title, 1 if is_pinned else 0, now_iso, now_iso, now_iso))
             conn.commit()
@@ -835,6 +861,52 @@ def toggle_pin_session(session_id, user_id, is_pinned=None):
             )
             conn.commit()
             return new_pinned
+
+def toggle_archive_session(session_id, user_id, is_archived=None):
+    if not session_id or not user_id:
+        return False
+    now_iso = datetime.now(timezone.utc).isoformat()
+    if _active_db_type == DB_TYPE_POSTGRES and _pg_pool:
+        conn = _pg_pool.getconn()
+        try:
+            with conn.cursor() as cur:
+                if is_archived is not None:
+                    cur.execute("""
+                        UPDATE chat_sessions 
+                        SET is_archived = %s, last_updated = CURRENT_TIMESTAMP 
+                        WHERE id = %s AND user_id = %s 
+                        RETURNING is_archived
+                    """, (bool(is_archived), session_id, user_id))
+                else:
+                    cur.execute("""
+                        UPDATE chat_sessions 
+                        SET is_archived = NOT COALESCE(is_archived, FALSE), last_updated = CURRENT_TIMESTAMP 
+                        WHERE id = %s AND user_id = %s 
+                        RETURNING is_archived
+                    """, (session_id, user_id))
+                row = cur.fetchone()
+                conn.commit()
+                return bool(row[0]) if row else False
+        finally:
+            _pg_pool.putconn(conn)
+    else:
+        with sqlite3.connect(_sqlite_path) as conn:
+            cur = conn.cursor()
+            try:
+                cur.execute("SELECT is_archived FROM chat_sessions WHERE id = ? AND user_id = ?", (session_id, user_id))
+            except Exception:
+                conn.execute("ALTER TABLE chat_sessions ADD COLUMN is_archived INTEGER DEFAULT 0")
+                conn.commit()
+                cur.execute("SELECT is_archived FROM chat_sessions WHERE id = ? AND user_id = ?", (session_id, user_id))
+            row = cur.fetchone()
+            current_archived = bool(row[0]) if row and row[0] is not None else False
+            new_archived = not current_archived if is_archived is None else bool(is_archived)
+            conn.execute(
+                "UPDATE chat_sessions SET is_archived = ?, last_updated = ? WHERE id = ? AND user_id = ?",
+                (1 if new_archived else 0, now_iso, session_id, user_id)
+            )
+            conn.commit()
+            return new_archived
 
 def verify_session_ownership(session_id, user_id):
     if not session_id or not user_id:

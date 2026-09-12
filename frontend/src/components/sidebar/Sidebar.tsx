@@ -22,6 +22,9 @@ import {
   Puzzle,
   MoreHorizontal,
   ChevronRight,
+  ChevronDown,
+  Archive,
+  ArchiveRestore,
 } from 'lucide-react';
 import { ChatSession, UserProfile } from '@/types';
 import { ActiveTab } from '../layout/Header';
@@ -37,6 +40,7 @@ interface SidebarProps {
   onRenameSession: (id: string, newTitle: string) => void;
   onDeleteSession: (id: string) => void;
   onTogglePinSession?: (id: string) => void;
+  onToggleArchiveSession?: (id: string, isArchived?: boolean) => void;
   activeTab?: ActiveTab;
   setActiveTab?: (tab: ActiveTab) => void;
   isAuthenticated?: boolean;
@@ -62,6 +66,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onRenameSession,
   onDeleteSession,
   onTogglePinSession,
+  onToggleArchiveSession,
   activeTab = 'chat',
   setActiveTab,
   isAuthenticated = false,
@@ -79,6 +84,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [showSearchBox, setShowSearchBox] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [showArchivedSection, setShowArchivedSection] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -92,13 +98,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
   }, [showSearchBox, isOpen]);
 
-  // Filter sessions by search term
+  // Filter sessions by search term and archive state
   const filteredSessions = sessions.filter((s) =>
     (s.title || 'Untitled Chat').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const pinnedSessions = filteredSessions.filter((s) => Boolean(s.is_pinned));
-  const recentSessions = filteredSessions.filter((s) => !s.is_pinned);
+  const activeSessions = filteredSessions.filter((s) => !s.is_archived);
+  const pinnedSessions = activeSessions.filter((s) => Boolean(s.is_pinned));
+  const recentSessions = activeSessions.filter((s) => !s.is_pinned);
+  const archivedSessions = filteredSessions.filter((s) => Boolean(s.is_archived));
 
   const startRename = (e: React.MouseEvent, session: ChatSession) => {
     e.stopPropagation();
@@ -129,6 +137,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const handleTogglePin = (e: React.MouseEvent, sessionId: string) => {
     e.stopPropagation();
     onTogglePinSession?.(sessionId);
+  };
+
+  const handleToggleArchive = (e: React.MouseEvent, sessionId: string, newArchived?: boolean) => {
+    e.stopPropagation();
+    onToggleArchiveSession?.(sessionId, newArchived);
   };
 
   const userInitial =
@@ -476,8 +489,40 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         {recentSessions.length}
                       </span>
                     </div>
-                    {recentSessions.map((session) => renderSessionItem(session))}
+                    {recentSessions.map((session) => renderSessionItem(session, false))}
                   </div>
+
+                  {/* Archived Conversations Group (Expandable) */}
+                  {archivedSessions.length > 0 && (
+                    <div className="space-y-0.5 pt-2 border-t border-zinc-850/80">
+                      <button
+                        type="button"
+                        onClick={() => setShowArchivedSection(!showArchivedSection)}
+                        className="w-full px-2 py-1 flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-zinc-400 hover:text-zinc-200 transition-colors rounded-lg group"
+                      >
+                        <span className="flex items-center gap-1.5">
+                          <Archive className="w-3 h-3 text-zinc-400 group-hover:text-white" />
+                          <span>Archived Chats</span>
+                        </span>
+                        <div className="flex items-center gap-1">
+                          <span className="text-[10px] text-zinc-500 font-mono">
+                            {archivedSessions.length}
+                          </span>
+                          <ChevronDown
+                            className={`w-3 h-3 text-zinc-500 transition-transform ${
+                              showArchivedSection ? 'rotate-180' : ''
+                            }`}
+                          />
+                        </div>
+                      </button>
+
+                      {showArchivedSection && (
+                        <div className="space-y-0.5 pt-0.5 animate-in fade-in duration-150">
+                          {archivedSessions.map((session) => renderSessionItem(session, true))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
             </React.Fragment>
@@ -566,7 +611,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     </React.Fragment>
   );
 
-  function renderSessionItem(session: ChatSession) {
+  function renderSessionItem(session: ChatSession, isArchivedView = false) {
     const isActive = session.session_id === activeSessionId && activeTab === 'chat';
     const isEditing = editingId === session.session_id;
     const isPinned = Boolean(session.is_pinned);
@@ -584,11 +629,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
         className={`group relative flex items-center justify-between px-2.5 py-1.5 rounded-xl text-xs cursor-pointer transition-all ${
           isActive
             ? 'bg-zinc-850 text-white border border-zinc-700 shadow-mono-subtle font-semibold'
+            : isArchivedView
+            ? 'text-zinc-400 hover:bg-zinc-900/80 hover:text-zinc-200 border border-transparent'
             : 'text-zinc-300 hover:bg-zinc-900 hover:text-white border border-transparent'
         }`}
       >
         <div className="flex items-center gap-2 min-w-0 flex-1 pr-1">
-          {isPinned ? (
+          {isArchivedView ? (
+            <Archive className="w-3.5 h-3.5 flex-shrink-0 text-zinc-500" />
+          ) : isPinned ? (
             <Pin className="w-3.5 h-3.5 flex-shrink-0 text-white fill-white/20" />
           ) : (
             <MessageSquare
@@ -616,7 +665,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           )}
         </div>
 
-        {/* Action buttons: Pin / Rename / Delete */}
+        {/* Action buttons */}
         <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
           {isEditing ? (
             <React.Fragment>
@@ -635,6 +684,26 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <X className="w-3.5 h-3.5" />
               </button>
             </React.Fragment>
+          ) : isArchivedView ? (
+            <React.Fragment>
+              {/* Unarchive / Restore Button */}
+              <button
+                onClick={(e) => handleToggleArchive(e, session.session_id, false)}
+                className="p-1 text-zinc-400 hover:text-emerald-400 transition-colors"
+                title="Restore / Unarchive chat"
+              >
+                <ArchiveRestore className="w-3.5 h-3.5" />
+              </button>
+
+              {/* Permanent Delete Button */}
+              <button
+                onClick={(e) => handleDelete(e, session.session_id)}
+                className="p-1 text-zinc-400 hover:text-rose-400 transition-colors"
+                title="Delete chat permanently"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </React.Fragment>
           ) : (
             <React.Fragment>
               {/* Pin / Unpin Button */}
@@ -648,6 +717,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 title={isPinned ? 'Unpin chat' : 'Pin chat to top'}
               >
                 <Pin className={`w-3 h-3 ${isPinned ? 'fill-white' : ''}`} />
+              </button>
+
+              {/* Archive Button */}
+              <button
+                onClick={(e) => handleToggleArchive(e, session.session_id, true)}
+                className="p-1 text-zinc-400 hover:text-white transition-colors"
+                title="Archive chat"
+              >
+                <Archive className="w-3 h-3" />
               </button>
 
               {/* Rename Button */}

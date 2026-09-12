@@ -14,6 +14,7 @@ import { LibraryModal } from '@/components/modals/LibraryModal';
 import { ScheduledModal } from '@/components/modals/ScheduledModal';
 import { PluginsModal } from '@/components/modals/PluginsModal';
 import { VoiceChatModal } from '@/components/modals/VoiceChatModal';
+import { ShareModal } from '@/components/modals/ShareModal';
 import { PhantomIconSvg, SidebarExpandIconSvg } from '@/components/common/PhantomLogo';
 import { api } from '@/lib/api';
 import { applyVoiceCustomSettings, applyMaleVoiceSettings, cleanTextForSpeech, splitTextIntoSpeechChunks } from '@/lib/voiceUtils';
@@ -81,6 +82,7 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ onNavigateHome }) =>
 
   // Modal State
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [shareModalOpen, setShareModalOpen] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
   const [authInitialEmail, setAuthInitialEmail] = useState('');
   const [authInitialMode, setAuthInitialMode] = useState<'login' | 'register'>('login');
@@ -320,25 +322,34 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ onNavigateHome }) =>
     }
   };
 
-  const handleShareChat = async () => {
-    try {
-      const url = typeof window !== 'undefined' ? window.location.href : '';
-      if (navigator.clipboard) {
-        await navigator.clipboard.writeText(url);
-        setShareCopied(true);
-        setTimeout(() => setShareCopied(false), 2500);
+  const handleShareChat = () => {
+    setShareModalOpen(true);
+  };
+
+  const handleToggleArchiveSession = async (sessionId: string, newArchived?: boolean) => {
+    const currentSession = sessions.find((s) => s.session_id === sessionId);
+    const targetArchived = newArchived !== undefined ? newArchived : !currentSession?.is_archived;
+    const updated = sessions.map((s) =>
+      s.session_id === sessionId ? { ...s, is_archived: targetArchived } : s
+    );
+    setSessions(updated);
+
+    if (userProfile?.authenticated) {
+      try {
+        await api.toggleArchiveSession(sessionId, targetArchived);
+        loadAllSessions();
+      } catch (err) {
+        console.error('Failed to toggle archive on session:', err);
       }
-    } catch {
-      setShareCopied(true);
-      setTimeout(() => setShareCopied(false), 2500);
+    }
+    if (targetArchived && sessionId === activeSessionId) {
+      handleNewChat();
     }
   };
 
   const handleArchiveCurrentChat = () => {
     if (activeSessionId) {
-      const updated = sessions.filter((s) => s.session_id !== activeSessionId);
-      setSessions(updated);
-      handleNewChat();
+      handleToggleArchiveSession(activeSessionId, true);
     } else {
       handleNewChat();
     }
@@ -747,6 +758,7 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ onNavigateHome }) =>
               onRenameSession={handleRenameSession}
               onDeleteSession={handleDeleteSession}
               onTogglePinSession={handleTogglePinSession}
+              onToggleArchiveSession={handleToggleArchiveSession}
               activeTab={activeTab}
               setActiveTab={setActiveTab}
               isAuthenticated={Boolean(userProfile?.authenticated)}
@@ -777,17 +789,8 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ onNavigateHome }) =>
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-900/90 hover:bg-zinc-850 text-zinc-300 hover:text-white border border-zinc-800 hover:border-zinc-700 text-xs font-medium transition-all cursor-pointer shadow-sm active:scale-95"
                   title="Share chat"
                 >
-                  {shareCopied ? (
-                    <>
-                      <Check className="w-3.5 h-3.5 text-emerald-400" />
-                      <span className="text-emerald-400">Copied</span>
-                    </>
-                  ) : (
-                    <>
-                      <Share2 className="w-3.5 h-3.5 text-zinc-400" />
-                      <span>Share</span>
-                    </>
-                  )}
+                  <Share2 className="w-3.5 h-3.5 text-zinc-400" />
+                  <span>Share</span>
                 </button>
 
                 {/* More Options Dropdown */}
@@ -986,6 +989,9 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ onNavigateHome }) =>
         settings={settings}
         onSaveSettings={(newSettings) => setSettings(newSettings)}
         userProfile={userProfile}
+        sessions={sessions}
+        onToggleArchiveSession={handleToggleArchiveSession}
+        onDeleteSession={handleDeleteSession}
       />
 
       <AuthModal
@@ -1071,6 +1077,16 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ onNavigateHome }) =>
             );
           }
         }}
+      />
+
+      {/* Share Conversation Modal */}
+      <ShareModal
+        isOpen={shareModalOpen}
+        onClose={() => setShareModalOpen(false)}
+        sessionTitle={sessions.find((s) => s.session_id === activeSessionId)?.title || 'Current Conversation'}
+        sessionId={activeSessionId || undefined}
+        messages={messages}
+        userProfile={userProfile}
       />
     </div>
   );

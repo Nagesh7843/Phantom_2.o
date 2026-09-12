@@ -130,6 +130,19 @@ export const api = {
     );
   },
 
+  toggleArchiveSession: async (
+    sessionId: string,
+    isArchived?: boolean
+  ): Promise<{ message: string; session_id: string; is_archived: boolean }> => {
+    return request<{ message: string; session_id: string; is_archived: boolean }>(
+      `/api/session/${sessionId}/archive`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ is_archived: isArchived }),
+      }
+    );
+  },
+
   // Subscription & Billing Management
   getSubscription: async (): Promise<any> => {
     return request<any>('/api/user/subscription');
