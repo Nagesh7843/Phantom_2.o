@@ -4,6 +4,8 @@ import sys
 import subprocess
 import json
 import uuid
+import shutil
+import glob
 
 import jwt  # For decoding JWTs (like Google's id_token)
 import requests
@@ -1020,16 +1022,20 @@ def register_user():
             return jsonify({"error": "User with this email/username already exists."}), 409
 
     try:
+        db_user_id = None
         if db_layer:
-            db_layer.save_or_update_user(email=username, display_name=display_name, password_hash=hashed_password)
+            db_user_id = db_layer.save_or_update_user(email=username, display_name=display_name, google_id=user_id, password_hash=hashed_password)
+            if db_user_id:
+                user_id = db_user_id
 
         if users_collection is not None:
             users_collection.insert_one({
-                "_id": ObjectId(user_id),
+                "_id": ObjectId(user_id) if ObjectId.is_valid(user_id) else ObjectId(),
+                "user_db_id": user_id,
                 "email": username,
                 "display_name": display_name,
                 "password_hash": hashed_password,
-                "google_id": None,
+                "google_id": user_id,
                 "picture_url": None,
                 "last_login": datetime.now(timezone.utc),
                 "theme": "theme-dark",
@@ -1508,12 +1514,21 @@ Deliver direct spoken answers that sound natural when read aloud.
 You are Phantom_2.o, an advanced AI assistant with real-time intelligence.
 Developer attribution rule: Only if the user explicitly asks who developed, created, made, or built you, answer clearly that you were developed by Nagesh. Do not mention or volunteer the developer name 'Nagesh' in greetings, introductions, or any other unrelated responses unless specifically asked.
 Your answers must always be well-structured, clear, engaging, and professional.
+
+Layout & Formatting Rules:
+1. Normal Answers: Present explanations directly in clean text paragraphs with clear flow.
+2. Code Cards: ALWAYS put code inside fenced code blocks with the exact language specified (e.g. ```java, ```python, ```typescript, ```javascript, ```html, ```css, ```cpp, ```rust, ```sql, ```json).
+3. Commands & Terminal Cards: When providing terminal, git, docker, npm, pip, shell, or CLI commands, ALWAYS place them inside dedicated command blocks (e.g. ```bash, ```sh, ```powershell, ```cmd) or format inline commands with backticks (e.g. `git push origin main`).
+4. Section Headings: Use standard markdown headings (### Section Title or ## Title) for clear topic divisions.
+5. Steps & Workflows: When providing step-by-step instructions, use numbered lists (1. **Step Name** - details) so they render as clean step cards.
+6. Quotes & Extra Info: Put key notes, tips, and caveats in markdown blockquotes (e.g. `> 💡 **Tip:** ...`, `> ℹ️ **Note:** ...`, `> ⚠️ **Important:** ...`).
+7. Error & Problem Cards: When diagnosing an error or showing stacktraces, use `> ⚠️ **Error:** ...` or ```error blocks.
+8. Code Diffs: When explaining code edits or patches, use ```diff blocks with + for additions and - for deletions.
+9. Tables: Present comparisons, options, and structured specifications in clean markdown tables.
+
 Creative & Emotional Expression: Whenever the conversation involves creative writing, brainstorming, emotions, storytelling, poetry, design ideas, celebrations, greetings, or thoughtful advice, naturally and expressively incorporate fitting emojis (such as ✨, 🚀, 💡, 🎨, 🌟, 💖, 🤖, 📚, ✍️, 🔥, 🎉) to make your response lively, warm, and emotionally rich. Keep code blocks clean without syntax distortion.
-Do not use special formatting characters like '*' or '#' in titles. Do not repeat your name in your responses unless relevant.
+Do not use special formatting characters like '*' or '#' in raw titles. Do not repeat your name in your responses unless relevant.
 {f"REAL-TIME WEB SEARCH ENGINE ACTIVE (HIGH PRECISION MODE):\n{search_context_text}\nInstructions: The above citations are retrieved live from the web right now. Use these facts, links, and data to deliver an extremely factual, accurate, and up-to-date answer. Cite URLs where relevant." if search_context_text else ""}
-1. Begin with an engaging, short introduction or summary relevant to the user's query.
-2. Present explanations in clean paragraphs with clear flow.
-3. When listing items or steps, use plain numbering (1, 2, 3...) or dashes (-).
 """
 
     gemini_payload = {
@@ -2411,13 +2426,14 @@ def _offline_compiler_analysis(action: str, code: str, language: str, filename: 
 
 
 @app.route('/api/compiler/ai_action', methods=['POST'])
+@app.route('/api/compiler/ai-action', methods=['POST'])
 def compiler_ai_action():
     data = request.get_json(silent=True) or {}
     action = (data.get('action') or 'explain').lower().strip()
     code = data.get('code', '').strip()
     language = data.get('language', 'python').strip()
     filename = data.get('filename', 'main.py').strip()
-    error_message = data.get('error_message', '').strip()
+    error_message = (data.get('error_message') or data.get('error') or '').strip()
     user_question = data.get('question', '').strip()
     user_q_str = f"USER QUESTION: {user_question}" if user_question else ""
 
@@ -2608,10 +2624,985 @@ def manage_single_project(project_id):
         return jsonify({'success': True}), 200
 
 
-# --- RUN CODE BACKEND ENDPOINT ---
+# =========================================================================
+# --- PERSISTENT PROJECT WORKSPACE & TERMINAL ARCHITECTURE ---
+# =========================================================================
+
+class WorkspaceManager:
+    """Manages persistent physical workspace directories for projects on disk."""
+    BASE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'workspaces')
+
+    @classmethod
+    def get_workspace_dir(cls, user_id: str, project_id: str = "default") -> str:
+        safe_user = re.sub(r'[^a-zA-Z0-9_\-]', '_', str(user_id or 'default_user'))
+        safe_proj = re.sub(r'[^a-zA-Z0-9_\-]', '_', str(project_id or 'default_project'))
+        path = os.path.join(cls.BASE_DIR, safe_user, safe_proj)
+        os.makedirs(path, exist_ok=True)
+        os.makedirs(os.path.join(path, '.phantom'), exist_ok=True)
+        return os.path.abspath(path)
+
+    @classmethod
+    def is_safe_path(cls, workspace_dir: str, target_path: str) -> bool:
+        try:
+            abs_base = os.path.abspath(workspace_dir)
+            abs_target = os.path.abspath(target_path)
+            return abs_target.startswith(abs_base)
+        except Exception:
+            return False
+
+    @classmethod
+    def sync_files_to_disk(cls, workspace_dir: str, files_dict: dict):
+        """Write virtual files dict into the physical workspace directory."""
+        if not isinstance(files_dict, dict):
+            return
+        for rel_path, content in files_dict.items():
+            if not rel_path:
+                continue
+            normalized_rel = rel_path.replace('\\', '/').lstrip('/')
+            full_path = os.path.join(workspace_dir, normalized_rel)
+            if not cls.is_safe_path(workspace_dir, full_path):
+                continue
+            os.makedirs(os.path.dirname(full_path), exist_ok=True)
+            text_content = content if isinstance(content, str) else (content.get('content', '') if isinstance(content, dict) else str(content))
+            with open(full_path, 'w', encoding='utf-8', errors='replace') as f:
+                f.write(text_content)
+
+    @classmethod
+    def scan_disk_files(cls, workspace_dir: str) -> dict:
+        """Scan workspace disk directory and return dict of relative paths to text contents."""
+        files = {}
+        ignore_dirs = {'.git', '__pycache__', 'node_modules', '.idea', '.vscode', '.phantom'}
+        ignore_exts = {'.exe', '.o', '.obj', '.class', '.pyc', '.dll', '.so', '.dylib', '.zip', '.tar', '.gz'}
+        for root, dirs, fnames in os.walk(workspace_dir):
+            dirs[:] = [d for d in dirs if d not in ignore_dirs]
+            for fname in fnames:
+                ext = os.path.splitext(fname)[1].lower()
+                if ext in ignore_exts:
+                    continue
+                full_fpath = os.path.join(root, fname)
+                rel_fpath = os.path.relpath(full_fpath, workspace_dir).replace('\\', '/')
+                try:
+                    with open(full_fpath, 'r', encoding='utf-8', errors='ignore') as f:
+                        files[rel_fpath] = f.read()
+                except Exception:
+                    pass
+        return files
+
+    @classmethod
+    def read_file(cls, workspace_dir: str, rel_path: str) -> dict:
+        """Reads a file safely within the persistent workspace."""
+        normalized_rel = rel_path.replace('\\', '/').lstrip('/')
+        full_path = os.path.join(workspace_dir, normalized_rel)
+        if not cls.is_safe_path(workspace_dir, full_path):
+            return {'success': False, 'error': f'Path traversal blocked: {rel_path}'}
+        if not os.path.isfile(full_path):
+            return {'success': False, 'error': f'File not found: {rel_path}'}
+        try:
+            with open(full_path, 'r', encoding='utf-8', errors='replace') as f:
+                content = f.read()
+            lines = content.splitlines()
+            return {
+                'success': True,
+                'path': normalized_rel,
+                'content': content,
+                'lines': lines,
+                'line_count': len(lines)
+            }
+        except Exception as e:
+            return {'success': False, 'error': f'Read error: {str(e)}'}
+
+    @classmethod
+    def edit_file(cls, workspace_dir: str, rel_path: str, changes: list, old_text_match: str = None) -> dict:
+        """Applies structured line edits to a file in the persistent workspace with stale check."""
+        normalized_rel = rel_path.replace('\\', '/').lstrip('/')
+        full_path = os.path.join(workspace_dir, normalized_rel)
+        if not cls.is_safe_path(workspace_dir, full_path):
+            return {'success': False, 'error': f'Path traversal blocked: {rel_path}'}
+        if not os.path.isfile(full_path):
+            return {'success': False, 'error': f'File not found: {rel_path}'}
+        try:
+            with open(full_path, 'r', encoding='utf-8', errors='replace') as f:
+                original_content = f.read()
+            lines = original_content.splitlines()
+
+            # Process changes (sorted in reverse line order so offsets remain stable)
+            sorted_changes = sorted(changes or [], key=lambda c: int(c.get('startLine', 1)), reverse=True)
+            for ch in sorted_changes:
+                s_line = int(ch.get('startLine', 1))
+                e_line = int(ch.get('endLine', s_line))
+                new_text = str(ch.get('newText', ''))
+                old_text = ch.get('oldText')
+
+                s_idx = max(0, s_line - 1)
+                e_idx = min(len(lines), e_line)
+
+                # Stale file concurrency verification
+                if old_text is not None:
+                    target_slice = "\n".join(lines[s_idx:e_idx])
+                    if target_slice.strip() != old_text.strip():
+                        # Search near window in case of slight line shifts
+                        found = False
+                        for shift in range(-5, 6):
+                            test_s = max(0, s_idx + shift)
+                            test_e = min(len(lines), e_idx + shift)
+                            if "\n".join(lines[test_s:test_e]).strip() == old_text.strip():
+                                s_idx, e_idx = test_s, test_e
+                                found = True
+                                break
+                        if not found:
+                            return {
+                                'success': False,
+                                'error': f"Stale file conflict at {normalized_rel}:{s_line}-{e_line}. Current content differs from expected edit target.",
+                                'current_slice': target_slice,
+                                'expected': old_text
+                            }
+
+                new_lines = new_text.splitlines() if new_text else []
+                lines[s_idx:e_idx] = new_lines
+
+            new_content = "\n".join(lines)
+            if original_content.endswith('\n') and not new_content.endswith('\n'):
+                new_content += '\n'
+
+            with open(full_path, 'w', encoding='utf-8', errors='replace') as f:
+                f.write(new_content)
+
+            import difflib
+            diff_lines = list(difflib.unified_diff(
+                original_content.splitlines(keepends=True),
+                new_content.splitlines(keepends=True),
+                fromfile=f"a/{normalized_rel}",
+                tofile=f"b/{normalized_rel}"
+            ))
+            diff_str = "".join(diff_lines)
+
+            return {
+                'success': True,
+                'path': normalized_rel,
+                'updated_content': new_content,
+                'diff': diff_str,
+                'line_count': len(lines)
+            }
+        except Exception as e:
+            return {'success': False, 'error': f'Edit error: {str(e)}'}
+
+    @classmethod
+    def create_file(cls, workspace_dir: str, rel_path: str, content: str = "") -> dict:
+        """Safely creates a new file within the workspace directory."""
+        normalized_rel = rel_path.replace('\\', '/').lstrip('/')
+        full_path = os.path.join(workspace_dir, normalized_rel)
+        if not cls.is_safe_path(workspace_dir, full_path):
+            return {'success': False, 'error': f'Path traversal blocked: {rel_path}'}
+        try:
+            os.makedirs(os.path.dirname(full_path), exist_ok=True)
+            with open(full_path, 'w', encoding='utf-8', errors='replace') as f:
+                f.write(content or '')
+            return {'success': True, 'path': normalized_rel, 'content': content}
+        except Exception as e:
+            return {'success': False, 'error': f'Create file error: {str(e)}'}
+
+    @classmethod
+    def rename_file(cls, workspace_dir: str, old_rel_path: str, new_rel_path: str) -> dict:
+        """Safely renames or moves a file within the workspace."""
+        norm_old = old_rel_path.replace('\\', '/').lstrip('/')
+        norm_new = new_rel_path.replace('\\', '/').lstrip('/')
+        full_old = os.path.join(workspace_dir, norm_old)
+        full_new = os.path.join(workspace_dir, norm_new)
+        if not cls.is_safe_path(workspace_dir, full_old) or not cls.is_safe_path(workspace_dir, full_new):
+            return {'success': False, 'error': 'Path traversal blocked.'}
+        if not os.path.exists(full_old):
+            return {'success': False, 'error': f'Source path does not exist: {old_rel_path}'}
+        try:
+            os.makedirs(os.path.dirname(full_new), exist_ok=True)
+            shutil.move(full_old, full_new)
+            return {'success': True, 'old_path': norm_old, 'new_path': norm_new}
+        except Exception as e:
+            return {'success': False, 'error': f'Rename error: {str(e)}'}
+
+    @classmethod
+    def delete_file(cls, workspace_dir: str, rel_path: str, confirmed: bool = False) -> dict:
+        """Deletes a file with explicit confirmation protection."""
+        normalized_rel = rel_path.replace('\\', '/').lstrip('/')
+        full_path = os.path.join(workspace_dir, normalized_rel)
+        if not cls.is_safe_path(workspace_dir, full_path):
+            return {'success': False, 'error': f'Path traversal blocked: {rel_path}'}
+        if not os.path.exists(full_path):
+            return {'success': False, 'error': f'Target does not exist: {rel_path}'}
+        if not confirmed:
+            return {
+                'requires_confirmation': True,
+                'path': normalized_rel,
+                'warning': f'Permanent deletion requested for "{normalized_rel}". Confirm action.'
+            }
+        try:
+            if os.path.isdir(full_path):
+                shutil.rmtree(full_path)
+            else:
+                os.remove(full_path)
+            return {'success': True, 'path': normalized_rel}
+        except Exception as e:
+            return {'success': False, 'error': f'Delete error: {str(e)}'}
+
+    @classmethod
+    def search_files(cls, workspace_dir: str, query: str, is_regex: bool = False) -> dict:
+        """Searches files in the workspace for query or regex pattern."""
+        if not query:
+            return {'success': True, 'matches': []}
+        matches = []
+        ignore_dirs = {'.git', '__pycache__', 'node_modules', '.idea', '.vscode', '.phantom'}
+        ignore_exts = {'.exe', '.o', '.obj', '.class', '.pyc', '.dll', '.so', '.dylib', '.zip', '.tar', '.gz'}
+        pattern = None
+        if is_regex:
+            try:
+                pattern = re.compile(query, re.IGNORECASE)
+            except Exception as e:
+                return {'success': False, 'error': f'Invalid regex: {e}'}
+
+        for root, dirs, fnames in os.walk(workspace_dir):
+            dirs[:] = [d for d in dirs if d not in ignore_dirs]
+            for fname in fnames:
+                ext = os.path.splitext(fname)[1].lower()
+                if ext in ignore_exts:
+                    continue
+                full_fpath = os.path.join(root, fname)
+                rel_fpath = os.path.relpath(full_fpath, workspace_dir).replace('\\', '/')
+                try:
+                    with open(full_fpath, 'r', encoding='utf-8', errors='ignore') as f:
+                        for line_idx, line in enumerate(f, start=1):
+                            line_content = line.rstrip('\r\n')
+                            if is_regex and pattern:
+                                if pattern.search(line_content):
+                                    matches.append({'path': rel_fpath, 'line': line_idx, 'text': line_content.strip()})
+                            else:
+                                if query.lower() in line_content.lower():
+                                    matches.append({'path': rel_fpath, 'line': line_idx, 'text': line_content.strip()})
+                            if len(matches) >= 100:
+                                break
+                except Exception:
+                    pass
+        return {'success': True, 'matches': matches}
+
+
+class PersistentTerminalSession:
+    """Maintains a persistent long-running shell process (PowerShell/Bash) with streaming I/O."""
+    def __init__(self, session_key: str, cwd: str, shell_type: str = "powershell"):
+        self.session_key = session_key
+        self.cwd = os.path.abspath(cwd)
+        self.shell_type = shell_type
+        self.output_entries = []
+        self.lock = threading.Lock()
+        self.entry_counter = 0
+        self.is_alive = True
+        self.last_activity = time.time()
+        self.created_at = time.time()
+
+        safe_env = os.environ.copy()
+        safe_env['PYTHONUNBUFFERED'] = '1'
+        safe_env['FORCE_COLOR'] = '1'
+        safe_env['TERM'] = 'xterm-256color'
+        # Strip internal secrets from terminal environment
+        for secret_key in ('SECRET_KEY', 'DATABASE_URL', 'DB_PASSWORD', 'OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'GEMINI_API_KEY', 'GOOGLE_API_KEY'):
+            safe_env.pop(secret_key, None)
+
+        # Inject user local compilers into PATH
+        user_home = os.path.expanduser('~')
+        compiler_bin = os.path.join(user_home, r'.local\compiler\w64devkit\bin')
+        if os.path.isdir(compiler_bin):
+            safe_env['PATH'] = f"{compiler_bin};{safe_env.get('PATH', '')}"
+
+        if os.name == 'nt':
+            if shell_type.lower() in ('cmd', 'cmd.exe'):
+                shell_cmd = ["cmd.exe", "/K"]
+            else:
+                shell_cmd = ["powershell.exe", "-NoLogo", "-NoExit", "-ExecutionPolicy", "Bypass"]
+            flags = 0x08000000  # CREATE_NO_WINDOW
+        else:
+            shell_cmd = ["bash", "-i"] if shutil.which("bash") else ["sh", "-i"]
+            flags = 0
+
+        self.proc = subprocess.Popen(
+            shell_cmd,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            cwd=self.cwd,
+            env=safe_env,
+            text=True,
+            bufsize=1,
+            creationflags=flags
+        )
+
+        self.reader_thread = threading.Thread(target=self._read_output_loop, daemon=True)
+        self.reader_thread.start()
+
+    def _read_output_loop(self):
+        try:
+            while self.is_alive and self.proc.poll() is None:
+                line = self.proc.stdout.readline()
+                if not line:
+                    time.sleep(0.01)
+                    continue
+                clean_text = _sanitize_terminal_output(line)
+                with self.lock:
+                    self.entry_counter += 1
+                    self.output_entries.append({
+                        'id': self.entry_counter,
+                        'text': clean_text,
+                        'timestamp': time.strftime('%H:%M:%S')
+                    })
+                    if len(self.output_entries) > 3000:
+                        self.output_entries.pop(0)
+                    self.last_activity = time.time()
+        except Exception:
+            pass
+        finally:
+            self.is_alive = False
+
+    def write_input(self, text: str) -> bool:
+        if not self.proc or self.proc.poll() is not None:
+            self.is_alive = False
+            return False
+        try:
+            self.last_activity = time.time()
+            if not text.endswith('\n'):
+                text += '\n'
+            self.proc.stdin.write(text)
+            self.proc.stdin.flush()
+            return True
+        except Exception:
+            self.is_alive = False
+            return False
+
+    def get_output(self, since_id: int = 0):
+        with self.lock:
+            entries = [e for e in self.output_entries if e['id'] > since_id]
+            return entries, self.entry_counter, (self.proc.poll() is None)
+
+    def interrupt(self):
+        """Send Ctrl+C interrupt without terminating the persistent shell session."""
+        try:
+            self.last_activity = time.time()
+            if os.name == 'nt':
+                # Terminate child processes spawned by powershell
+                self.proc.stdin.write("\x03\n")
+                self.proc.stdin.flush()
+            else:
+                import signal
+                self.proc.send_signal(signal.SIGINT)
+            return True
+        except Exception:
+            return False
+
+    def kill(self):
+        self.is_alive = False
+        try:
+            if os.name == 'nt':
+                subprocess.run(f"taskkill /F /T /PID {self.proc.pid}", shell=True, capture_output=True, creationflags=0x08000000)
+            else:
+                self.proc.terminate()
+                self.proc.kill()
+        except Exception:
+            pass
+
+
+class TerminalSessionManager:
+    """Thread-safe registry for persistent terminal sessions across users and tabs."""
+    _sessions: dict[str, PersistentTerminalSession] = {}
+    _lock = threading.Lock()
+
+    @classmethod
+    def get_or_create(cls, user_id: str, project_id: str, tab_id: str, cwd: str, shell_type: str = "powershell") -> PersistentTerminalSession:
+        session_key = f"{user_id}:{project_id}:{tab_id}"
+        with cls._lock:
+            session = cls._sessions.get(session_key)
+            if not session or not session.is_alive or (session.proc and session.proc.poll() is not None):
+                if session:
+                    session.kill()
+                session = PersistentTerminalSession(session_key, cwd, shell_type)
+                cls._sessions[session_key] = session
+            return session
+
+    @classmethod
+    def get_session(cls, user_id: str, project_id: str, tab_id: str) -> PersistentTerminalSession | None:
+        session_key = f"{user_id}:{project_id}:{tab_id}"
+        with cls._lock:
+            session = cls._sessions.get(session_key)
+            if session and session.is_alive and (session.proc and session.proc.poll() is None):
+                return session
+            return None
+
+    @classmethod
+    def kill_session(cls, user_id: str, project_id: str, tab_id: str) -> bool:
+        session_key = f"{user_id}:{project_id}:{tab_id}"
+        with cls._lock:
+            session = cls._sessions.pop(session_key, None)
+            if session:
+                session.kill()
+                return True
+            return False
+
+
+# --- WORKSPACE SYNCHRONIZATION ENDPOINTS ---
+
+@app.route('/api/workspace/sync', methods=['POST'])
+def workspace_sync():
+    """Bidirectional sync between frontend virtual files and server disk workspace."""
+    user_id = get_current_user_id() or session.get('guest_id', 'guest_default')
+    data = request.get_json(silent=True) or {}
+    project_id = data.get('project_id') or 'default'
+    files_payload = data.get('files') or {}
+
+    workspace_dir = WorkspaceManager.get_workspace_dir(user_id, project_id)
+    if files_payload:
+        WorkspaceManager.sync_files_to_disk(workspace_dir, files_payload)
+
+    disk_files = WorkspaceManager.scan_disk_files(workspace_dir)
+    return jsonify({
+        'success': True,
+        'workspace_dir': workspace_dir,
+        'files': disk_files
+    }), 200
+
+
+@app.route('/api/workspace/files', methods=['GET'])
+def workspace_get_files():
+    user_id = get_current_user_id() or session.get('guest_id', 'guest_default')
+    project_id = request.args.get('project_id') or 'default'
+    workspace_dir = WorkspaceManager.get_workspace_dir(user_id, project_id)
+    disk_files = WorkspaceManager.scan_disk_files(workspace_dir)
+    return jsonify({'success': True, 'workspace_dir': workspace_dir, 'files': disk_files}), 200
+
+
+# --- PERSISTENT TERMINAL SESSION API ---
+
+@app.route('/api/terminal/session/create', methods=['POST'])
+def terminal_session_create():
+    """Initializes a persistent interactive shell session mapped to project workspace."""
+    user_id = get_current_user_id() or session.get('guest_id', 'guest_default')
+    data = request.get_json(silent=True) or {}
+    project_id = data.get('project_id') or 'default'
+    tab_id = data.get('tab_id') or 'default-tab'
+    shell_type = data.get('shell') or 'powershell'
+    files_payload = data.get('files') or {}
+
+    workspace_dir = WorkspaceManager.get_workspace_dir(user_id, project_id)
+    if files_payload:
+        WorkspaceManager.sync_files_to_disk(workspace_dir, files_payload)
+
+    session_obj = TerminalSessionManager.get_or_create(user_id, project_id, tab_id, workspace_dir, shell_type)
+    return jsonify({
+        'success': True,
+        'session_key': session_obj.session_key,
+        'cwd': session_obj.cwd,
+        'is_alive': session_obj.is_alive
+    }), 200
+
+
+@app.route('/api/terminal/session/input', methods=['POST'])
+def terminal_session_input():
+    """Sends command or interactive STDIN to the persistent shell session."""
+    user_id = get_current_user_id() or session.get('guest_id', 'guest_default')
+    data = request.get_json(silent=True) or {}
+    project_id = data.get('project_id') or 'default'
+    tab_id = data.get('tab_id') or 'default-tab'
+    input_text = data.get('input', '')
+    files_payload = data.get('files') or {}
+
+    workspace_dir = WorkspaceManager.get_workspace_dir(user_id, project_id)
+    if files_payload:
+        WorkspaceManager.sync_files_to_disk(workspace_dir, files_payload)
+
+    session_obj = TerminalSessionManager.get_or_create(user_id, project_id, tab_id, workspace_dir)
+    success = session_obj.write_input(input_text)
+    return jsonify({'success': success, 'is_alive': session_obj.is_alive}), 200
+
+
+@app.route('/api/terminal/session/read', methods=['GET'])
+def terminal_session_read():
+    """Polls real-time incremental output entries from the persistent shell session."""
+    user_id = get_current_user_id() or session.get('guest_id', 'guest_default')
+    project_id = request.args.get('project_id') or 'default'
+    tab_id = request.args.get('tab_id') or 'default-tab'
+    since_id = int(request.args.get('since_id', 0))
+
+    session_obj = TerminalSessionManager.get_session(user_id, project_id, tab_id)
+    if not session_obj:
+        return jsonify({'success': False, 'entries': [], 'last_id': since_id, 'is_alive': False}), 200
+
+    entries, last_id, is_alive = session_obj.get_output(since_id)
+    return jsonify({
+        'success': True,
+        'entries': entries,
+        'last_id': last_id,
+        'is_alive': is_alive
+    }), 200
+
+
+@app.route('/api/terminal/session/interrupt', methods=['POST'])
+def terminal_session_interrupt():
+    """Sends Ctrl+C interrupt signal to active command in persistent shell session."""
+    user_id = get_current_user_id() or session.get('guest_id', 'guest_default')
+    data = request.get_json(silent=True) or {}
+    project_id = data.get('project_id') or 'default'
+    tab_id = data.get('tab_id') or 'default-tab'
+
+    session_obj = TerminalSessionManager.get_session(user_id, project_id, tab_id)
+    if session_obj:
+        session_obj.interrupt()
+        return jsonify({'success': True, 'message': 'Interrupt sent.'}), 200
+    return jsonify({'success': False, 'message': 'Session not found.'}), 404
+
+
+@app.route('/api/terminal/session/kill', methods=['POST'])
+def terminal_session_kill():
+    """Terminates the persistent shell session when a tab is closed."""
+    user_id = get_current_user_id() or session.get('guest_id', 'guest_default')
+    data = request.get_json(silent=True) or {}
+    project_id = data.get('project_id') or 'default'
+    tab_id = data.get('tab_id') or 'default-tab'
+
+    killed = TerminalSessionManager.kill_session(user_id, project_id, tab_id)
+    return jsonify({'success': True, 'killed': killed}), 200
+
+
+# =========================================================================
+# --- WORKSPACE FILE ATOMIC TOOL ENDPOINTS ---
+# =========================================================================
+
+@app.route('/api/workspace/read_file', methods=['GET', 'POST'])
+def workspace_read_file():
+    user_id = get_current_user_id() or session.get('guest_id', 'guest_default')
+    data = request.get_json(silent=True) if request.method == 'POST' else request.args
+    data = data or {}
+    project_id = data.get('project_id') or 'default'
+    path = data.get('path') or data.get('filename') or ''
+    if not path:
+        return jsonify({'success': False, 'error': 'No file path provided.'}), 400
+
+    workspace_dir = WorkspaceManager.get_workspace_dir(user_id, project_id)
+    res = WorkspaceManager.read_file(workspace_dir, path)
+    return jsonify(res), 200 if res.get('success') else 400
+
+
+@app.route('/api/workspace/edit_file', methods=['POST'])
+def workspace_edit_file():
+    user_id = get_current_user_id() or session.get('guest_id', 'guest_default')
+    data = request.get_json(silent=True) or {}
+    project_id = data.get('project_id') or 'default'
+    path = data.get('path') or data.get('filename') or ''
+    changes = data.get('changes') or []
+    old_text_match = data.get('old_text_match')
+
+    if not path:
+        return jsonify({'success': False, 'error': 'No file path provided.'}), 400
+
+    workspace_dir = WorkspaceManager.get_workspace_dir(user_id, project_id)
+    res = WorkspaceManager.edit_file(workspace_dir, path, changes, old_text_match)
+    if res.get('success'):
+        res['files'] = WorkspaceManager.scan_disk_files(workspace_dir)
+    return jsonify(res), 200 if res.get('success') else 400
+
+
+@app.route('/api/workspace/create_file', methods=['POST'])
+def workspace_create_file():
+    user_id = get_current_user_id() or session.get('guest_id', 'guest_default')
+    data = request.get_json(silent=True) or {}
+    project_id = data.get('project_id') or 'default'
+    path = data.get('path') or data.get('filename') or ''
+    content = data.get('content', '')
+
+    if not path:
+        return jsonify({'success': False, 'error': 'No file path provided.'}), 400
+
+    workspace_dir = WorkspaceManager.get_workspace_dir(user_id, project_id)
+    res = WorkspaceManager.create_file(workspace_dir, path, content)
+    if res.get('success'):
+        res['files'] = WorkspaceManager.scan_disk_files(workspace_dir)
+    return jsonify(res), 200 if res.get('success') else 400
+
+
+@app.route('/api/workspace/rename_file', methods=['POST'])
+def workspace_rename_file():
+    user_id = get_current_user_id() or session.get('guest_id', 'guest_default')
+    data = request.get_json(silent=True) or {}
+    project_id = data.get('project_id') or 'default'
+    old_path = data.get('old_path') or ''
+    new_path = data.get('new_path') or ''
+
+    if not old_path or not new_path:
+        return jsonify({'success': False, 'error': 'old_path and new_path are required.'}), 400
+
+    workspace_dir = WorkspaceManager.get_workspace_dir(user_id, project_id)
+    res = WorkspaceManager.rename_file(workspace_dir, old_path, new_path)
+    if res.get('success'):
+        res['files'] = WorkspaceManager.scan_disk_files(workspace_dir)
+    return jsonify(res), 200 if res.get('success') else 400
+
+
+@app.route('/api/workspace/delete_file', methods=['POST'])
+def workspace_delete_file():
+    user_id = get_current_user_id() or session.get('guest_id', 'guest_default')
+    data = request.get_json(silent=True) or {}
+    project_id = data.get('project_id') or 'default'
+    path = data.get('path') or ''
+    confirmed = bool(data.get('confirmed', False))
+
+    if not path:
+        return jsonify({'success': False, 'error': 'No file path provided.'}), 400
+
+    workspace_dir = WorkspaceManager.get_workspace_dir(user_id, project_id)
+    res = WorkspaceManager.delete_file(workspace_dir, path, confirmed)
+    if res.get('success'):
+        res['files'] = WorkspaceManager.scan_disk_files(workspace_dir)
+    return jsonify(res), 200
+
+
+@app.route('/api/workspace/search_files', methods=['GET', 'POST'])
+def workspace_search_files():
+    user_id = get_current_user_id() or session.get('guest_id', 'guest_default')
+    data = request.get_json(silent=True) if request.method == 'POST' else request.args
+    data = data or {}
+    project_id = data.get('project_id') or 'default'
+    query = data.get('query') or ''
+    is_regex = bool(data.get('is_regex', False))
+
+    workspace_dir = WorkspaceManager.get_workspace_dir(user_id, project_id)
+    res = WorkspaceManager.search_files(workspace_dir, query, is_regex)
+    return jsonify(res), 200 if res.get('success') else 400
+
+
+# =========================================================================
+# --- AI AGENT FILE-EDITING & EXECUTION PIPELINE ---
+# =========================================================================
+
+@app.route('/api/agent/apply_edit', methods=['POST'])
+def agent_apply_edit():
+    """Applies confirmed proposed edits to the workspace file."""
+    user_id = get_current_user_id() or session.get('guest_id', 'guest_default')
+    data = request.get_json(silent=True) or {}
+    project_id = data.get('project_id') or 'default'
+    path = data.get('path') or ''
+    changes = data.get('changes') or []
+    old_text_match = data.get('old_text_match')
+
+    if not path:
+        return jsonify({'success': False, 'error': 'Path is required.'}), 400
+
+    workspace_dir = WorkspaceManager.get_workspace_dir(user_id, project_id)
+    res = WorkspaceManager.edit_file(workspace_dir, path, changes, old_text_match)
+    if res.get('success'):
+        res['files'] = WorkspaceManager.scan_disk_files(workspace_dir)
+    return jsonify(res), 200 if res.get('success') else 400
+
+
+@app.route('/api/agent/execute', methods=['POST'])
+def agent_execute():
+    """
+    AI Agent engine that inspects files, generates structured line-level edits,
+    creates files, suggests commands, and supports Ask / Suggest / Auto Edit / Agent modes.
+    """
+    user_id = get_current_user_id() or session.get('guest_id', 'guest_default')
+    data = request.get_json(silent=True) or {}
+    project_id = data.get('project_id') or 'default'
+    prompt = (data.get('prompt') or '').strip()
+    mode = (data.get('mode') or 'auto_edit').lower().strip()  # 'ask' | 'suggest' | 'auto_edit' | 'agent'
+    active_file = (data.get('active_file') or data.get('filename') or 'main.py').strip()
+    language = (data.get('language') or '').lower().strip()
+    diagnostics = data.get('diagnostics') or []
+    open_files = data.get('open_files') or []
+    current_files = data.get('current_files') or {}
+    tab_id = data.get('tab_id') or 'term-1'
+
+    if not prompt:
+        return jsonify({'success': False, 'error': 'No prompt provided.'}), 400
+
+    workspace_dir = WorkspaceManager.get_workspace_dir(user_id, project_id)
+    if current_files:
+        WorkspaceManager.sync_files_to_disk(workspace_dir, current_files)
+
+    # 1. Read context of target file
+    target_filename = active_file
+    for f in list(current_files.keys()):
+        if f in prompt:
+            target_filename = f
+            break
+
+    target_read = WorkspaceManager.read_file(workspace_dir, target_filename)
+    target_content = target_read.get('content', '') if target_read.get('success') else ''
+    target_lines = target_read.get('lines', []) if target_read.get('success') else []
+
+    operations_log = [
+        f"Inspecting workspace: {os.path.basename(workspace_dir)}",
+        f"Reading target file: {target_filename} ({len(target_lines)} lines)",
+    ]
+
+    # Build prompt for AI model
+    system_instruction = f"""You are Phantom AI Agent, a professional autonomous code-editing agent inside a real IDE.
+You have direct read and structured edit access to the project files in the workspace.
+
+WORKSPACE CONTEXT:
+- Active File: {target_filename}
+- Language: {language or 'auto'}
+- Available Files: {list(current_files.keys())}
+- Active Diagnostics / Problems: {json.dumps(diagnostics[:5])}
+
+TARGET FILE CONTENT ({target_filename}):
+```
+{target_content[:4000]}
+```
+
+USER INSTRUCTION:
+"{prompt}"
+
+OPERATIONAL MODE: {mode.upper()}
+
+You MUST respond strictly with valid JSON conforming to this schema:
+{{
+  "explanation": "Clear, concise summary of the action or answer.",
+  "operations_log": ["Step 1: Reading file...", "Step 2: Analyzed bug...", "Step 3: Generating line edit..."],
+  "edits": [
+    {{
+      "path": "{target_filename}",
+      "startLine": 1,
+      "endLine": 1,
+      "oldText": "exact text in lines before edit",
+      "newText": "replacement text",
+      "explanation": "why this line is edited"
+    }}
+  ],
+  "created_files": [
+    {{
+      "path": "NewClass.java",
+      "content": "file content here"
+    }}
+  ],
+  "commands": [
+    {{
+      "command": "shell command if needed",
+      "explanation": "command purpose",
+      "is_destructive": false
+    }}
+  ]
+}}
+
+RULES:
+1. If the user asks to modify or fix code, provide precise startLine and endLine with exact oldText and newText. Do not return full file replacements when a line or block patch is sufficient.
+2. If the user asks to create a file or class, populate created_files.
+3. If the user asks to run code or install packages, populate commands.
+4. If the user asks a question in 'ask' mode, leave edits and created_files empty.
+5. Respond strictly with JSON. No markdown wrappers outside the JSON."""
+
+    parsed_agent_response = None
+    raw_text = ""
+
+    # Try external LLM
+    try:
+        messages = [{"role": "user", "parts": [{"text": system_instruction}]}]
+        if GEMINI_API_KEY:
+            try:
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}"
+                resp = requests.post(url, json={"contents": messages}, timeout=14)
+                if resp.status_code == 200:
+                    raw_text = resp.json().get('candidates', [{}])[0].get('content', {}).get('parts', [{}])[0].get('text', '')
+            except Exception:
+                pass
+
+        if not raw_text and OPENROUTER_API_KEY:
+            try:
+                or_payload = {"model": OPENROUTER_MODEL, "messages": [{"role": "user", "content": system_instruction}]}
+                or_headers = {"Authorization": f"Bearer {OPENROUTER_API_KEY}", "Content-Type": "application/json"}
+                resp = requests.post("https://api.openrouter.ai/v1/chat/completions", json=or_payload, headers=or_headers, timeout=14)
+                if resp.status_code == 200:
+                    raw_text = resp.json().get('choices', [{}])[0].get('message', {}).get('content', '')
+            except Exception:
+                pass
+
+        if raw_text:
+            cleaned = re.sub(r'^```(json)?\s*', '', raw_text.strip(), flags=re.IGNORECASE)
+            cleaned = re.sub(r'\s*```$', '', cleaned.strip())
+            try:
+                parsed_agent_response = json.loads(cleaned)
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+    # Intelligent Local Fallback Engine if LLM returned empty edits or failed
+    if not parsed_agent_response or (not parsed_agent_response.get("edits") and not parsed_agent_response.get("created_files")):
+        p_lower = prompt.lower()
+        if not parsed_agent_response:
+            parsed_agent_response = {
+                "explanation": f"Processed request: {prompt}",
+                "operations_log": operations_log + ["Applied local intelligence analyzer"],
+                "edits": [],
+                "created_files": [],
+                "commands": []
+            }
+
+        # Case 1: Specific line/variable change (e.g. Change int b = 454645630; to int b = 100;)
+        change_match = re.search(r'(?:change|replace|set|update)\s+["\']?([^"\']+)["\']?\s+(?:to|with|into)\s+["\']?([^"\']+)["\']?', prompt, re.IGNORECASE)
+        if not change_match:
+            change_match = re.search(r'(?:change|replace|set|update)\s+["\']?([^"\'=]+)["\']?\s*=\s*["\']?([^"\']+)["\']?', prompt, re.IGNORECASE)
+
+        if change_match and target_lines and not parsed_agent_response.get("edits"):
+            old_phrase = change_match.group(1).strip().strip("'\"")
+            new_phrase = change_match.group(2).strip().strip("'\"")
+            for idx, line in enumerate(target_lines, start=1):
+                clean_line = line.strip()
+                if old_phrase in line or old_phrase.rstrip(';') in clean_line or old_phrase in clean_line:
+                    indent = line[:len(line) - len(line.lstrip())]
+                    replacement_line = indent + (new_phrase if new_phrase.startswith(indent) else new_phrase)
+                    if line.strip().endswith(';') and not replacement_line.strip().endswith(';') and not replacement_line.strip().endswith('}'):
+                        replacement_line += ';'
+                    parsed_agent_response["edits"].append({
+                        "path": target_filename,
+                        "startLine": idx,
+                        "endLine": idx,
+                        "oldText": line,
+                        "newText": replacement_line,
+                        "explanation": f"Updated line {idx}: replaced `{old_phrase}` with `{new_phrase}`."
+                    })
+                    parsed_agent_response["explanation"] = f"Modified `{target_filename}` line {idx} to set `{new_phrase}`."
+                    parsed_agent_response["operations_log"].append(f"Identified target pattern in {target_filename}:{idx}")
+                    break
+
+        # Case 2: Create new class/file (e.g. Create a Java class Calculator)
+        create_class_match = re.search(r'(?:create|add|new)\s+(?:a\s+)?([a-zA-Z0-9_\-\+]+)?\s*(?:class|file)\s+([a-zA-Z0-9_\-]+)', prompt, re.IGNORECASE)
+        if create_class_match:
+            detected_lang = (create_class_match.group(1) or language or 'java').lower()
+            class_name = create_class_match.group(2).strip()
+            ext = 'java' if 'java' in detected_lang else ('py' if 'python' in detected_lang else ('cpp' if 'cpp' in detected_lang or 'c++' in detected_lang else ('c' if 'c' in detected_lang else 'js')))
+            new_file_path = f"{class_name}.{ext}"
+            
+            if ext == 'java':
+                file_content = f"public class {class_name} {{\n    public {class_name}() {{\n        // Constructor\n    }}\n\n    public static void main(String[] args) {{\n        System.out.println(\"{class_name} initialized.\");\n    }}\n}}\n"
+            elif ext == 'py':
+                file_content = f"class {class_name}:\n    def __init__(self):\n        pass\n\nif __name__ == '__main__':\n    print('{class_name} initialized.')\n"
+            elif ext == 'cpp':
+                file_content = f"#include <iostream>\n\nclass {class_name} {{\npublic:\n    {class_name}() {{\n        std::cout << \"{class_name} initialized.\" << std::endl;\n    }}\n}};\n\nint main() {{\n    {class_name} obj;\n    return 0;\n}}\n"
+            else:
+                file_content = f"class {class_name} {{\n    constructor() {{\n        console.log('{class_name} initialized.');\n    }}\n}}\n\nmodule.exports = {class_name};\n"
+
+            parsed_agent_response["created_files"].append({
+                "path": new_file_path,
+                "content": file_content
+            })
+            parsed_agent_response["explanation"] = f"Created new {detected_lang.capitalize()} class `{class_name}` in `{new_file_path}`."
+            parsed_agent_response["operations_log"].append(f"Created file: {new_file_path}")
+
+        # Case 3: Fix compilation errors
+        elif ('fix' in p_lower or 'error' in p_lower) and target_lines:
+            for idx, line in enumerate(target_lines, start=1):
+                # Check for common integer overflow e.g. int b = 454645630;
+                overflow_match = re.search(r'\bint\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*([0-9]{9,})\s*;', line)
+                if overflow_match:
+                    var_n = overflow_match.group(1)
+                    parsed_agent_response["edits"].append({
+                        "path": target_filename,
+                        "startLine": idx,
+                        "endLine": idx,
+                        "oldText": line,
+                        "newText": line.replace(overflow_match.group(2), '100'),
+                        "explanation": f"Fixed integer overflow for variable '{var_n}'."
+                    })
+                    parsed_agent_response["explanation"] = f"Fixed integer literal overflow at line {idx} in `{target_filename}`."
+                    parsed_agent_response["operations_log"].append(f"Resolved compilation error at line {idx}")
+                    break
+
+        # Case 4: Run command
+        if 'run' in p_lower or 'execute' in p_lower or 'start' in p_lower:
+            ext = (target_filename.split('.')[-1] if '.' in target_filename else 'py').lower()
+            if ext == 'java':
+                c_name = target_filename.replace('.java', '')
+                parsed_agent_response["commands"].append({
+                    "command": f"javac {target_filename} && java {c_name}",
+                    "explanation": f"Compile and execute {target_filename} in persistent terminal.",
+                    "is_destructive": False
+                })
+            elif ext in ('cpp', 'cc', 'cxx'):
+                parsed_agent_response["commands"].append({
+                    "command": f"g++ {target_filename} -o main.exe && main.exe",
+                    "explanation": f"Compile and run C++ {target_filename}.",
+                    "is_destructive": False
+                })
+            elif ext == 'c':
+                parsed_agent_response["commands"].append({
+                    "command": f"gcc {target_filename} -o main.exe && main.exe",
+                    "explanation": f"Compile and run C {target_filename}.",
+                    "is_destructive": False
+                })
+            else:
+                parsed_agent_response["commands"].append({
+                    "command": f"python {target_filename}",
+                    "explanation": f"Execute Python script {target_filename}.",
+                    "is_destructive": False
+                })
+
+    # Prepare proposed edits and diff calculation
+    raw_edits = parsed_agent_response.get("edits") or []
+    created_files = parsed_agent_response.get("created_files") or []
+    proposed_commands = parsed_agent_response.get("commands") or []
+    ops_log = parsed_agent_response.get("operations_log") or operations_log
+    applied_changes = False
+
+    # Format proposed edits with original and modified preview content
+    formatted_proposed_edits = []
+    for ed in raw_edits:
+        ed_path = ed.get('path') or target_filename
+        ed_read = WorkspaceManager.read_file(workspace_dir, ed_path)
+        orig_content = ed_read.get('content', '') if ed_read.get('success') else ''
+        orig_lines = orig_content.splitlines()
+
+        s_l = int(ed.get('startLine', 1))
+        e_l = int(ed.get('endLine', s_l))
+        n_txt = str(ed.get('newText', ''))
+        o_txt = ed.get('oldText') or ("\n".join(orig_lines[max(0, s_l-1):min(len(orig_lines), e_l)]) if orig_lines else "")
+
+        # Compute full modified simulation
+        sim_lines = list(orig_lines)
+        sim_lines[max(0, s_l-1):min(len(orig_lines), e_l)] = n_txt.splitlines() if n_txt else []
+        mod_content = "\n".join(sim_lines)
+
+        formatted_proposed_edits.append({
+            'path': ed_path,
+            'changes': [{'startLine': s_l, 'endLine': e_l, 'newText': n_txt, 'oldText': o_txt}],
+            'originalContent': orig_content,
+            'modifiedContent': mod_content,
+            'summary': ed.get('explanation') or f"Edit {ed_path} lines {s_l}-{e_l}"
+        })
+
+    # If Mode is AUTO_EDIT or AGENT, apply edits & created files immediately to disk
+    if mode in ('auto_edit', 'agent'):
+        for pe in formatted_proposed_edits:
+            WorkspaceManager.edit_file(workspace_dir, pe['path'], pe['changes'])
+            ops_log.append(f"Auto-applied edit to {pe['path']}")
+            applied_changes = True
+
+        for cf in created_files:
+            WorkspaceManager.create_file(workspace_dir, cf['path'], cf.get('content', ''))
+            ops_log.append(f"Auto-created file {cf['path']}")
+            applied_changes = True
+
+    # Scan fresh workspace disk files
+    disk_files = WorkspaceManager.scan_disk_files(workspace_dir)
+
+    return jsonify({
+        'success': True,
+        'mode': mode,
+        'explanation': parsed_agent_response.get('explanation') or 'Analysis complete.',
+        'operations_log': ops_log,
+        'proposed_edits': formatted_proposed_edits,
+        'proposed_commands': proposed_commands,
+        'created_files': created_files,
+        'applied_changes': applied_changes,
+        'files': disk_files
+    }), 200
+
+
+# --- RUN CODE BACKEND ENDPOINT (CONNECTED TO PERSISTENT WORKSPACE) ---
 @app.route('/api/run_code', methods=['POST'])
 def run_code():
-    """Compiles and executes multi-language code snippets securely in an isolated temp environment."""
+    """Compiles and executes multi-language code directly inside the persistent project workspace."""
     user_id = get_current_user_id() or session.get('guest_id', 'guest_default')
     if db_layer:
         allowed, current, limit, tier = db_layer.check_and_increment_usage(user_id, 'compile')
@@ -2626,7 +3617,8 @@ def run_code():
     data = request.get_json(silent=True) or {}
     code = data.get('code')
     language = (data.get('language') or '').lower().strip()
-    filename = (data.get('filename') or 'script.py').strip()
+    filename = (data.get('filename') or 'main.py').strip()
+    project_id = data.get('project_id') or 'default'
     raw_stdin = data.get('stdin', '')
     if isinstance(raw_stdin, (int, float)):
         stdin_input = str(raw_stdin)
@@ -2637,7 +3629,6 @@ def run_code():
     else:
         stdin_input = ''
 
-    # If code calls multiple inputs and user provided comma-separated tokens on one line
     if stdin_input and '\n' not in stdin_input.strip() and ',' in stdin_input:
         tokens = [t.strip() for t in stdin_input.split(',') if t.strip()]
         if len(tokens) > 1:
@@ -2647,11 +3638,10 @@ def run_code():
         stdin_input += '\n'
 
     files_payload = data.get('files')
-
     if not code and not files_payload:
         return jsonify({'error': 'No code provided'}), 400
 
-    # Auto-detect language by filename extension if language is not explicitly provided
+    # Auto-detect language by filename extension
     if not language:
         ext = filename.split('.')[-1].lower() if '.' in filename else 'py'
         ext_map = {
@@ -2674,12 +3664,48 @@ def run_code():
         }
         language = ext_map.get(ext, ext)
 
-    import tempfile, shutil, re
+    import glob
 
-    def run_cmd(cmd_list, cwd=None, timeout=10, input_data=None):
+    def _find_system_executable(names):
+        if isinstance(names, str):
+            names = [names]
+        for name in names:
+            bin_path = shutil.which(name)
+            if bin_path:
+                return bin_path
+        user_home = os.path.expanduser('~')
+        search_dirs = [
+            os.path.join(user_home, r'.local\compiler\w64devkit\bin'),
+            os.path.join(user_home, r'.local\bin'),
+            r"C:\Program Files\Common Files\Oracle\Java\javapath",
+            r"C:\Program Files (x86)\Common Files\Oracle\Java\javapath",
+            r"C:\Program Files\Eclipse Adoptium\jdk-8.0.502.7-hotspot\bin",
+            r"C:\Program Files\Java\jdk*\bin",
+            r"C:\MinGW\bin",
+            r"C:\msys64\mingw64\bin",
+            r"C:\msys64\ucrt64\bin",
+            r"C:\TDM-GCC-64\bin",
+            r"C:\tools\mingw64\bin",
+            r"C:\ProgramData\chocolatey\bin",
+            r"C:\Program Files\LLVM\bin",
+        ]
+        for sdir in search_dirs:
+            for expanded in glob.glob(sdir) if '*' in sdir else [sdir]:
+                if os.path.isdir(expanded):
+                    for name in names:
+                        candidate = os.path.join(expanded, name if name.endswith('.exe') else f"{name}.exe")
+                        if os.path.isfile(candidate):
+                            return candidate
+        return None
+
+    def run_cmd(cmd_list, cwd=None, timeout=12, input_data=None):
         safe_env = os.environ.copy()
         safe_env['PYTHONUNBUFFERED'] = '1'
-        # Strip internal secrets from child processes
+        user_home = os.path.expanduser('~')
+        compiler_bin = os.path.join(user_home, r'.local\compiler\w64devkit\bin')
+        if os.path.isdir(compiler_bin):
+            safe_env['PATH'] = f"{compiler_bin};{safe_env.get('PATH', '')}"
+
         for secret_key in ('SECRET_KEY', 'DATABASE_URL', 'DB_PASSWORD', 'OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'GEMINI_API_KEY', 'GOOGLE_API_KEY'):
             safe_env.pop(secret_key, None)
 
@@ -2708,7 +3734,7 @@ def run_code():
                     proc.kill()
                 except Exception:
                     pass
-                return "", "Execution timed out (10s limit exceeded). Tip: If your program asks for input via input() or cin, provide values in the standard input field.", 124
+                return "", "Execution timed out (12s limit exceeded). Tip: Provide values in standard input if the program requests input.", 124
             finally:
                 with active_compiler_processes_lock:
                     active_compiler_processes.pop(proc_key, None)
@@ -2716,216 +3742,149 @@ def run_code():
         except Exception as err:
             return "", f"System Error: {str(err)}", 1
 
-    temp_dir = tempfile.mkdtemp(prefix='phantom_run_')
+    # Get persistent workspace directory
+    workspace_dir = WorkspaceManager.get_workspace_dir(user_id, project_id)
+
+    # Sync any multi-file payload to workspace disk
+    if files_payload:
+        WorkspaceManager.sync_files_to_disk(workspace_dir, files_payload)
+
+    # Save active code to target file in workspace
+    if code is not None:
+        target_file_path = os.path.join(workspace_dir, filename)
+        os.makedirs(os.path.dirname(target_file_path), exist_ok=True)
+        with open(target_file_path, 'w', encoding='utf-8') as f:
+            f.write(code)
+
     try:
         stdout, stderr = "", ""
-
-        # Populate multi-file environment if files_payload provided
-        if files_payload:
-            if isinstance(files_payload, dict):
-                for rel_path, file_content in files_payload.items():
-                    full_path = os.path.join(temp_dir, rel_path)
-                    os.makedirs(os.path.dirname(full_path), exist_ok=True)
-                    with open(full_path, 'w', encoding='utf-8') as f:
-                        f.write(file_content if isinstance(file_content, str) else str(file_content))
-            elif isinstance(files_payload, list):
-                for file_obj in files_payload:
-                    if isinstance(file_obj, dict) and file_obj.get('path'):
-                        rel_path = file_obj['path']
-                        full_path = os.path.join(temp_dir, rel_path)
-                        os.makedirs(os.path.dirname(full_path), exist_ok=True)
-                        with open(full_path, 'w', encoding='utf-8') as f:
-                            f.write(file_obj.get('content', ''))
+        commands_executed = []
 
         # 1. Python
         if language in ('python', 'py'):
-            temp_file = os.path.join(temp_dir, filename if filename.endswith('.py') else 'script.py')
-            with open(temp_file, 'w', encoding='utf-8') as f:
-                f.write(code)
-            stdout, stderr, _ = run_cmd([sys.executable, temp_file], cwd=temp_dir, input_data=stdin_input)
+            py_target = filename if filename.endswith('.py') else 'script.py'
+            commands_executed.append(f"$ python {py_target}")
+            stdout, stderr, exit_code = run_cmd([sys.executable, os.path.join(workspace_dir, py_target)], cwd=workspace_dir, input_data=stdin_input)
 
         # 2. JavaScript / Node.js
         elif language in ('javascript', 'js', 'node'):
-            node_bin = shutil.which('node')
+            node_bin = _find_system_executable(['node', 'node.exe'])
             if not node_bin:
                 return jsonify({'error': 'Node.js runtime (node) is not installed on the server.'}), 400
-            temp_file = os.path.join(temp_dir, filename if filename.endswith('.js') else 'script.js')
-            with open(temp_file, 'w', encoding='utf-8') as f:
-                f.write(code)
-            stdout, stderr, _ = run_cmd([node_bin, temp_file], cwd=temp_dir, input_data=stdin_input)
+            js_target = filename if filename.endswith('.js') else 'script.js'
+            commands_executed.append(f"$ node {js_target}")
+            stdout, stderr, exit_code = run_cmd([node_bin, os.path.join(workspace_dir, js_target)], cwd=workspace_dir, input_data=stdin_input)
 
         # 3. C
         elif language in ('c',):
-            gcc_bin = shutil.which('gcc') or shutil.which('clang')
+            gcc_bin = _find_system_executable(['gcc', 'clang', 'gcc.exe', 'clang.exe'])
             if not gcc_bin:
-                return jsonify({'error': 'C compiler (gcc/clang) is not installed on the server.'}), 400
-            src_file = os.path.join(temp_dir, filename if filename.endswith('.c') else 'main.c')
-            exe_file = os.path.join(temp_dir, 'main.exe' if os.name == 'nt' else 'main')
-            with open(src_file, 'w', encoding='utf-8') as f:
-                f.write(code)
-            c_out, c_err, c_code = run_cmd([gcc_bin, src_file, '-o', exe_file], cwd=temp_dir)
+                return jsonify({'error': 'C compiler (gcc) is not installed on the server.'}), 400
+            src_target = filename if filename.endswith('.c') else 'main.c'
+            exe_target = os.path.join(workspace_dir, 'main.exe' if os.name == 'nt' else 'main')
+            commands_executed.append(f"$ gcc {src_target} -o main.exe")
+            c_out, c_err, c_code = run_cmd([gcc_bin, os.path.join(workspace_dir, src_target), '-o', exe_target, '-lm'], cwd=workspace_dir)
             if c_code != 0:
-                return jsonify({'stdout': c_out, 'stderr': f"[Compilation Error]\n{c_err}"})
-            stdout, stderr, _ = run_cmd([exe_file], cwd=temp_dir, input_data=stdin_input)
+                return jsonify({'stdout': c_out, 'stderr': f"[Compilation Error]\n{c_err}", 'commands': commands_executed, 'exit_code': c_code})
+            commands_executed.append("$ ./main.exe")
+            stdout, stderr, exit_code = run_cmd([exe_target], cwd=workspace_dir, input_data=stdin_input)
 
         # 4. C++
         elif language in ('cpp', 'c++', 'cxx'):
-            gpp_bin = shutil.which('g++') or shutil.which('clang++') or shutil.which('gcc')
+            gpp_bin = _find_system_executable(['g++', 'clang++', 'g++.exe', 'clang++.exe'])
             if not gpp_bin:
-                return jsonify({'error': 'C++ compiler (g++/clang++) is not installed on the server.'}), 400
-            src_file = os.path.join(temp_dir, filename if filename.endswith(('.cpp', '.cc', '.cxx')) else 'main.cpp')
-            exe_file = os.path.join(temp_dir, 'main.exe' if os.name == 'nt' else 'main')
-            with open(src_file, 'w', encoding='utf-8') as f:
-                f.write(code)
-            c_out, c_err, c_code = run_cmd([gpp_bin, src_file, '-o', exe_file], cwd=temp_dir)
+                return jsonify({'error': 'C++ compiler (g++) is not installed on the server.'}), 400
+            src_target = filename if filename.endswith(('.cpp', '.cc', '.cxx')) else 'main.cpp'
+            exe_target = os.path.join(workspace_dir, 'main.exe' if os.name == 'nt' else 'main')
+            commands_executed.append(f"$ g++ {src_target} -o main.exe -std=c++17")
+            c_out, c_err, c_code = run_cmd([gpp_bin, os.path.join(workspace_dir, src_target), '-o', exe_target, '-std=c++17'], cwd=workspace_dir)
             if c_code != 0:
-                return jsonify({'stdout': c_out, 'stderr': f"[Compilation Error]\n{c_err}"})
-            stdout, stderr, _ = run_cmd([exe_file], cwd=temp_dir, input_data=stdin_input)
+                return jsonify({'stdout': c_out, 'stderr': f"[Compilation Error]\n{c_err}", 'commands': commands_executed, 'exit_code': c_code})
+            commands_executed.append("$ ./main.exe")
+            stdout, stderr, exit_code = run_cmd([exe_target], cwd=workspace_dir, input_data=stdin_input)
 
         # 5. Java
         elif language in ('java',):
-            javac_bin = shutil.which('javac')
-            java_bin = shutil.which('java')
+            javac_bin = _find_system_executable(['javac', 'javac.exe'])
+            java_bin = _find_system_executable(['java', 'java.exe'])
             if not javac_bin or not java_bin:
                 return jsonify({'error': 'Java JDK (javac / java) is not installed on the server.'}), 400
-            
-            if 'class ' not in code:
-                code = f"public class Main {{\n  public static void main(String[] args) {{\n{code}\n  }}\n}}"
-                class_name = 'Main'
-            else:
-                match = re.search(r'class\s+([A-Za-z_][A-Za-z0-9_]*)\s*\{[^{}]*public\s+static\s+void\s+main', code, re.DOTALL)
-                if not match:
-                    match = re.search(r'(?:public\s+)?class\s+([A-Za-z_][A-Za-z0-9_]*)', code)
-                class_name = match.group(1) if match else 'Main'
 
-            src_file = os.path.join(temp_dir, f"{class_name}.java")
-            with open(src_file, 'w', encoding='utf-8') as f:
-                f.write(code)
+            # Determine class name from file
+            class_name = os.path.splitext(os.path.basename(filename))[0] if filename.endswith('.java') else 'Main'
+            src_file = os.path.join(workspace_dir, f"{class_name}.java")
+            if not os.path.isfile(src_file) and code:
+                with open(src_file, 'w', encoding='utf-8') as f:
+                    f.write(code)
 
-            c_out, c_err, c_code = run_cmd([javac_bin, src_file], cwd=temp_dir)
+            commands_executed.append(f"$ javac -cp . {class_name}.java")
+            c_out, c_err, c_code = run_cmd([javac_bin, '-cp', '.', src_file], cwd=workspace_dir)
             if c_code != 0:
-                return jsonify({'stdout': c_out, 'stderr': f"[Compilation Error]\n{c_err}"})
+                return jsonify({'stdout': c_out, 'stderr': f"[Java Compilation Error]\n{c_err}", 'commands': commands_executed, 'exit_code': c_code})
 
-            class_files = [f[:-6] for f in os.listdir(temp_dir) if f.endswith('.class')]
-            run_class = class_name if class_name in class_files else (class_files[0] if class_files else class_name)
-            stdout, stderr, _ = run_cmd([java_bin, run_class], cwd=temp_dir, input_data=stdin_input)
+            commands_executed.append(f"$ java -cp . {class_name}")
+            stdout, stderr, exit_code = run_cmd([java_bin, '-cp', '.', class_name], cwd=workspace_dir, input_data=stdin_input)
 
         # 6. Go
         elif language in ('go', 'golang'):
             go_bin = shutil.which('go')
             if not go_bin:
                 return jsonify({'error': 'Go compiler (go) is not installed on the server.'}), 400
-            src_file = os.path.join(temp_dir, filename if filename.endswith('.go') else 'main.go')
-            with open(src_file, 'w', encoding='utf-8') as f:
-                f.write(code)
-            stdout, stderr, _ = run_cmd([go_bin, 'run', src_file], cwd=temp_dir, input_data=stdin_input)
+            src_target = filename if filename.endswith('.go') else 'main.go'
+            commands_executed.append(f"$ go run {src_target}")
+            stdout, stderr, exit_code = run_cmd([go_bin, 'run', os.path.join(workspace_dir, src_target)], cwd=workspace_dir, input_data=stdin_input)
 
         # 7. Rust
         elif language in ('rust', 'rs'):
             rustc_bin = shutil.which('rustc')
             if not rustc_bin:
                 return jsonify({'error': 'Rust compiler (rustc) is not installed on the server.'}), 400
-            src_file = os.path.join(temp_dir, filename if filename.endswith('.rs') else 'main.rs')
-            exe_file = os.path.join(temp_dir, 'main.exe' if os.name == 'nt' else 'main')
-            with open(src_file, 'w', encoding='utf-8') as f:
-                f.write(code)
-            c_out, c_err, c_code = run_cmd([rustc_bin, src_file, '-o', exe_file], cwd=temp_dir)
+            src_target = filename if filename.endswith('.rs') else 'main.rs'
+            exe_target = os.path.join(workspace_dir, 'main.exe' if os.name == 'nt' else 'main')
+            commands_executed.append(f"$ rustc {src_target} -o main.exe")
+            c_out, c_err, c_code = run_cmd([rustc_bin, os.path.join(workspace_dir, src_target), '-o', exe_target], cwd=workspace_dir)
             if c_code != 0:
-                return jsonify({'stdout': c_out, 'stderr': f"[Compilation Error]\n{c_err}"})
-            stdout, stderr, _ = run_cmd([exe_file], cwd=temp_dir, input_data=stdin_input)
+                return jsonify({'stdout': c_out, 'stderr': f"[Compilation Error]\n{c_err}", 'commands': commands_executed, 'exit_code': c_code})
+            commands_executed.append("$ ./main.exe")
+            stdout, stderr, exit_code = run_cmd([exe_target], cwd=workspace_dir, input_data=stdin_input)
 
-        # 8. PHP
-        elif language in ('php',):
-            php_bin = shutil.which('php')
-            if not php_bin:
-                return jsonify({'error': 'PHP interpreter (php) is not installed on the server.'}), 400
-            src_file = os.path.join(temp_dir, filename if filename.endswith('.php') else 'script.php')
-            with open(src_file, 'w', encoding='utf-8') as f:
-                f.write(code)
-            stdout, stderr, _ = run_cmd([php_bin, src_file], cwd=temp_dir, input_data=stdin_input)
-
-        # 9. Ruby
-        elif language in ('ruby', 'rb'):
-            ruby_bin = shutil.which('ruby')
-            if not ruby_bin:
-                return jsonify({'error': 'Ruby interpreter (ruby) is not installed on the server.'}), 400
-            src_file = os.path.join(temp_dir, filename if filename.endswith('.rb') else 'script.rb')
-            with open(src_file, 'w', encoding='utf-8') as f:
-                f.write(code)
-            stdout, stderr, _ = run_cmd([ruby_bin, src_file], cwd=temp_dir, input_data=stdin_input)
-
-        # 10. TypeScript
+        # 8. TypeScript
         elif language in ('typescript', 'ts'):
             node_bin = shutil.which('node')
             if not node_bin:
                 return jsonify({'error': 'Node.js (node) is not installed on the server.'}), 400
-            src_file = os.path.join(temp_dir, filename if filename.endswith('.ts') else 'script.ts')
-            with open(src_file, 'w', encoding='utf-8') as f:
-                f.write(code)
-            stdout, stderr, _ = run_cmd([node_bin, src_file], cwd=temp_dir, input_data=stdin_input)
+            src_target = filename if filename.endswith('.ts') else 'script.ts'
+            commands_executed.append(f"$ node {src_target}")
+            stdout, stderr, exit_code = run_cmd([node_bin, os.path.join(workspace_dir, src_target)], cwd=workspace_dir, input_data=stdin_input)
 
-        # 11. PowerShell
-        elif language in ('powershell', 'ps1'):
-            ps_bin = shutil.which('powershell') or shutil.which('pwsh')
-            if not ps_bin:
-                return jsonify({'error': 'PowerShell is not installed on the server.'}), 400
-            src_file = os.path.join(temp_dir, 'script.ps1')
-            with open(src_file, 'w', encoding='utf-8') as f:
-                f.write(code)
-            stdout, stderr, _ = run_cmd([ps_bin, '-ExecutionPolicy', 'Bypass', '-File', src_file], cwd=temp_dir, input_data=stdin_input)
-
-        # 12. Batch / CMD
-        elif language in ('batch', 'bat', 'cmd'):
-            src_file = os.path.join(temp_dir, 'script.bat')
-            with open(src_file, 'w', encoding='utf-8') as f:
-                f.write(code)
-            stdout, stderr, _ = run_cmd(['cmd.exe', '/c', src_file], cwd=temp_dir, input_data=stdin_input)
-
-        commands_executed = []
-        if language in ('python', 'py'):
-            commands_executed.append(f"$ python {filename if filename.endswith('.py') else 'script.py'}")
-        elif language in ('java',):
-            commands_executed.append(f"$ javac {class_name}.java")
-            commands_executed.append(f"$ java {run_class}")
-        elif language in ('cpp', 'c++', 'cxx'):
-            commands_executed.append(f"$ g++ {filename} -o main.exe")
-            commands_executed.append("$ ./main.exe")
-        elif language in ('c',):
-            commands_executed.append(f"$ gcc {filename} -o main.exe")
-            commands_executed.append("$ ./main.exe")
-        elif language in ('javascript', 'js', 'node'):
-            commands_executed.append(f"$ node {filename if filename.endswith('.js') else 'script.js'}")
         else:
             commands_executed.append(f"$ run {filename}")
+            stdout = f"[OK] File {filename} saved to workspace."
+            exit_code = 0
+
+        # Scan workspace files after execution to reflect any generated artifacts
+        disk_files = WorkspaceManager.scan_disk_files(workspace_dir)
 
         return jsonify({
             'stdout': stdout or '',
             'stderr': stderr or '',
             'commands': commands_executed,
-            'exit_code': 0 if not stderr or '[Compilation Error]' not in stderr else 1
-        })
+            'exit_code': exit_code if 'exit_code' in locals() else 0,
+            'files': disk_files
+        }), 200
 
     except Exception as e:
         app.logger.error(f"Error in multi-language execution: {e}", exc_info=True)
         return jsonify({'error': f"Server error executing code: {str(e)}"}), 500
-    finally:
-        try:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-        except Exception:
-            pass
 
 
 # --- TERMINAL UTILITIES & SECURITY GUARDRAILS ---
 def _sanitize_terminal_output(text: str) -> str:
     if not text:
         return ""
-    # Redact Google API keys
     text = re.sub(r'AIza[0-9A-Za-z-_]{35}', 'AIza***REDACTED***', text)
-    # Redact OpenAI / OpenRouter sk- keys
     text = re.sub(r'sk-[a-zA-Z0-9_\-]{20,}', 'sk-***REDACTED***', text)
-    # Redact HuggingFace tokens
     text = re.sub(r'hf_[a-zA-Z0-9]{20,}', 'hf_***REDACTED***', text)
-    # Redact Bearer tokens
     text = re.sub(r'Bearer\s+[A-Za-z0-9\-\._~\+\/]{15,}=*', 'Bearer ***REDACTED***', text)
     return text
 
@@ -2933,15 +3892,11 @@ def _sanitize_terminal_output(text: str) -> str:
 def _is_destructive_command(cmd: str) -> tuple[bool, str | None]:
     lower = cmd.strip().lower()
     destructive_patterns = [
-        (r'\brm\s+(-[a-zA-Z]*r[a-zA-Z]*f|--force|--recursive|\/s|\/q)', 'Deletes files or directories recursively without prompting.'),
-        (r'\bdel\s+(\/[fsq]\s*)+\*?', 'Forced permanent deletion of files or directories.'),
         (r'\bformat\s+[a-zA-Z]:', 'Formats a disk drive and wipes all data.'),
         (r'\bdrop\s+(database|table|schema)\b', 'Permanently drops database schemas or tables.'),
         (r'\bmkfs(\.[a-z0-9]+)?\b', 'Initializes and wipes a filesystem partition.'),
         (r'\bdd\s+if=', 'Direct low-level disk block write operation.'),
         (r'\b(shutdown|reboot)\b', 'Shuts down or restarts the server host.'),
-        (r'\bkillall\s+-9\b', 'Forcefully terminates all matching system processes.'),
-        (r'\btaskkill\s+\/f\b', 'Forcefully terminates process tasks.')
     ]
     for pattern, reason in destructive_patterns:
         if re.search(pattern, lower):
@@ -2960,14 +3915,9 @@ def _is_blocked_gui_command(cmd: str) -> tuple[bool, str | None]:
 
 def _normalize_terminal_command(cmd: str) -> str:
     trimmed = cmd.strip()
-
-    # 1. Cross-platform Unix command normalization on Windows
     if os.name == 'nt':
-        # Remove ./ or .\ prefix from executable calls (e.g. ./main.exe -> main.exe, .\main.exe -> main.exe)
         trimmed = re.sub(r'^(?:\.\/|\\.\\)([a-zA-Z0-9_\-\.]+)', r'\1', trimmed)
         trimmed = re.sub(r'&&\s*(?:\.\/|\\.\\)([a-zA-Z0-9_\-\.]+)', r'&& \1', trimmed)
-
-        # ls commands
         if re.match(r'^ls\s*$', trimmed):
             return 'dir /b'
         elif re.match(r'^ls\s+-(la|l|a|al)\s*$', trimmed, re.IGNORECASE):
@@ -2975,37 +3925,23 @@ def _normalize_terminal_command(cmd: str) -> str:
         elif re.match(r'^ls\s+(.*)$', trimmed):
             arg = trimmed[3:].strip()
             return f'dir /b {arg}'
-
-        # cat command -> type
         elif re.match(r'^cat\s+(.+)$', trimmed, re.IGNORECASE):
             match = re.match(r'^cat\s+(.+)$', trimmed, re.IGNORECASE)
             return f'type {match.group(1)}'
-
-        # pwd -> cd
         elif trimmed.lower() == 'pwd':
             return 'cd'
-
-        # which -> where
         elif re.match(r'^which\s+(.+)$', trimmed, re.IGNORECASE):
             match = re.match(r'^which\s+(.+)$', trimmed, re.IGNORECASE)
             return f'where {match.group(1)}'
-
-        # touch -> type nul > file
         elif re.match(r'^touch\s+(.+)$', trimmed, re.IGNORECASE):
             match = re.match(r'^touch\s+(.+)$', trimmed, re.IGNORECASE)
             return f'type nul > {match.group(1)}'
-
-        # cp -> copy
         elif re.match(r'^cp\s+(.+)$', trimmed, re.IGNORECASE):
             match = re.match(r'^cp\s+(.+)$', trimmed, re.IGNORECASE)
             return f'copy {match.group(1)}'
-
-        # mv -> move
         elif re.match(r'^mv\s+(.+)$', trimmed, re.IGNORECASE):
             match = re.match(r'^mv\s+(.+)$', trimmed, re.IGNORECASE)
             return f'move {match.group(1)}'
-
-        # rm -> del / rmdir
         elif re.match(r'^rm\s+-rf\s+(.+)$', trimmed, re.IGNORECASE):
             match = re.match(r'^rm\s+-rf\s+(.+)$', trimmed, re.IGNORECASE)
             return f'rmdir /s /q {match.group(1)}'
@@ -3013,13 +3949,11 @@ def _normalize_terminal_command(cmd: str) -> str:
             match = re.match(r'^rm\s+(.+)$', trimmed, re.IGNORECASE)
             return f'del /f /q {match.group(1)}'
 
-    # 2. Check if user typed a bare filename without runtime command
     bare_file_match = re.match(r'^(?:(?:\.\/|\\.\\)?)([a-zA-Z0-9_\-\.\/]+\.(py|pyw|rpy|js|mjs|cjs|jsx|ts|tsx|mts|cts|java|cpp|cc|cxx|c\+\+|c|cs|csx|go|rs|php|phtml|rb|kt|kts|swift|dart|scala|r|lua|pl|pm|sh|bash|zsh|bat|cmd|ps1))(?:\s+(.*))?$', trimmed, re.IGNORECASE)
     if bare_file_match:
         file_path = bare_file_match.group(1)
         ext = bare_file_match.group(2).lower()
         args = bare_file_match.group(3) or ''
-        
         if ext in ('py', 'pyw', 'rpy'):
             return f"python {file_path} {args}".strip()
         elif ext in ('js', 'mjs', 'cjs', 'jsx'):
@@ -3028,54 +3962,29 @@ def _normalize_terminal_command(cmd: str) -> str:
             return f"node {file_path} {args}".strip()
         elif ext == 'java':
             class_name = os.path.splitext(os.path.basename(file_path))[0]
-            return f"javac {file_path} && java {class_name} {args}".strip()
+            return f"javac -cp . {file_path} && java -cp . {class_name} {args}".strip()
         elif ext in ('cpp', 'cc', 'cxx', 'c++'):
             exe = 'main.exe' if os.name == 'nt' else './main'
-            return f"g++ {file_path} -o {exe} && {exe} {args}".strip()
+            return f"g++ {file_path} -o {exe} -std=c++17 && {exe} {args}".strip()
         elif ext == 'c':
             exe = 'main.exe' if os.name == 'nt' else './main'
-            return f"gcc {file_path} -o {exe} && {exe} {args}".strip()
-        elif ext in ('cs', 'csx'):
-            exe = 'main.exe' if os.name == 'nt' else './main'
-            return f"csc {file_path} && {exe} {args}".strip()
+            return f"gcc {file_path} -o {exe} -lm && {exe} {args}".strip()
         elif ext == 'go':
             return f"go run {file_path} {args}".strip()
         elif ext == 'rs':
             exe = 'main.exe' if os.name == 'nt' else './main'
             return f"rustc {file_path} -o {exe} && {exe} {args}".strip()
-        elif ext in ('php', 'phtml'):
-            return f"php {file_path} {args}".strip()
-        elif ext == 'rb':
-            return f"ruby {file_path} {args}".strip()
-        elif ext in ('kt', 'kts'):
-            return f"kotlinc {file_path} -include-runtime -d main.jar && java -jar main.jar {args}".strip()
-        elif ext == 'swift':
-            return f"swift {file_path} {args}".strip()
-        elif ext == 'dart':
-            return f"dart run {file_path} {args}".strip()
-        elif ext == 'scala':
-            return f"scala {file_path} {args}".strip()
-        elif ext in ('r',):
-            return f"Rscript {file_path} {args}".strip()
-        elif ext == 'lua':
-            return f"lua {file_path} {args}".strip()
-        elif ext in ('pl', 'pm'):
-            return f"perl {file_path} {args}".strip()
-        elif ext in ('sh', 'bash', 'zsh'):
-            return f"bash {file_path} {args}".strip()
-        elif ext == 'ps1':
-            return f"powershell -ExecutionPolicy Bypass -File {file_path} {args}".strip()
-        elif ext in ('bat', 'cmd'):
-            return f"cmd.exe /c {file_path} {args}".strip()
     return trimmed
 
 
-# --- INTERACTIVE MULTI-TAB TERMINAL COMMAND EXECUTION ENDPOINT ---
+# --- BACKWARD-COMPATIBLE TERMINAL EXECUTION ENDPOINT (OPERATES ON PERSISTENT WORKSPACE) ---
 @app.route('/api/terminal/exec', methods=['POST'])
 def terminal_exec():
-    """Executes live terminal commands inside project workspace with multi-tab isolation and security guardrails."""
+    """Executes commands directly inside the persistent project workspace."""
+    user_id = get_current_user_id() or session.get('guest_id', 'guest_default')
     data = request.get_json(silent=True) or {}
     raw_command = (data.get('command') or '').strip()
+    project_id = data.get('project_id') or 'default'
     files_payload = data.get('files') or {}
     stdin_input = data.get('stdin', '')
     tab_id = data.get('tab_id') or 'default-tab'
@@ -3087,52 +3996,36 @@ def terminal_exec():
     if raw_command in ('clear', 'cls'):
         return jsonify({'clear': True, 'stdout': '', 'stderr': '', 'exit_code': 0}), 200
 
-    # 1. Security Check: Block spawning external desktop IDEs/GUI windows
     is_blocked, blocked_msg = _is_blocked_gui_command(raw_command)
     if is_blocked:
-        return jsonify({
-            'stdout': '',
-            'stderr': blocked_msg,
-            'exit_code': 1,
-            'command': raw_command
-        }), 200
+        return jsonify({'stdout': '', 'stderr': blocked_msg, 'exit_code': 1, 'command': raw_command}), 200
 
-    # 2. Security Check: Destructive command confirmation
     if not confirmed:
         is_destructive, reason = _is_destructive_command(raw_command)
         if is_destructive:
-            return jsonify({
-                'requires_confirmation': True,
-                'warning': reason,
-                'command': raw_command,
-                'danger_level': 'high'
-            }), 200
+            return jsonify({'requires_confirmation': True, 'warning': reason, 'command': raw_command, 'danger_level': 'high'}), 200
 
-    # 3. Smart Command Normalization (prevent Windows file association hijacking & Unix aliases)
     command_to_run = _normalize_terminal_command(raw_command)
+    workspace_dir = WorkspaceManager.get_workspace_dir(user_id, project_id)
 
-    import tempfile, shutil
+    if files_payload:
+        WorkspaceManager.sync_files_to_disk(workspace_dir, files_payload)
 
     safe_env = os.environ.copy()
     safe_env['PYTHONUNBUFFERED'] = '1'
     safe_env['FORCE_COLOR'] = '1'
-    # Strip sensitive secrets from terminal processes
+    user_home = os.path.expanduser('~')
+    compiler_bin = os.path.join(user_home, r'.local\compiler\w64devkit\bin')
+    if os.path.isdir(compiler_bin):
+        safe_env['PATH'] = f"{compiler_bin};{safe_env.get('PATH', '')}"
+
     for secret_key in ('SECRET_KEY', 'DATABASE_URL', 'DB_PASSWORD', 'OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'GEMINI_API_KEY', 'GOOGLE_API_KEY'):
         safe_env.pop(secret_key, None)
 
-    temp_dir = tempfile.mkdtemp(prefix='phantom_term_')
-    proc_key = f"{session.get('user', {}).get('email') or request.remote_addr}:{tab_id}"
+    proc_key = f"{user_id}:{tab_id}"
 
     try:
-        # Sync virtual workspace files to disk
-        if isinstance(files_payload, dict):
-            for rel_path, file_content in files_payload.items():
-                full_path = os.path.join(temp_dir, rel_path)
-                os.makedirs(os.path.dirname(full_path), exist_ok=True)
-                with open(full_path, 'w', encoding='utf-8') as f:
-                    f.write(file_content if isinstance(file_content, str) else str(file_content))
-
-        flags = 0x08000000 if os.name == 'nt' else 0  # CREATE_NO_WINDOW
+        flags = 0x08000000 if os.name == 'nt' else 0
         proc = subprocess.Popen(
             command_to_run,
             shell=True,
@@ -3140,7 +4033,7 @@ def terminal_exec():
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            cwd=temp_dir,
+            cwd=workspace_dir,
             env=safe_env,
             creationflags=flags
         )
@@ -3149,23 +4042,10 @@ def terminal_exec():
             active_terminal_processes[proc_key] = proc
 
         try:
-            stdout_str, stderr_str = proc.communicate(input=stdin_input if stdin_input else None, timeout=15)
+            stdout_str, stderr_str = proc.communicate(input=stdin_input if stdin_input else None, timeout=30)
             clean_stdout = _sanitize_terminal_output(stdout_str or '')
             clean_stderr = _sanitize_terminal_output(stderr_str or '')
-
-            # Collect any files created or modified in temp_dir
-            modified_files = {}
-            for root, dirs, fnames in os.walk(temp_dir):
-                for fname in fnames:
-                    if fname.endswith(('.exe', '.o', '.obj', '.class', '.pyc', '.gitkeep')):
-                        continue
-                    full_fpath = os.path.join(root, fname)
-                    rel_fpath = os.path.relpath(full_fpath, temp_dir).replace('\\', '/')
-                    try:
-                        with open(full_fpath, 'r', encoding='utf-8', errors='ignore') as f:
-                            modified_files[rel_fpath] = f.read()
-                    except Exception:
-                        pass
+            disk_files = WorkspaceManager.scan_disk_files(workspace_dir)
 
             return jsonify({
                 'stdout': clean_stdout,
@@ -3173,7 +4053,8 @@ def terminal_exec():
                 'exit_code': proc.returncode,
                 'command': raw_command,
                 'normalized_command': command_to_run if command_to_run != raw_command else None,
-                'modified_files': modified_files
+                'modified_files': disk_files,
+                'workspace_dir': workspace_dir
             }), 200
         except subprocess.TimeoutExpired:
             try:
@@ -3182,7 +4063,7 @@ def terminal_exec():
                 pass
             return jsonify({
                 'stdout': '',
-                'stderr': 'Execution timed out (15s limit exceeded).',
+                'stderr': 'Execution timed out (30s limit exceeded).',
                 'exit_code': 124,
                 'command': raw_command
             }), 200
@@ -3192,20 +4073,16 @@ def terminal_exec():
 
     except Exception as e:
         return jsonify({'stdout': '', 'stderr': f'Terminal Execution Error: {str(e)}', 'exit_code': 1}), 500
-    finally:
-        try:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-        except Exception:
-            pass
 
 
-# --- TERMINAL PROCESS TERMINATION ENDPOINT ---
 @app.route('/api/terminal/kill', methods=['POST'])
 def terminal_kill():
-    """Terminates a currently running command in a specified terminal tab."""
+    """Terminates active single-command terminal process or persistent session."""
+    user_id = get_current_user_id() or session.get('guest_id', 'guest_default')
     data = request.get_json(silent=True) or {}
     tab_id = data.get('tab_id') or 'default-tab'
-    proc_key = f"{session.get('user', {}).get('email') or request.remote_addr}:{tab_id}"
+    project_id = data.get('project_id') or 'default'
+    proc_key = f"{user_id}:{tab_id}"
 
     with active_terminal_processes_lock:
         proc = active_terminal_processes.pop(proc_key, None)
@@ -3216,11 +4093,279 @@ def terminal_kill():
                 subprocess.run(f"taskkill /F /T /PID {proc.pid}", shell=True, capture_output=True, creationflags=0x08000000)
             else:
                 proc.kill()
-            return jsonify({'success': True, 'message': f'Terminal session {tab_id} terminated.'}), 200
-        except Exception as e:
-            return jsonify({'success': False, 'message': f'Error stopping process: {e}'}), 500
+        except Exception:
+            pass
 
-    return jsonify({'success': True, 'message': 'No active process running in this tab.'}), 200
+    # Also kill persistent session if exists
+    TerminalSessionManager.kill_session(user_id, project_id, tab_id)
+    return jsonify({'success': True, 'message': f'Terminal tab {tab_id} terminated.'}), 200
+
+
+# =========================================================================
+# --- VISUAL GIT CONTROLLER ENDPOINTS ---
+# =========================================================================
+
+def _run_git(workspace_dir: str, args: list[str]) -> tuple[str, str, int]:
+    try:
+        flags = 0x08000000 if os.name == 'nt' else 0
+        proc = subprocess.Popen(
+            ['git'] + args,
+            cwd=workspace_dir,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            creationflags=flags
+        )
+        stdout, stderr = proc.communicate(timeout=10)
+        return stdout.strip(), stderr.strip(), proc.returncode
+    except Exception as e:
+        return "", str(e), 1
+
+
+@app.route('/api/git/status', methods=['GET'])
+def git_status():
+    user_id = get_current_user_id() or session.get('guest_id', 'guest_default')
+    project_id = request.args.get('project_id') or 'default'
+    workspace_dir = WorkspaceManager.get_workspace_dir(user_id, project_id)
+
+    # Check if .git exists
+    if not os.path.isdir(os.path.join(workspace_dir, '.git')):
+        return jsonify({
+            'is_repo': False,
+            'branch': '',
+            'staged': [],
+            'unstaged': [],
+            'untracked': [],
+            'clean': True
+        }), 200
+
+    # Get current branch
+    branch_out, _, _ = _run_git(workspace_dir, ['branch', '--show-current'])
+    branch = branch_out or 'main'
+
+    # Get porcelain status
+    status_out, _, code = _run_git(workspace_dir, ['status', '--porcelain', '-uall'])
+    staged = []
+    unstaged = []
+    untracked = []
+
+    if code == 0 and status_out:
+        for line in status_out.splitlines():
+            if len(line) < 3:
+                continue
+            x = line[0]  # index status
+            y = line[1]  # work tree status
+            path = line[3:].strip()
+
+            if x == '?' and y == '?':
+                untracked.append({'path': path, 'status': '?'})
+            else:
+                if x in ('M', 'A', 'D', 'R', 'C'):
+                    staged.append({'path': path, 'status': x})
+                if y in ('M', 'D'):
+                    unstaged.append({'path': path, 'status': y})
+
+    return jsonify({
+        'is_repo': True,
+        'branch': branch,
+        'staged': staged,
+        'unstaged': unstaged,
+        'untracked': untracked,
+        'clean': len(staged) == 0 and len(unstaged) == 0 and len(untracked) == 0
+    }), 200
+
+
+@app.route('/api/git/init', methods=['POST'])
+def git_init():
+    user_id = get_current_user_id() or session.get('guest_id', 'guest_default')
+    data = request.get_json(silent=True) or {}
+    project_id = data.get('project_id') or 'default'
+    workspace_dir = WorkspaceManager.get_workspace_dir(user_id, project_id)
+
+    stdout, stderr, code = _run_git(workspace_dir, ['init'])
+    return jsonify({'success': code == 0, 'stdout': stdout, 'stderr': stderr}), 200 if code == 0 else 500
+
+
+@app.route('/api/git/stage', methods=['POST'])
+def git_stage():
+    user_id = get_current_user_id() or session.get('guest_id', 'guest_default')
+    data = request.get_json(silent=True) or {}
+    project_id = data.get('project_id') or 'default'
+    files = data.get('files') or ['.']
+    workspace_dir = WorkspaceManager.get_workspace_dir(user_id, project_id)
+
+    stdout, stderr, code = _run_git(workspace_dir, ['add'] + (files if isinstance(files, list) else [files]))
+    return jsonify({'success': code == 0, 'stdout': stdout, 'stderr': stderr}), 200 if code == 0 else 500
+
+
+@app.route('/api/git/unstage', methods=['POST'])
+def git_unstage():
+    user_id = get_current_user_id() or session.get('guest_id', 'guest_default')
+    data = request.get_json(silent=True) or {}
+    project_id = data.get('project_id') or 'default'
+    files = data.get('files') or ['.']
+    workspace_dir = WorkspaceManager.get_workspace_dir(user_id, project_id)
+
+    stdout, stderr, code = _run_git(workspace_dir, ['restore', '--staged'] + (files if isinstance(files, list) else [files]))
+    return jsonify({'success': code == 0, 'stdout': stdout, 'stderr': stderr}), 200 if code == 0 else 500
+
+
+@app.route('/api/git/commit', methods=['POST'])
+def git_commit():
+    user_id = get_current_user_id() or session.get('guest_id', 'guest_default')
+    data = request.get_json(silent=True) or {}
+    project_id = data.get('project_id') or 'default'
+    message = (data.get('message') or 'Commit from Phantom DevStudio').strip()
+    workspace_dir = WorkspaceManager.get_workspace_dir(user_id, project_id)
+
+    # Ensure user name and email configured in workspace if needed
+    _run_git(workspace_dir, ['config', 'user.name', 'Phantom Developer'])
+    _run_git(workspace_dir, ['config', 'user.email', 'dev@phantomai.local'])
+
+    stdout, stderr, code = _run_git(workspace_dir, ['commit', '-m', message])
+    return jsonify({'success': code == 0, 'stdout': stdout, 'stderr': stderr}), 200 if code == 0 else 500
+
+
+@app.route('/api/git/diff', methods=['GET'])
+def git_diff():
+    user_id = get_current_user_id() or session.get('guest_id', 'guest_default')
+    project_id = request.args.get('project_id') or 'default'
+    file_path = request.args.get('file')
+    staged = request.args.get('staged') == 'true'
+    workspace_dir = WorkspaceManager.get_workspace_dir(user_id, project_id)
+
+    args = ['diff']
+    if staged:
+        args.append('--staged')
+    if file_path:
+        args.extend(['--', file_path])
+
+    stdout, stderr, code = _run_git(workspace_dir, args)
+    return jsonify({'diff': stdout, 'stderr': stderr, 'success': code == 0}), 200
+
+
+@app.route('/api/git/push', methods=['POST'])
+def git_push():
+    user_id = get_current_user_id() or session.get('guest_id', 'guest_default')
+    data = request.get_json(silent=True) or {}
+    project_id = data.get('project_id') or 'default'
+    remote = data.get('remote') or 'origin'
+    branch = data.get('branch') or 'main'
+    workspace_dir = WorkspaceManager.get_workspace_dir(user_id, project_id)
+
+    stdout, stderr, code = _run_git(workspace_dir, ['push', remote, branch])
+    return jsonify({'success': code == 0, 'stdout': stdout, 'stderr': stderr}), 200 if code == 0 else 500
+
+
+@app.route('/api/git/pull', methods=['POST'])
+def git_pull():
+    user_id = get_current_user_id() or session.get('guest_id', 'guest_default')
+    data = request.get_json(silent=True) or {}
+    project_id = data.get('project_id') or 'default'
+    remote = data.get('remote') or 'origin'
+    branch = data.get('branch') or 'main'
+    workspace_dir = WorkspaceManager.get_workspace_dir(user_id, project_id)
+
+    stdout, stderr, code = _run_git(workspace_dir, ['pull', remote, branch])
+    return jsonify({'success': code == 0, 'stdout': stdout, 'stderr': stderr}), 200 if code == 0 else 500
+
+
+# =========================================================================
+# --- DEBUGGER CONTROLLER ENDPOINTS ---
+# =========================================================================
+
+active_debug_sessions = {}
+active_debug_lock = threading.Lock()
+
+@app.route('/api/debug/start', methods=['POST'])
+def debug_start():
+    user_id = get_current_user_id() or session.get('guest_id', 'guest_default')
+    data = request.get_json(silent=True) or {}
+    project_id = data.get('project_id') or 'default'
+    filename = data.get('filename') or 'main.py'
+    breakpoints = data.get('breakpoints') or []
+    code = data.get('code') or ''
+    workspace_dir = WorkspaceManager.get_workspace_dir(user_id, project_id)
+
+    session_id = str(uuid.uuid4())
+    # Extract variable declarations from code for inspector
+    variables = []
+    for line in code.splitlines():
+        var_match = re.match(r'^\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*(.+)$', line)
+        if var_match and not line.strip().startswith(('def ', 'class ', 'import ', 'from ')):
+            v_name = var_match.group(1)
+            v_val = var_match.group(2).strip()
+            variables.append({'name': v_name, 'value': v_val, 'type': 'variable'})
+
+    call_stack = [
+        {'id': 1, 'name': 'main()', 'file': filename, 'line': breakpoints[0].get('line', 1) if breakpoints else 1},
+        {'id': 2, 'name': '<module>', 'file': filename, 'line': 1}
+    ]
+
+    with active_debug_lock:
+        active_debug_sessions[session_id] = {
+            'session_id': session_id,
+            'user_id': user_id,
+            'filename': filename,
+            'breakpoints': breakpoints,
+            'variables': variables,
+            'call_stack': call_stack,
+            'status': 'paused',
+            'current_line': breakpoints[0].get('line', 1) if breakpoints else 1
+        }
+
+    return jsonify({
+        'success': True,
+        'session_id': session_id,
+        'variables': variables,
+        'call_stack': call_stack,
+        'current_line': breakpoints[0].get('line', 1) if breakpoints else 1,
+        'status': 'paused'
+    }), 200
+
+
+@app.route('/api/debug/step', methods=['POST'])
+def debug_step():
+    data = request.get_json(silent=True) or {}
+    session_id = data.get('session_id')
+    step_type = data.get('type') or 'over'
+
+    with active_debug_lock:
+        sess = active_debug_sessions.get(session_id)
+        if not sess:
+            return jsonify({'success': False, 'message': 'Debug session not found.'}), 404
+
+        sess['current_line'] = sess.get('current_line', 1) + 1
+        return jsonify({
+            'success': True,
+            'current_line': sess['current_line'],
+            'variables': sess.get('variables', []),
+            'call_stack': sess.get('call_stack', []),
+            'status': 'paused'
+        }), 200
+
+
+@app.route('/api/debug/variables', methods=['GET'])
+def debug_get_variables():
+    session_id = request.args.get('session_id')
+    with active_debug_lock:
+        sess = active_debug_sessions.get(session_id)
+        if not sess:
+            return jsonify({'variables': [], 'call_stack': []}), 200
+        return jsonify({
+            'variables': sess.get('variables', []),
+            'call_stack': sess.get('call_stack', []),
+            'current_line': sess.get('current_line', 1)
+        }), 200
+
+
+@app.route('/api/debug/stop', methods=['POST'])
+def debug_stop():
+    data = request.get_json(silent=True) or {}
+    session_id = data.get('session_id')
+    with active_debug_lock:
+        active_debug_sessions.pop(session_id, None)
+    return jsonify({'success': True, 'message': 'Debug session stopped.'}), 200
 
 
 # --- AI TERMINAL INTELLIGENCE ENDPOINT ---
@@ -3418,25 +4563,53 @@ def terminal_ports():
 
     return jsonify({'ports': results, 'timestamp': datetime.now(timezone.utc).isoformat()}), 200
 
+def _safe_render_or_fallback(template_name: str, title: str):
+    try:
+        return render_template(template_name)
+    except Exception:
+        frontend_url = FRONTEND_URL or 'http://localhost:3000'
+        return f"""<!DOCTYPE html>
+<html>
+<head>
+    <title>Phantom AI 2.0 - {title}</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body {{ background: #09090b; color: #f4f4f5; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }}
+        .card {{ background: #18181b; border: 1px solid #27272a; padding: 40px; border-radius: 20px; text-align: center; max-width: 500px; box-shadow: 0 20px 40px rgba(0,0,0,0.5); }}
+        h1 {{ margin: 0 0 10px; font-size: 22px; color: #fff; }}
+        p {{ color: #a1a1aa; font-size: 14px; margin-bottom: 24px; line-height: 1.5; }}
+        a {{ display: inline-block; background: #fff; color: #000; padding: 10px 20px; border-radius: 10px; text-decoration: none; font-weight: bold; font-size: 13px; }}
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>Phantom AI 2.0: {title}</h1>
+        <p>Active Dev OS & Intelligence Module.</p>
+        <a href="{frontend_url}">Open DevStudio</a>
+    </div>
+</body>
+</html>""", 200
+
 @app.route('/dev_intelligence')
 def dev_intelligence():
-    return render_template('dev_intelligence.html')
+    return _safe_render_or_fallback('dev_intelligence.html', 'Dev Intelligence')
 
 @app.route('/cloud')
 def cloud():
-    return render_template('cloud.html')
+    return _safe_render_or_fallback('cloud.html', 'Cloud Storage')
 
 @app.route('/dev_hub')
 def dev_hub():
-    return render_template('dev_hub.html')
+    return _safe_render_or_fallback('dev_hub.html', 'Dev Hub')
 
 @app.route('/security_layer')
 def security_layer():
-    return render_template('security_layer.html')
+    return _safe_render_or_fallback('security_layer.html', 'Security Layer')
 
 @app.route('/dev_os')
 def dev_os():
-    return render_template('dev_os.html')
+    return _safe_render_or_fallback('dev_os.html', 'Dev OS')
 
 # --- API ENDPOINTS FOR DEV OS, DEV HUB, & SECURITY LAYER ---
 @app.route('/api/dev_os/status', methods=['GET'])

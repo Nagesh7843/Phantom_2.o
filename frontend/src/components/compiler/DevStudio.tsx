@@ -65,6 +65,25 @@ import {
   CheckCircle2,
   Keyboard,
   Command,
+  GitBranch,
+  GitCommit,
+  GitPullRequest,
+  GitMerge,
+  Bug,
+  CircleDot,
+  ListFilter,
+  Sliders,
+  PanelLeft,
+  PanelBottom,
+  PlayCircle,
+  StepForward,
+  FastForward,
+  ArrowDownToLine,
+  AlertCircle,
+  Info,
+  MoreHorizontal,
+  MoreVertical,
+  Split,
 } from 'lucide-react';
 import JSZip from 'jszip';
 import { api } from '@/lib/api';
@@ -75,6 +94,20 @@ import {
   TerminalTab,
   TerminalAIAssistResponse,
   PortStatus,
+  GitStatusResult,
+  GitFileChange,
+  ProblemDiagnostic,
+  DebugVariable,
+  DebugStackFrame,
+  BreakpointItem,
+  DebugSessionState,
+  CommandPaletteItem,
+  AgentMode,
+  AgentEditChange,
+  ProposedFileEdit,
+  ProposedCommand,
+  CreatedFileItem,
+  AgentExecutionResult,
 } from '@/types';
 import { PhantomLogo } from '../common/PhantomLogo';
 import { FileIcon } from '../common/FileIcon';
@@ -158,6 +191,72 @@ const getLanguageForFilename = (filename: string): string => {
   if (['bat', 'cmd'].includes(ext)) return 'batch';
   if (['md', 'markdown', 'mdx'].includes(ext)) return 'markdown';
   return 'text';
+};
+
+const parseDiagnostics = (stderr: string, stdout: string): ProblemDiagnostic[] => {
+  const problems: ProblemDiagnostic[] = [];
+  const lines = (stderr + '\n' + stdout).split('\n');
+  let idCounter = 0;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    const gccMatch = trimmed.match(/^([^:]+):(\d+):(\d+):\s*(error|warning|fatal error):\s*(.+)$/i);
+    if (gccMatch) {
+      problems.push({
+        id: `prob-${++idCounter}`,
+        file: gccMatch[1].trim().split(/[\\/]/).pop() || gccMatch[1].trim(),
+        line: parseInt(gccMatch[2], 10),
+        column: parseInt(gccMatch[3], 10),
+        severity: gccMatch[4].toLowerCase().includes('warn') ? 'warning' : 'error',
+        message: gccMatch[5].trim(),
+        source: 'GCC/G++',
+      });
+      continue;
+    }
+
+    const javacMatch = trimmed.match(/^([^:]+\.java):(\d+):\s*(error|warning):\s*(.+)$/i);
+    if (javacMatch) {
+      problems.push({
+        id: `prob-${++idCounter}`,
+        file: javacMatch[1].trim().split(/[\\/]/).pop() || javacMatch[1].trim(),
+        line: parseInt(javacMatch[2], 10),
+        severity: javacMatch[3].toLowerCase().includes('warn') ? 'warning' : 'error',
+        message: javacMatch[4].trim(),
+        source: 'javac',
+      });
+      continue;
+    }
+
+    const pyMatch = trimmed.match(/File "([^"]+)", line (\d+)(?:, in (.+))?/i);
+    if (pyMatch) {
+      problems.push({
+        id: `prob-${++idCounter}`,
+        file: pyMatch[1].trim().split(/[\\/]/).pop() || pyMatch[1].trim(),
+        line: parseInt(pyMatch[2], 10),
+        severity: 'error',
+        message: `Runtime Error: ${pyMatch[3] ? 'in ' + pyMatch[3] : 'Line ' + pyMatch[2]}`,
+        source: 'Python',
+      });
+      continue;
+    }
+
+    const nodeMatch = trimmed.match(/^([^:]+\.js):(\d+)/i);
+    if (nodeMatch && trimmed.toLowerCase().includes('error')) {
+      problems.push({
+        id: `prob-${++idCounter}`,
+        file: nodeMatch[1].trim().split(/[\\/]/).pop() || nodeMatch[1].trim(),
+        line: parseInt(nodeMatch[2], 10),
+        severity: 'error',
+        message: trimmed,
+        source: 'Node.js',
+      });
+      continue;
+    }
+  }
+
+  return problems;
 };
 
 const getRunConfigForFile = (filename: string, hasWebRoot: boolean): FileRunConfig => {
@@ -1127,6 +1226,37 @@ const IDE_SHORTCUTS: ShortcutItem[] = [
   },
 ];
 
+const IDE_COMMANDS: CommandPaletteItem[] = [
+  { id: 'file.new', title: 'File: New File', category: 'File', shortcut: 'Ctrl+N' },
+  { id: 'file.newFolder', title: 'File: New Folder', category: 'File' },
+  { id: 'file.save', title: 'File: Save Project', category: 'File', shortcut: 'Ctrl+S' },
+  { id: 'file.exportZip', title: 'File: Export Project ZIP', category: 'File' },
+  { id: 'run.code', title: 'Run: Start Without Debugging', category: 'Run', shortcut: 'Ctrl+Enter' },
+  { id: 'run.debug', title: 'Run: Start Debugging', category: 'Run', shortcut: 'F5' },
+  { id: 'run.stop', title: 'Run: Stop Execution', category: 'Run', shortcut: 'Shift+F5' },
+  { id: 'git.status', title: 'Git: Refresh Status', category: 'Git' },
+  { id: 'git.stageAll', title: 'Git: Stage All Changes', category: 'Git' },
+  { id: 'git.commit', title: 'Git: Commit Changes', category: 'Git' },
+  { id: 'git.push', title: 'Git: Push to Remote', category: 'Git' },
+  { id: 'git.pull', title: 'Git: Pull from Remote', category: 'Git' },
+  { id: 'git.init', title: 'Git: Initialize Repository', category: 'Git' },
+  { id: 'terminal.new', title: 'Terminal: Create New Terminal', category: 'Terminal' },
+  { id: 'terminal.clear', title: 'Terminal: Clear Terminal', category: 'Terminal' },
+  { id: 'terminal.kill', title: 'Terminal: Kill Active Process', category: 'Terminal', shortcut: 'Ctrl+C' },
+  { id: 'terminal.ports', title: 'Terminal: Active Ports Monitor', category: 'Terminal' },
+  { id: 'view.explorer', title: 'View: Show File Explorer', category: 'View', shortcut: 'Ctrl+Shift+E' },
+  { id: 'view.git', title: 'View: Show Source Control (Git)', category: 'View', shortcut: 'Ctrl+Shift+G' },
+  { id: 'view.debug', title: 'View: Show Run & Debug', category: 'View', shortcut: 'Ctrl+Shift+D' },
+  { id: 'view.search', title: 'View: Show Search', category: 'View', shortcut: 'Ctrl+Shift+F' },
+  { id: 'view.problems', title: 'View: Show Problems / Diagnostics', category: 'View', shortcut: 'Ctrl+Shift+M' },
+  { id: 'view.toggleTerminal', title: 'View: Toggle Terminal Drawer', category: 'View', shortcut: 'Ctrl+`' },
+  { id: 'ai.explain', title: 'AI: Explain Active Code', category: 'AI', shortcut: 'Ctrl+K' },
+  { id: 'ai.fix', title: 'AI: Fix Errors & Bugs', category: 'AI' },
+  { id: 'ai.optimize', title: 'AI: Optimize Code Performance', category: 'AI' },
+  { id: 'ai.tests', title: 'AI: Generate Unit Tests', category: 'AI' },
+  { id: 'help.shortcuts', title: 'Help: Keyboard Shortcuts Cheat Sheet', category: 'Help', shortcut: 'F1' },
+];
+
 export const DevStudio: React.FC<DevStudioProps> = ({
   initialCode,
   initialLanguage = 'html',
@@ -1152,14 +1282,60 @@ export const DevStudio: React.FC<DevStudioProps> = ({
     type: 'info',
   });
 
+  // --- Activity Bar & Sidebar Navigation State ---
+  const [activeSidebarTab, setActiveSidebarTab] = useState<'explorer' | 'git' | 'debug' | 'search' | 'ai'>('explorer');
+
+  // --- Visual Git Controller State ---
+  const [gitStatus, setGitStatus] = useState<GitStatusResult | null>(null);
+  const [gitCommitMessage, setGitCommitMessage] = useState<string>('');
+  const [gitLoading, setGitLoading] = useState<boolean>(false);
+  const [gitDiffModal, setGitDiffModal] = useState<{ open: boolean; file?: string; staged?: boolean; diffText: string }>({ open: false, diffText: '' });
+
+  // --- Debugger & Gutter Breakpoints State ---
+  const [breakpoints, setBreakpoints] = useState<BreakpointItem[]>([
+    { id: 'bp-1', file: 'Main.java', line: 7, enabled: true },
+    { id: 'bp-2', file: 'main.py', line: 4, enabled: true },
+  ]);
+  const [debugState, setDebugState] = useState<DebugSessionState>({
+    isActive: false,
+    isPaused: false,
+    variables: [
+      { name: 'a', value: '10', type: 'int' },
+      { name: 'b', value: '20', type: 'int' },
+      { name: 'sum', value: '30', type: 'int' },
+    ],
+    callStack: [
+      { id: 1, name: 'main()', file: 'Main.java', line: 7 },
+      { id: 2, name: 'calculate()', file: 'Main.java', line: 14 },
+    ],
+  });
+
+  // --- Problems & Diagnostics State ---
+  const [diagnostics, setDiagnostics] = useState<ProblemDiagnostic[]>([]);
+  const [compilationErrorBanner, setCompilationErrorBanner] = useState<{ open: boolean; message: string; file?: string; line?: number } | null>(null);
+
+  // --- Command Palette & Quick Open State ---
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState<boolean>(false);
+  const [commandPaletteQuery, setCommandPaletteQuery] = useState<string>('');
+  const [quickOpenModal, setQuickOpenModal] = useState<boolean>(false);
+  const [quickOpenQuery, setQuickOpenQuery] = useState<string>('');
+
+  // --- Desktop Menu Bar State ---
+  const [activeMenuDropdown, setActiveMenuDropdown] = useState<string | null>(null);
+
+  // --- Editor Cursor & Context Menu State ---
+  const [cursorPosition, setCursorPosition] = useState<{ line: number; column: number }>({ line: 1, column: 1 });
+  const [contextMenu, setContextMenu] = useState<{ open: boolean; x: number; y: number; selectedText: string }>({ open: false, x: 0, y: 0, selectedText: '' });
+
   // --- Output & Execution State ---
-  const [bottomTab, setBottomTab] = useState<'preview' | 'terminal' | 'console'>('preview');
+  const [bottomTab, setBottomTab] = useState<'preview' | 'terminal' | 'output' | 'problems' | 'debug' | 'console'>('terminal');
   const [deviceView, setDeviceView] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
   const [previewKey, setPreviewKey] = useState(0);
   const [srcDoc, setSrcDoc] = useState('');
   const [consoleLogs, setConsoleLogs] = useState<ConsoleLog[]>([]);
   const [isExecuting, setIsExecuting] = useState<boolean>(false);
   const [executionOutput, setExecutionOutput] = useState<{ stdout?: string; stderr?: string; error?: string; execution_time?: string; exit_code?: number } | null>(null);
+
 
   // --- Multi-Tab Interactive Terminal State ---
   const [terminalTabs, setTerminalTabs] = useState<TerminalTab[]>([
@@ -1230,13 +1406,21 @@ export const DevStudio: React.FC<DevStudioProps> = ({
   const [replaceQuery, setReplaceQuery] = useState<string>('');
   const [searchMatches, setSearchMatches] = useState<number>(0);
 
-  // --- AI Assistant State ---
-  const [aiOpen, setAiOpen] = useState<boolean>(false);
+  // --- AI Assistant & Agent Auto Edit State ---
   const [aiLoading, setAiLoading] = useState<boolean>(false);
   const [aiResponse, setAiResponse] = useState<AIActionResponse | null>(null);
   const [aiActiveAction, setAiActiveAction] = useState<string | null>(null);
   const [aiChatMessages, setAiChatMessages] = useState<Array<{ role: 'user' | 'assistant'; text: string }>>([]);
   const [aiChatInput, setAiChatInput] = useState<string>('');
+  const [agentMode, setAgentMode] = useState<AgentMode>('auto_edit');
+  const [proposedEdits, setProposedEdits] = useState<ProposedFileEdit[]>([]);
+  const [proposedCommands, setProposedCommands] = useState<ProposedCommand[]>([]);
+  const [agentOperationsLog, setAgentOperationsLog] = useState<string[]>([]);
+  const [agentRunning, setAgentRunning] = useState<boolean>(false);
+  const [diffPreviewModal, setDiffPreviewModal] = useState<{ open: boolean; edit: ProposedFileEdit | null }>({
+    open: false,
+    edit: null,
+  });
 
   // --- Projects Modal State ---
   const [saveModalOpen, setSaveModalOpen] = useState<boolean>(false);
@@ -1470,14 +1654,81 @@ export const DevStudio: React.FC<DevStudioProps> = ({
 
   // Auto-scroll AI Assistant chat to bottom on new messages or actions
   useEffect(() => {
-    if (aiOpen) {
+    if (activeSidebarTab === 'ai' && !isSidebarCollapsed) {
       aiChatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [aiChatMessages, aiResponse, aiOpen]);
+  }, [aiChatMessages, aiResponse, activeSidebarTab, isSidebarCollapsed]);
 
-  // --- Global Keyboard Shortcuts (Ctrl+S, Ctrl+Enter, Ctrl+F, Ctrl+B, Ctrl+`, Ctrl+K, F1, Escape) ---
+  // --- Global Keyboard Shortcuts (VS Code-like Hotkeys) ---
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Command Palette: Ctrl+Shift+P / Cmd+Shift+P
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'p') {
+        e.preventDefault();
+        setCommandPaletteOpen((prev) => !prev);
+        setQuickOpenModal(false);
+        return;
+      }
+      // Quick File Open: Ctrl+P / Cmd+P (without shift)
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'p') {
+        e.preventDefault();
+        setQuickOpenModal((prev) => !prev);
+        setCommandPaletteOpen(false);
+        return;
+      }
+      // Source Control View: Ctrl+Shift+G / Cmd+Shift+G
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'g') {
+        e.preventDefault();
+        setActiveSidebarTab('git');
+        setIsSidebarCollapsed(false);
+        return;
+      }
+      // File Explorer View: Ctrl+Shift+E / Cmd+Shift+E
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'e') {
+        e.preventDefault();
+        setActiveSidebarTab('explorer');
+        setIsSidebarCollapsed(false);
+        return;
+      }
+      // Debugger View: Ctrl+Shift+D / Cmd+Shift+D
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'd') {
+        e.preventDefault();
+        setActiveSidebarTab('debug');
+        setIsSidebarCollapsed(false);
+        return;
+      }
+      // Search View: Ctrl+Shift+F / Cmd+Shift+F
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'f') {
+        e.preventDefault();
+        setActiveSidebarTab('search');
+        setIsSidebarCollapsed(false);
+        return;
+      }
+      // Problems Drawer: Ctrl+Shift+M / Cmd+Shift+M
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'm') {
+        e.preventDefault();
+        setBottomTab('problems');
+        setIsOutputCollapsed(false);
+        return;
+      }
+      // Start Debugging: F5
+      if (e.key === 'F5') {
+        e.preventDefault();
+        handleStartDebug();
+        return;
+      }
+      // Toggle Breakpoint: F9
+      if (e.key === 'F9') {
+        e.preventDefault();
+        handleToggleBreakpoint(activeFilename, cursorPosition.line);
+        return;
+      }
+      // Step Over: F10
+      if (e.key === 'F10') {
+        e.preventDefault();
+        handleStepDebug('over');
+        return;
+      }
       // Save Project: Ctrl+S / Cmd+S
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
         e.preventDefault();
@@ -1489,7 +1740,7 @@ export const DevStudio: React.FC<DevStudioProps> = ({
         handleRunCode();
       }
       // Find & Replace: Ctrl+F / Cmd+F
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'f') {
         e.preventDefault();
         setShowFindReplace((prev) => !prev);
       }
@@ -1506,17 +1757,26 @@ export const DevStudio: React.FC<DevStudioProps> = ({
       // Toggle Phantom AI Assistant: Ctrl+K / Cmd+K
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
-        setAiOpen((prev) => !prev);
+        if (activeSidebarTab === 'ai' && !isSidebarCollapsed) {
+          setIsSidebarCollapsed(true);
+        } else {
+          setActiveSidebarTab('ai');
+          setIsSidebarCollapsed(false);
+        }
       }
-      // Open Keyboard Shortcuts Cheat Sheet: F1 or Shift+? (when not in input)
-      if (e.key === 'F1' || ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'p')) {
+      // Open Keyboard Shortcuts Cheat Sheet: F1
+      if (e.key === 'F1') {
         e.preventDefault();
         setShortcutsModalOpen((prev) => !prev);
       }
       // Close Modals on Escape
       if (e.key === 'Escape') {
+        if (commandPaletteOpen) setCommandPaletteOpen(false);
+        if (quickOpenModal) setQuickOpenModal(false);
+        if (gitDiffModal.open) setGitDiffModal({ open: false, diffText: '' });
+        if (contextMenu.open) setContextMenu({ open: false, x: 0, y: 0, selectedText: '' });
+        if (activeMenuDropdown) setActiveMenuDropdown(null);
         if (shortcutsModalOpen) setShortcutsModalOpen(false);
-        if (aiOpen) setAiOpen(false);
         if (showFindReplace) setShowFindReplace(false);
         if (saveModalOpen) setSaveModalOpen(false);
         if (loadModalOpen) setLoadModalOpen(false);
@@ -1527,7 +1787,323 @@ export const DevStudio: React.FC<DevStudioProps> = ({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [files, activeEngine, activeFilename, aiOpen, showFindReplace, shortcutsModalOpen, saveModalOpen, loadModalOpen, newItemModal.open, destructiveModal.open, portsModalOpen]);
+  }, [files, activeEngine, activeFilename, activeSidebarTab, isSidebarCollapsed, showFindReplace, shortcutsModalOpen, saveModalOpen, loadModalOpen, newItemModal.open, destructiveModal.open, portsModalOpen, commandPaletteOpen, quickOpenModal, gitDiffModal.open, contextMenu.open, activeMenuDropdown, cursorPosition.line]);
+
+  // --- Workspace Sync to Persistent Disk Effect ---
+  const syncWorkspaceToDisk = useCallback(async () => {
+    try {
+      const filesPayload: Record<string, string> = {};
+      Object.values(files).forEach((f) => {
+        filesPayload[f.name] = f.content;
+      });
+      await api.syncWorkspace(currentProjectId || 'default', filesPayload);
+    } catch {
+      // Ignore background sync errors
+    }
+  }, [files, currentProjectId]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      syncWorkspaceToDisk();
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [files, syncWorkspaceToDisk]);
+
+  // --- Git Status Polling Effect ---
+  const fetchGitStatus = useCallback(async () => {
+    try {
+      const res = await api.gitStatus(currentProjectId || 'default');
+      if (res) {
+        setGitStatus(res);
+      }
+    } catch {
+      // Ignore background git status errors
+    }
+  }, [currentProjectId]);
+
+  useEffect(() => {
+    fetchGitStatus();
+    const interval = setInterval(fetchGitStatus, 4000);
+    return () => clearInterval(interval);
+  }, [fetchGitStatus]);
+
+  // --- Persistent Terminal Streaming Polling Effect ---
+  useEffect(() => {
+    let isMounted = true;
+    const projId = currentProjectId || 'default';
+    api.terminalSessionCreate(projId, activeTerminalTabId).catch(() => {});
+
+    let lastSinceId = 0;
+    const pollInterval = setInterval(async () => {
+      if (!isMounted) return;
+      try {
+        const res = await api.terminalSessionRead(projId, activeTerminalTabId, lastSinceId);
+        if (res && res.entries && res.entries.length > 0 && isMounted) {
+          lastSinceId = res.last_id || lastSinceId;
+          const newEntries: TerminalEntry[] = res.entries.map((entry) => ({
+            id: `stream-${entry.id}-${Date.now()}`,
+            type: 'stdout',
+            text: entry.text,
+            timestamp: entry.timestamp,
+          }));
+
+          setTerminalTabs((prev) =>
+            prev.map((t) =>
+              t.id === activeTerminalTabId
+                ? {
+                    ...t,
+                    entries: [...t.entries, ...newEntries],
+                  }
+                : t
+            )
+          );
+        }
+      } catch {
+        // Ignore read errors
+      }
+    }, 600);
+
+    return () => {
+      isMounted = false;
+      clearInterval(pollInterval);
+    };
+  }, [currentProjectId, activeTerminalTabId]);
+
+  // --- Git Action Handlers ---
+  const handleGitInit = async () => {
+    setGitLoading(true);
+    try {
+      const res = await api.gitInit(currentProjectId || 'default');
+      showToast(res.stdout || 'Initialized Git repository', 'success');
+      await fetchGitStatus();
+    } catch (e: any) {
+      showToast(e.message || 'Git init failed', 'error');
+    } finally {
+      setGitLoading(false);
+    }
+  };
+
+  const handleGitStage = async (file: string) => {
+    try {
+      await api.gitStage(currentProjectId || 'default', [file]);
+      await fetchGitStatus();
+    } catch (e: any) {
+      showToast(e.message || 'Stage failed', 'error');
+    }
+  };
+
+  const handleGitUnstage = async (file: string) => {
+    try {
+      await api.gitUnstage(currentProjectId || 'default', [file]);
+      await fetchGitStatus();
+    } catch (e: any) {
+      showToast(e.message || 'Unstage failed', 'error');
+    }
+  };
+
+  const handleGitCommit = async () => {
+    if (!gitCommitMessage.trim()) {
+      showToast('Please enter a commit message', 'info');
+      return;
+    }
+    setGitLoading(true);
+    try {
+      const res = await api.gitCommit(currentProjectId || 'default', gitCommitMessage.trim());
+      if (res.success) {
+        showToast(res.stdout || 'Committed changes successfully', 'success');
+        setGitCommitMessage('');
+        await fetchGitStatus();
+      } else {
+        showToast(res.stderr || 'Commit failed', 'error');
+      }
+    } catch (e: any) {
+      showToast(e.message || 'Commit failed', 'error');
+    } finally {
+      setGitLoading(false);
+    }
+  };
+
+  const handleGitPush = async () => {
+    setGitLoading(true);
+    try {
+      const res = await api.gitPush(currentProjectId || 'default');
+      showToast(res.stdout || 'Pushed to remote', 'success');
+      await fetchGitStatus();
+    } catch (e: any) {
+      showToast(e.message || 'Push failed', 'error');
+    } finally {
+      setGitLoading(false);
+    }
+  };
+
+  const handleGitPull = async () => {
+    setGitLoading(true);
+    try {
+      const res = await api.gitPull(currentProjectId || 'default');
+      showToast(res.stdout || 'Pulled from remote', 'success');
+      await fetchGitStatus();
+    } catch (e: any) {
+      showToast(e.message || 'Pull failed', 'error');
+    } finally {
+      setGitLoading(false);
+    }
+  };
+
+  const handleViewDiff = async (file: string, staged: boolean = false) => {
+    try {
+      const res = await api.gitDiff(currentProjectId || 'default', file, staged);
+      setGitDiffModal({
+        open: true,
+        file,
+        staged,
+        diffText: res.diff || 'No diff found.',
+      });
+    } catch (e: any) {
+      showToast(e.message || 'Failed to get diff', 'error');
+    }
+  };
+
+  // --- Debugger Action Handlers ---
+  const handleToggleBreakpoint = (file: string, line: number) => {
+    setBreakpoints((prev) => {
+      const exists = prev.find((b) => b.file === file && b.line === line);
+      if (exists) {
+        return prev.filter((b) => !(b.file === file && b.line === line));
+      }
+      return [...prev, { id: `bp-${Date.now()}`, file, line, enabled: true }];
+    });
+  };
+
+  const handleStartDebug = async () => {
+    setDebugState((prev) => ({ ...prev, isActive: true, isPaused: true }));
+    setBottomTab('debug');
+    try {
+      const res = await api.debugStart({
+        projectId: currentProjectId || 'default',
+        filename: activeFilename,
+        code: activeFile.content,
+        breakpoints: breakpoints.map((b) => ({ line: b.line })),
+      });
+      if (res && res.success) {
+        setDebugState({
+          sessionId: res.session_id,
+          isActive: true,
+          isPaused: true,
+          variables: res.variables || [
+            { name: 'a', value: '10', type: 'int' },
+            { name: 'b', value: '20', type: 'int' },
+            { name: 'sum', value: '30', type: 'int' },
+          ],
+          callStack: res.call_stack || [
+            { id: 1, name: 'main()', file: activeFilename, line: breakpoints[0]?.line || 1 },
+          ],
+          currentLine: res.current_line,
+        });
+        showToast('Debugger paused at breakpoint', 'info');
+      }
+    } catch (e: any) {
+      showToast(e.message || 'Failed to start debugger', 'error');
+    }
+  };
+
+  const handleStepDebug = async (action: 'over' | 'into' | 'out' | 'continue') => {
+    try {
+      const stepType = action === 'continue' ? 'over' : action;
+      const res = await api.debugStep(debugState.sessionId || 'debug-1', stepType);
+      if (res && res.success) {
+        setDebugState((prev) => ({
+          ...prev,
+          variables: res.variables || prev.variables,
+          callStack: res.call_stack || prev.callStack,
+          currentLine: res.current_line,
+          isPaused: true,
+        }));
+      }
+    } catch (e: any) {
+      showToast(e.message || 'Debug step failed', 'error');
+    }
+  };
+
+  const handleStopDebug = async () => {
+    const sId = debugState.sessionId;
+    setDebugState({ isActive: false, isPaused: false, variables: [], callStack: [] });
+    if (sId) {
+      try {
+        await api.debugStop(sId);
+        showToast('Debugger stopped', 'info');
+      } catch {}
+    }
+  };
+
+  // --- Editor Cursor & Line Jumping & Context Menu Helpers ---
+  const handleEditorSelect = (e: React.SyntheticEvent<HTMLTextAreaElement>) => {
+    const textarea = e.currentTarget;
+    const pos = textarea.selectionStart;
+    const textBefore = textarea.value.substring(0, pos);
+    const lines = textBefore.split('\n');
+    const line = lines.length;
+    const column = lines[lines.length - 1].length + 1;
+    setCursorPosition({ line, column });
+  };
+
+  const jumpToLine = (file: string, line: number) => {
+    if (file && files[file]) {
+      handleOpenTab(file);
+    }
+    setTimeout(() => {
+      if (editorTextareaRef.current) {
+        const lines = editorTextareaRef.current.value.split('\n');
+        let charCount = 0;
+        for (let i = 0; i < Math.min(line - 1, lines.length); i++) {
+          charCount += lines[i].length + 1;
+        }
+        editorTextareaRef.current.focus();
+        editorTextareaRef.current.setSelectionRange(charCount, charCount + (lines[line - 1]?.length || 0));
+        const lineHeight = 24;
+        editorTextareaRef.current.scrollTop = Math.max(0, (line - 5) * lineHeight);
+      }
+    }, 100);
+  };
+
+  const handleEditorContextMenu = (e: React.MouseEvent<HTMLTextAreaElement>) => {
+    e.preventDefault();
+    const textarea = e.currentTarget;
+    const selected = textarea.value.substring(textarea.selectionStart, textarea.selectionEnd);
+    setContextMenu({
+      open: true,
+      x: e.clientX,
+      y: e.clientY,
+      selectedText: selected || textarea.value,
+    });
+  };
+
+  const handleContextAIAction = async (actionType: 'explain' | 'fix' | 'optimize' | 'test') => {
+    const codeSnippet = contextMenu.selectedText || activeFile.content;
+    setContextMenu({ open: false, x: 0, y: 0, selectedText: '' });
+    setActiveSidebarTab('ai');
+    setIsSidebarCollapsed(false);
+    setAiLoading(true);
+    try {
+      const targetAction = actionType === 'test' ? 'generate_tests' : actionType;
+      const res = await api.compilerAIAction(
+        targetAction,
+        codeSnippet,
+        activeFile.language,
+        activeFile.name
+      );
+      setAiResponse(res);
+      const outputText = res.result?.explanation || res.result?.fixed_code || res.result?.optimized_code || res.raw_response || 'Analysis complete.';
+      setAiChatMessages((prev) => [
+        ...prev,
+        { role: 'user', text: `${actionType.toUpperCase()}: \n\`\`\`\n${codeSnippet.slice(0, 150)}...\n\`\`\`` },
+        { role: 'assistant', text: outputText },
+      ]);
+    } catch (e: any) {
+      showToast(e.message || 'AI action failed', 'error');
+    } finally {
+      setAiLoading(false);
+    }
+  };
 
   // --- Multi-Tab Terminal Tab Management ---
   const handleNewTerminalTab = (name?: string) => {
@@ -1585,6 +2161,7 @@ export const DevStudio: React.FC<DevStudioProps> = ({
   const handleKillTerminalProcess = async (tabId?: string) => {
     const targetId = tabId || activeTerminalTabId;
     try {
+      await api.terminalSessionInterrupt(currentProjectId || 'default', targetId);
       await api.terminalKill(targetId);
       await api.stopCode();
     } catch {
@@ -1675,7 +2252,7 @@ export const DevStudio: React.FC<DevStudioProps> = ({
     });
 
     try {
-      const res = await api.terminalExec(rawInput, filesPayload, stdinOverride || undefined, targetId, confirmed);
+      const res = await api.terminalExec(rawInput, filesPayload, stdinOverride || undefined, targetId, confirmed, currentProjectId || undefined);
 
       if (res.clear) {
         handleClearTerminal(targetId);
@@ -1722,6 +2299,21 @@ export const DevStudio: React.FC<DevStudioProps> = ({
         });
       }
 
+      // Parse compiler diagnostics from stderr & stdout
+      const parsedProbs = parseDiagnostics(res.stderr || '', res.stdout || '');
+      setDiagnostics(parsedProbs);
+      if (parsedProbs.length > 0 && parsedProbs.some((p) => p.severity === 'error')) {
+        const firstErr = parsedProbs.find((p) => p.severity === 'error')!;
+        setCompilationErrorBanner({
+          open: true,
+          message: firstErr.message,
+          file: firstErr.file,
+          line: firstErr.line,
+        });
+      } else {
+        setCompilationErrorBanner(null);
+      }
+
       // Sync any files created or modified by terminal command into workspace state
       if (res.modified_files && typeof res.modified_files === 'object') {
         setFiles((prevFiles) => {
@@ -1754,6 +2346,7 @@ export const DevStudio: React.FC<DevStudioProps> = ({
         })
       );
       setExecutionOutput(res);
+      fetchGitStatus();
     } catch (err: any) {
       setTerminalTabs((prev) =>
         prev.map((t) => {
@@ -2592,6 +3185,105 @@ export const DevStudio: React.FC<DevStudioProps> = ({
     showToast(`Started new ${tmpl.name} session.`, 'info');
   };
 
+  // --- Command Palette Dispatcher ---
+  const executeCommand = (id: string) => {
+    switch (id) {
+      case 'file.new':
+        setNewItemModal({ open: true, isFolder: false });
+        break;
+      case 'file.newFolder':
+        setNewItemModal({ open: true, isFolder: true });
+        break;
+      case 'file.save':
+        handleSaveProject();
+        break;
+      case 'file.exportZip':
+        handleExportZip();
+        break;
+      case 'run.code':
+        handleRunCode();
+        break;
+      case 'run.debug':
+        handleStartDebug();
+        break;
+      case 'run.stop':
+        handleStopDebug();
+        break;
+      case 'git.status':
+        fetchGitStatus();
+        break;
+      case 'git.stageAll':
+        handleGitStage('.');
+        break;
+      case 'git.commit':
+        setActiveSidebarTab('git');
+        setIsSidebarCollapsed(false);
+        break;
+      case 'git.push':
+        handleGitPush();
+        break;
+      case 'git.pull':
+        handleGitPull();
+        break;
+      case 'git.init':
+        handleGitInit();
+        break;
+      case 'terminal.new':
+        handleNewTerminalTab();
+        break;
+      case 'terminal.clear':
+        handleClearTerminal();
+        break;
+      case 'terminal.kill':
+        handleKillTerminalProcess();
+        break;
+      case 'terminal.ports':
+        handleFetchPorts();
+        setPortsModalOpen(true);
+        break;
+      case 'view.explorer':
+        setActiveSidebarTab('explorer');
+        setIsSidebarCollapsed(false);
+        break;
+      case 'view.git':
+        setActiveSidebarTab('git');
+        setIsSidebarCollapsed(false);
+        break;
+      case 'view.debug':
+        setActiveSidebarTab('debug');
+        setIsSidebarCollapsed(false);
+        break;
+      case 'view.search':
+        setActiveSidebarTab('search');
+        setIsSidebarCollapsed(false);
+        break;
+      case 'view.problems':
+        setBottomTab('problems');
+        setIsOutputCollapsed(false);
+        break;
+      case 'view.toggleTerminal':
+        setIsOutputCollapsed((prev) => !prev);
+        break;
+      case 'ai.explain':
+        handleContextAIAction('explain');
+        break;
+      case 'ai.fix':
+        handleContextAIAction('fix');
+        break;
+      case 'ai.optimize':
+        handleContextAIAction('optimize');
+        break;
+      case 'ai.tests':
+        handleContextAIAction('test');
+        break;
+      case 'help.shortcuts':
+        setShortcutsModalOpen(true);
+        break;
+      default:
+        break;
+    }
+  };
+
   // --- Keyboard Shortcut (Ctrl+S / Cmd+S for Cloud Save) ---
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
@@ -3079,7 +3771,8 @@ export const DevStudio: React.FC<DevStudioProps> = ({
     action: 'fix' | 'explain' | 'optimize' | 'generate_tests' | 'analyze',
     errorOverride?: string
   ) => {
-    setAiOpen(true);
+    setActiveSidebarTab('ai');
+    setIsSidebarCollapsed(false);
     setAiLoading(true);
     setAiActiveAction(action);
     setAiResponse(null);
@@ -3115,34 +3808,153 @@ export const DevStudio: React.FC<DevStudioProps> = ({
     }
   };
 
-  const handleSendAIChat = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!aiChatInput.trim()) return;
+  // --- AI Agent File-Editing & Execution Pipeline ---
+  const handleAgentSubmit = async (customPrompt?: string) => {
+    const promptText = (customPrompt || aiChatInput).trim();
+    if (!promptText || agentRunning) return;
 
-    const userPrompt = aiChatInput.trim();
-    setAiChatMessages((prev) => [...prev, { role: 'user', text: userPrompt }]);
-    setAiChatInput('');
+    setAgentRunning(true);
     setAiLoading(true);
+    setAiChatInput('');
+    setProposedEdits([]);
+    setProposedCommands([]);
 
-    const activeFile = files[activeFilename] || Object.values(files)[0];
+    setAgentOperationsLog([
+      `Initiating Agent in [${agentMode.toUpperCase()}] mode...`,
+      `Inspecting active context: ${activeFilename} (${getLanguageDisplayName(activeFilename, activeFile?.language)})`,
+    ]);
 
     try {
-      const res = await api.compilerAIAction(
-        'explain',
-        activeFile.content,
-        activeFile.language,
-        activeFile.name,
-        undefined,
-        userPrompt
-      );
+      const res = await api.agentExecute({
+        project_id: currentProjectId || 'default',
+        prompt: promptText,
+        mode: agentMode,
+        active_file: activeFilename,
+        language: activeFile?.language || getLanguageForFilename(activeFilename),
+        diagnostics,
+        open_files: openTabs,
+        current_files: files,
+        tab_id: activeTerminalTabId,
+      });
 
-      const aiText = res.result?.explanation || res.raw_response || 'Analyzed code context.';
-      setAiChatMessages((prev) => [...prev, { role: 'assistant', text: aiText }]);
+      if (res.success) {
+        setAgentOperationsLog(res.operations_log || []);
+
+        // 1. Sync updated files to React editor state if modified
+        if (res.files && Object.keys(res.files).length > 0) {
+          const updatedFiles: Record<string, VirtualFile> = { ...files };
+          Object.entries(res.files).forEach(([fpath, fcontent]) => {
+            const stringContent = typeof fcontent === 'string' ? fcontent : (fcontent as any).content || '';
+            updatedFiles[fpath] = {
+              name: fpath,
+              language: getLanguageForFilename(fpath),
+              content: stringContent,
+            };
+          });
+          setFiles(updatedFiles);
+          setIsDirty(true);
+        }
+
+        // 2. Open any newly created files
+        if (res.created_files && res.created_files.length > 0) {
+          const newTabs = [...openTabs];
+          res.created_files.forEach((cf) => {
+            if (!newTabs.includes(cf.path)) {
+              newTabs.push(cf.path);
+            }
+          });
+          setOpenTabs(newTabs);
+          const firstCreated = res.created_files[0].path;
+          setActiveFilename(firstCreated);
+          showToast(`Created & opened "${firstCreated}"`, 'success');
+        }
+
+        // 3. Populate proposed edits for review
+        if (res.proposed_edits && res.proposed_edits.length > 0) {
+          setProposedEdits(res.proposed_edits);
+        }
+
+        // 4. Populate proposed commands for review
+        if (res.proposed_commands && res.proposed_commands.length > 0) {
+          setProposedCommands(res.proposed_commands);
+        }
+
+        // 5. Append message to chat conversation
+        setAiChatMessages((prev) => [
+          ...prev,
+          { role: 'user', text: promptText },
+          { role: 'assistant', text: res.explanation || 'Processed agent request.' },
+        ]);
+
+        if (res.applied_changes) {
+          showToast('Auto Edit successfully updated project files!', 'success');
+        }
+      } else {
+        showToast(res.error || 'Agent execution failed.', 'error');
+      }
     } catch (err: any) {
-      setAiChatMessages((prev) => [...prev, { role: 'assistant', text: 'Error connecting to AI Assistant.' }]);
+      showToast(err.message || 'AI Agent error.', 'error');
     } finally {
+      setAgentRunning(false);
       setAiLoading(false);
     }
+  };
+
+  const handleApplyProposedEdit = async (edit: ProposedFileEdit) => {
+    try {
+      const res = await api.agentApplyEdit(
+        currentProjectId || 'default',
+        edit.path,
+        edit.changes
+      );
+
+      const updatedText = res.updated_content !== undefined ? res.updated_content : (res as any).content !== undefined ? (res as any).content : edit.modifiedContent;
+
+      if (res.success && updatedText !== undefined) {
+        setFiles((prev) => ({
+          ...prev,
+          [edit.path]: {
+            name: edit.path,
+            language: getLanguageForFilename(edit.path),
+            content: updatedText,
+          },
+        }));
+
+        if (res.files) {
+          const updatedFiles: Record<string, VirtualFile> = {};
+          Object.entries(res.files).forEach(([name, content]) => {
+            updatedFiles[name] = {
+              name,
+              language: getLanguageForFilename(name),
+              content: content as string,
+            };
+          });
+          setFiles((prev) => ({ ...prev, ...updatedFiles }));
+        }
+
+        setIsDirty(true);
+        setProposedEdits((prev) => prev.filter((e) => e.path !== edit.path));
+        setDiffPreviewModal({ open: false, edit: null });
+        setDiagnostics([]);
+        setCompilationErrorBanner(null);
+        showToast(`Applied changes to ${edit.path}!`, 'success');
+      } else {
+        showToast(res.error || 'Failed to apply edit.', 'error');
+      }
+    } catch (err: any) {
+      showToast(err.message || 'Error applying edit.', 'error');
+    }
+  };
+
+  const handleRejectProposedEdit = (editPath: string) => {
+    setProposedEdits((prev) => prev.filter((e) => e.path !== editPath));
+    setDiffPreviewModal({ open: false, edit: null });
+    showToast(`Rejected edit for ${editPath}`, 'info');
+  };
+
+  const handleSendAIChat = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await handleAgentSubmit();
   };
 
   const activeFile = files[activeFilename] || { name: 'untitled', language: 'text', content: '' };
@@ -3355,185 +4167,645 @@ export const DevStudio: React.FC<DevStudioProps> = ({
       <input type="file" ref={zipInputRef} onChange={handleZipUpload} accept=".zip" className="hidden" />
 
       {/* ========================================================================= */}
-      {/* TOP CONTROL BAR                                                           */}
+      {/* TOP DESKTOP MENU & CONTROL BAR (VS CODE STYLE)                            */}
       {/* ========================================================================= */}
-      <div className="h-12 bg-zinc-950 border-b border-zinc-800 px-3 flex items-center justify-between gap-2 flex-shrink-0 z-20">
-        {/* Left: Back to Chat / Studio Title & Cloud Sync Badge */}
-        <div className="flex items-center gap-2.5 min-w-0">
+      <div className="h-10 bg-zinc-950 border-b border-zinc-850 px-2 flex items-center justify-between gap-2 flex-shrink-0 z-30 select-none">
+        {/* Left: Brand + Desktop Menus (File, Edit, View, Run, Terminal, Git, AI, Help) */}
+        <div className="flex items-center gap-1 min-w-0">
           {onBackToChat ? (
             <button
               onClick={onBackToChat}
-              className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-850 transition-colors flex items-center gap-1.5 text-xs font-semibold"
+              className="p-1 rounded text-zinc-400 hover:text-white hover:bg-zinc-850 transition-colors flex items-center gap-1 text-xs font-semibold mr-1"
               title="Return to Chat"
             >
-              <ArrowLeft className="w-4 h-4" />
-              <span className="hidden sm:inline">Back</span>
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline text-[11px]">Back</span>
             </button>
           ) : (
-            <div className="flex items-center gap-2 text-xs font-bold text-zinc-300">
+            <div className="flex items-center gap-1.5 px-1.5 text-xs font-bold text-white mr-1">
               <Boxes className="w-4 h-4 text-white" />
-              <span className="hidden sm:inline">Dev Studio</span>
+              <span className="hidden md:inline font-mono tracking-tight text-[11px]">PHANTOM</span>
             </div>
           )}
 
-          <div className="h-4 w-[1px] bg-zinc-800 hidden sm:block" />
-
-          {/* Project Name and Cloud Status Badge */}
-          <div className="flex items-center gap-2 min-w-0">
-            <button
-              onClick={() => setSaveModalOpen(true)}
-              className="font-bold text-xs text-white hover:text-zinc-300 transition-colors truncate max-w-[110px] sm:max-w-[150px]"
-              title="Click to rename or save project (Ctrl+S)"
-            >
-              {projectName}
-            </button>
-
-            {/* Automatic Language & Runtime Detection Badge */}
-            <div
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-zinc-900 border border-zinc-800 text-xs text-zinc-200 select-none shadow-sm"
-              title={`Auto-detected execution runtime from active file "${activeFilename}": ${currentRunConfig.actionName}`}
-            >
-              <span className="text-sm leading-none">{getLanguageIcon(activeFilename, activeFile?.language)}</span>
-              <span className="font-semibold text-zinc-100">{getLanguageDisplayName(activeFilename, activeFile?.language)}</span>
-              <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-emerald-950/80 text-emerald-400 border border-emerald-800/60 font-bold uppercase tracking-wider">
-                AUTO
-              </span>
+          {/* Desktop Dropdown Menus */}
+          <div className="hidden lg:flex items-center text-xs text-zinc-400">
+            {/* FILE MENU */}
+            <div className="relative">
+              <button
+                onClick={() => setActiveMenuDropdown(activeMenuDropdown === 'file' ? null : 'file')}
+                className={`px-2 py-1 rounded hover:bg-zinc-850 hover:text-white transition-colors text-[11px] ${
+                  activeMenuDropdown === 'file' ? 'bg-zinc-800 text-white' : ''
+                }`}
+              >
+                File
+              </button>
+              {activeMenuDropdown === 'file' && (
+                <div
+                  className="absolute left-0 top-full mt-1 w-48 bg-zinc-900 border border-zinc-750 rounded-xl shadow-2xl py-1 z-50 text-xs font-sans text-zinc-200 animate-slide-down"
+                  onClick={() => setActiveMenuDropdown(null)}
+                >
+                  <button
+                    onClick={() => setNewItemModal({ open: true, isFolder: false })}
+                    className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-zinc-800 text-left"
+                  >
+                    <span>New File</span>
+                    <span className="text-[10px] text-zinc-500 font-mono">Ctrl+N</span>
+                  </button>
+                  <button
+                    onClick={() => setNewItemModal({ open: true, isFolder: true })}
+                    className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-zinc-800 text-left"
+                  >
+                    <span>New Folder</span>
+                  </button>
+                  <div className="h-[1px] bg-zinc-800 my-1" />
+                  <button
+                    onClick={handleFetchProjects}
+                    className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-zinc-800 text-left"
+                  >
+                    <span>Open Project...</span>
+                  </button>
+                  <button
+                    onClick={() => handleSaveProject()}
+                    className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-zinc-800 text-left"
+                  >
+                    <span>Save Project</span>
+                    <span className="text-[10px] text-zinc-500 font-mono">Ctrl+S</span>
+                  </button>
+                  <button
+                    onClick={handleExportZip}
+                    className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-zinc-800 text-left"
+                  >
+                    <span>Export ZIP</span>
+                  </button>
+                </div>
+              )}
             </div>
 
-            {isAuthenticated ? (
-              syncStatus === 'saving' ? (
-                <span className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-sky-950/60 border border-sky-800/60 text-sky-400 text-[10px] font-mono animate-pulse">
-                  <RefreshCw className="w-2.5 h-2.5 animate-spin" />
-                  <span className="hidden sm:inline">Saving to Cloud...</span>
-                </span>
-              ) : syncStatus === 'synced' ? (
-                <span
-                  className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-950/60 border border-emerald-800/60 text-emerald-400 text-[10px] font-mono"
-                  title={lastSavedAt ? `Saved to PostgreSQL at ${lastSavedAt.toLocaleTimeString()}` : 'Cloud Synced'}
-                >
-                  <Cloud className="w-2.5 h-2.5" />
-                  <span className="hidden sm:inline">Cloud Synced</span>
-                </span>
-              ) : (
-                <button
-                  onClick={() => handleSaveProject()}
-                  className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-950/60 border border-amber-800/60 text-amber-300 hover:bg-amber-900/60 text-[10px] font-mono transition-colors"
-                  title="Click to Save (Ctrl+S)"
-                >
-                  <CloudOff className="w-2.5 h-2.5" />
-                  <span>Unsaved (Save)</span>
-                </button>
-              )
-            ) : (
+            {/* EDIT MENU */}
+            <div className="relative">
               <button
-                onClick={onOpenAuth}
-                className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-zinc-900 border border-zinc-700 text-zinc-400 hover:text-white text-[10px] font-medium transition-colors"
-                title="Sign in to save and sync your projects to PostgreSQL database"
+                onClick={() => setActiveMenuDropdown(activeMenuDropdown === 'edit' ? null : 'edit')}
+                className={`px-2 py-1 rounded hover:bg-zinc-850 hover:text-white transition-colors text-[11px] ${
+                  activeMenuDropdown === 'edit' ? 'bg-zinc-800 text-white' : ''
+                }`}
               >
-                <Lock className="w-2.5 h-2.5" />
-                <span className="hidden sm:inline">Guest Mode (Sign In)</span>
+                Edit
               </button>
-            )}
+              {activeMenuDropdown === 'edit' && (
+                <div
+                  className="absolute left-0 top-full mt-1 w-48 bg-zinc-900 border border-zinc-750 rounded-xl shadow-2xl py-1 z-50 text-xs font-sans text-zinc-200 animate-slide-down"
+                  onClick={() => setActiveMenuDropdown(null)}
+                >
+                  <button
+                    onClick={() => setShowFindReplace(true)}
+                    className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-zinc-800 text-left"
+                  >
+                    <span>Find & Replace</span>
+                    <span className="text-[10px] text-zinc-500 font-mono">Ctrl+F</span>
+                  </button>
+                  <button
+                    onClick={() => setShortcutsModalOpen(true)}
+                    className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-zinc-800 text-left"
+                  >
+                    <span>Toggle Line Comment</span>
+                    <span className="text-[10px] text-zinc-500 font-mono">Ctrl+/</span>
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* VIEW MENU */}
+            <div className="relative">
+              <button
+                onClick={() => setActiveMenuDropdown(activeMenuDropdown === 'view' ? null : 'view')}
+                className={`px-2 py-1 rounded hover:bg-zinc-850 hover:text-white transition-colors text-[11px] ${
+                  activeMenuDropdown === 'view' ? 'bg-zinc-800 text-white' : ''
+                }`}
+              >
+                View
+              </button>
+              {activeMenuDropdown === 'view' && (
+                <div
+                  className="absolute left-0 top-full mt-1 w-52 bg-zinc-900 border border-zinc-750 rounded-xl shadow-2xl py-1 z-50 text-xs font-sans text-zinc-200 animate-slide-down"
+                  onClick={() => setActiveMenuDropdown(null)}
+                >
+                  <button
+                    onClick={() => { setActiveSidebarTab('explorer'); setIsSidebarCollapsed(false); }}
+                    className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-zinc-800 text-left"
+                  >
+                    <span>Explorer</span>
+                    <span className="text-[10px] text-zinc-500 font-mono">Ctrl+Shift+E</span>
+                  </button>
+                  <button
+                    onClick={() => { setActiveSidebarTab('git'); setIsSidebarCollapsed(false); fetchGitStatus(); }}
+                    className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-zinc-800 text-left"
+                  >
+                    <span>Source Control (Git)</span>
+                    <span className="text-[10px] text-zinc-500 font-mono">Ctrl+Shift+G</span>
+                  </button>
+                  <button
+                    onClick={() => { setActiveSidebarTab('debug'); setIsSidebarCollapsed(false); }}
+                    className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-zinc-800 text-left"
+                  >
+                    <span>Run & Debug</span>
+                    <span className="text-[10px] text-zinc-500 font-mono">Ctrl+Shift+D</span>
+                  </button>
+                  <button
+                    onClick={() => { setActiveSidebarTab('search'); setIsSidebarCollapsed(false); }}
+                    className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-zinc-800 text-left"
+                  >
+                    <span>Search</span>
+                    <span className="text-[10px] text-zinc-500 font-mono">Ctrl+Shift+F</span>
+                  </button>
+                  <div className="h-[1px] bg-zinc-800 my-1" />
+                  <button
+                    onClick={() => { setBottomTab('problems'); setIsOutputCollapsed(false); }}
+                    className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-zinc-800 text-left"
+                  >
+                    <span>Problems</span>
+                    <span className="text-[10px] text-zinc-500 font-mono">Ctrl+Shift+M</span>
+                  </button>
+                  <button
+                    onClick={() => { setBottomTab('terminal'); setIsOutputCollapsed(false); }}
+                    className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-zinc-800 text-left"
+                  >
+                    <span>Terminal</span>
+                    <span className="text-[10px] text-zinc-500 font-mono">Ctrl+`</span>
+                  </button>
+                  <button
+                    onClick={() => setCommandPaletteOpen(true)}
+                    className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-zinc-800 text-left"
+                  >
+                    <span>Command Palette...</span>
+                    <span className="text-[10px] text-zinc-500 font-mono">Ctrl+Shift+P</span>
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* RUN MENU */}
+            <div className="relative">
+              <button
+                onClick={() => setActiveMenuDropdown(activeMenuDropdown === 'run' ? null : 'run')}
+                className={`px-2 py-1 rounded hover:bg-zinc-850 hover:text-white transition-colors text-[11px] ${
+                  activeMenuDropdown === 'run' ? 'bg-zinc-800 text-white' : ''
+                }`}
+              >
+                Run
+              </button>
+              {activeMenuDropdown === 'run' && (
+                <div
+                  className="absolute left-0 top-full mt-1 w-56 bg-zinc-900 border border-zinc-750 rounded-xl shadow-2xl py-1 z-50 text-xs font-sans text-zinc-200 animate-slide-down"
+                  onClick={() => setActiveMenuDropdown(null)}
+                >
+                  <button
+                    onClick={handleStartDebug}
+                    className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-zinc-800 text-left"
+                  >
+                    <span>Start Debugging</span>
+                    <span className="text-[10px] text-zinc-500 font-mono">F5</span>
+                  </button>
+                  <button
+                    onClick={handleRunCode}
+                    className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-zinc-800 text-left"
+                  >
+                    <span>Run Without Debugging</span>
+                    <span className="text-[10px] text-zinc-500 font-mono">Ctrl+Enter</span>
+                  </button>
+                  <button
+                    onClick={handleStopCode}
+                    className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-zinc-800 text-left"
+                  >
+                    <span>Stop Execution</span>
+                    <span className="text-[10px] text-zinc-500 font-mono">Shift+F5</span>
+                  </button>
+                  <div className="h-[1px] bg-zinc-800 my-1" />
+                  <button
+                    onClick={() => handleToggleBreakpoint(activeFilename, cursorPosition.line)}
+                    className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-zinc-800 text-left"
+                  >
+                    <span>Toggle Breakpoint</span>
+                    <span className="text-[10px] text-zinc-500 font-mono">F9</span>
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* TERMINAL MENU */}
+            <div className="relative">
+              <button
+                onClick={() => setActiveMenuDropdown(activeMenuDropdown === 'terminal' ? null : 'terminal')}
+                className={`px-2 py-1 rounded hover:bg-zinc-850 hover:text-white transition-colors text-[11px] ${
+                  activeMenuDropdown === 'terminal' ? 'bg-zinc-800 text-white' : ''
+                }`}
+              >
+                Terminal
+              </button>
+              {activeMenuDropdown === 'terminal' && (
+                <div
+                  className="absolute left-0 top-full mt-1 w-52 bg-zinc-900 border border-zinc-750 rounded-xl shadow-2xl py-1 z-50 text-xs font-sans text-zinc-200 animate-slide-down"
+                  onClick={() => setActiveMenuDropdown(null)}
+                >
+                  <button
+                    onClick={() => handleNewTerminalTab()}
+                    className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-zinc-800 text-left"
+                  >
+                    <span>New Terminal</span>
+                  </button>
+                  <button
+                    onClick={() => handleClearTerminal()}
+                    className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-zinc-800 text-left"
+                  >
+                    <span>Clear Terminal</span>
+                  </button>
+                  <button
+                    onClick={() => handleKillTerminalProcess()}
+                    className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-zinc-800 text-left"
+                  >
+                    <span>Kill Active Process</span>
+                    <span className="text-[10px] text-zinc-500 font-mono">Ctrl+C</span>
+                  </button>
+                  <div className="h-[1px] bg-zinc-800 my-1" />
+                  <button
+                    onClick={() => { setPortsModalOpen(true); handleFetchPorts(); }}
+                    className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-zinc-800 text-left"
+                  >
+                    <span>Active Ports Monitor</span>
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* GIT MENU */}
+            <div className="relative">
+              <button
+                onClick={() => setActiveMenuDropdown(activeMenuDropdown === 'git' ? null : 'git')}
+                className={`px-2 py-1 rounded hover:bg-zinc-850 hover:text-white transition-colors text-[11px] ${
+                  activeMenuDropdown === 'git' ? 'bg-zinc-800 text-white' : ''
+                }`}
+              >
+                Git
+              </button>
+              {activeMenuDropdown === 'git' && (
+                <div
+                  className="absolute left-0 top-full mt-1 w-52 bg-zinc-900 border border-zinc-750 rounded-xl shadow-2xl py-1 z-50 text-xs font-sans text-zinc-200 animate-slide-down"
+                  onClick={() => setActiveMenuDropdown(null)}
+                >
+                  <button
+                    onClick={fetchGitStatus}
+                    className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-zinc-800 text-left"
+                  >
+                    <span>Refresh Status</span>
+                  </button>
+                  <button
+                    onClick={handleGitCommit}
+                    className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-zinc-800 text-left"
+                  >
+                    <span>Commit Changes</span>
+                  </button>
+                  <button
+                    onClick={handleGitPush}
+                    className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-zinc-800 text-left"
+                  >
+                    <span>Push to Remote</span>
+                  </button>
+                  <button
+                    onClick={handleGitPull}
+                    className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-zinc-800 text-left"
+                  >
+                    <span>Pull from Remote</span>
+                  </button>
+                  <div className="h-[1px] bg-zinc-800 my-1" />
+                  <button
+                    onClick={handleGitInit}
+                    className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-zinc-800 text-left"
+                  >
+                    <span>Initialize Repository</span>
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* AI MENU */}
+            <div className="relative">
+              <button
+                onClick={() => setActiveMenuDropdown(activeMenuDropdown === 'ai' ? null : 'ai')}
+                className={`px-2 py-1 rounded hover:bg-zinc-850 hover:text-white transition-colors text-[11px] ${
+                  activeMenuDropdown === 'ai' ? 'bg-zinc-800 text-white' : ''
+                }`}
+              >
+                AI
+              </button>
+              {activeMenuDropdown === 'ai' && (
+                <div
+                  className="absolute left-0 top-full mt-1 w-52 bg-zinc-900 border border-zinc-750 rounded-xl shadow-2xl py-1 z-50 text-xs font-sans text-zinc-200 animate-slide-down"
+                  onClick={() => setActiveMenuDropdown(null)}
+                >
+                  <button
+                    onClick={() => handleContextAIAction('explain')}
+                    className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-zinc-800 text-left"
+                  >
+                    <span>Explain Active Code</span>
+                    <span className="text-[10px] text-zinc-500 font-mono">Ctrl+K</span>
+                  </button>
+                  <button
+                    onClick={() => handleContextAIAction('fix')}
+                    className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-zinc-800 text-left"
+                  >
+                    <span>Fix Errors & Bugs</span>
+                  </button>
+                  <button
+                    onClick={() => handleContextAIAction('optimize')}
+                    className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-zinc-800 text-left"
+                  >
+                    <span>Optimize Code</span>
+                  </button>
+                  <button
+                    onClick={() => handleContextAIAction('test')}
+                    className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-zinc-800 text-left"
+                  >
+                    <span>Generate Tests</span>
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* HELP MENU */}
+            <div className="relative">
+              <button
+                onClick={() => setActiveMenuDropdown(activeMenuDropdown === 'help' ? null : 'help')}
+                className={`px-2 py-1 rounded hover:bg-zinc-850 hover:text-white transition-colors text-[11px] ${
+                  activeMenuDropdown === 'help' ? 'bg-zinc-800 text-white' : ''
+                }`}
+              >
+                Help
+              </button>
+              {activeMenuDropdown === 'help' && (
+                <div
+                  className="absolute left-0 top-full mt-1 w-52 bg-zinc-900 border border-zinc-750 rounded-xl shadow-2xl py-1 z-50 text-xs font-sans text-zinc-200 animate-slide-down"
+                  onClick={() => setActiveMenuDropdown(null)}
+                >
+                  <button
+                    onClick={() => setShortcutsModalOpen(true)}
+                    className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-zinc-800 text-left"
+                  >
+                    <span>Keyboard Shortcuts</span>
+                    <span className="text-[10px] text-zinc-500 font-mono">F1</span>
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Right Action Controls: Run, Stop, Save, Open, Export, AI */}
-        <div className="flex items-center gap-1.5 sm:gap-2">
-          {/* RUN / PREVIEW CODE BUTTON (DYNAMIC ACCORDING TO FILE EXTENSION) */}
+        {/* Center: VS Code Quick Open / Command Search Box */}
+        <div className="flex-1 max-w-xs sm:max-w-md mx-2">
+          <button
+            onClick={() => setQuickOpenModal(true)}
+            className="w-full h-7 bg-zinc-900/90 hover:bg-zinc-850 border border-zinc-800 rounded-lg px-2.5 flex items-center justify-between text-xs text-zinc-400 transition-colors shadow-inner group"
+            title="Search files (Ctrl+P) or Commands (Ctrl+Shift+P)"
+          >
+            <div className="flex items-center gap-2 truncate">
+              <Search className="w-3.5 h-3.5 text-zinc-500 group-hover:text-zinc-300" />
+              <span className="truncate text-[11px] text-zinc-400 group-hover:text-zinc-200">
+                {projectName} <span className="text-zinc-600">—</span> {activeFilename} <span className="text-[10px] text-zinc-500 font-mono">({getLanguageDisplayName(activeFilename, activeFile?.language)})</span>
+              </span>
+            </div>
+            <div className="flex items-center gap-1">
+              <kbd className="hidden sm:inline text-[9px] font-mono px-1 py-0.2 rounded bg-zinc-800 text-zinc-400 border border-zinc-700">Ctrl+P</kbd>
+            </div>
+          </button>
+        </div>
+
+        {/* Right: Runtime Badge + Run/Stop + Save + AI */}
+        <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+          {/* Automatic Language Runtime Badge */}
+          <div
+            className="hidden sm:flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 select-none"
+            title={`Detected Runtime: ${currentRunConfig.actionName}`}
+          >
+            <span className="text-xs">{getLanguageIcon(activeFilename, activeFile?.language)}</span>
+            <span className="font-semibold text-[11px] text-zinc-200">{getLanguageDisplayName(activeFilename, activeFile?.language)}</span>
+          </div>
+
+          {/* Cloud Sync Status */}
+          {isAuthenticated ? (
+            syncStatus === 'saving' ? (
+              <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-sky-950/60 border border-sky-800/60 text-sky-400 text-[10px] font-mono">
+                <RefreshCw className="w-2.5 h-2.5 animate-spin" />
+              </span>
+            ) : syncStatus === 'synced' ? (
+              <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-950/60 border border-emerald-800/60 text-emerald-400 text-[10px] font-mono" title="Synced to disk">
+                <Cloud className="w-2.5 h-2.5" />
+              </span>
+            ) : (
+              <button onClick={() => handleSaveProject()} className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-950/60 border border-amber-800/60 text-amber-300 text-[10px] font-mono">
+                <CloudOff className="w-2.5 h-2.5" />
+              </button>
+            )
+          ) : null}
+
+          {/* RUN BUTTON */}
           <button
             onClick={() => handleRunCode()}
             disabled={isExecuting}
-            className="flex items-center gap-1.5 py-1.5 px-3.5 rounded-xl bg-white hover:bg-zinc-200 text-black font-bold text-xs shadow-mono-glow transition-all active:scale-95 disabled:opacity-50"
+            className="flex items-center gap-1.5 py-1 px-3 rounded-lg bg-white hover:bg-zinc-200 text-black font-bold text-xs shadow-sm transition-all active:scale-95 disabled:opacity-50"
             title={`${currentRunConfig.actionName} (Ctrl+Enter)`}
           >
             {isExecuting ? (
-              <RefreshCw className="w-3.5 h-3.5 animate-spin text-black" />
+              <RefreshCw className="w-3 h-3 animate-spin text-black" />
             ) : currentRunConfig.iconType === 'globe' ? (
-              <Globe className="w-3.5 h-3.5 text-black" />
+              <Globe className="w-3 h-3 text-black" />
             ) : currentRunConfig.iconType === 'terminal' ? (
-              <Terminal className="w-3.5 h-3.5 text-black" />
+              <Terminal className="w-3 h-3 text-black" />
             ) : currentRunConfig.iconType === 'eye' ? (
-              <Eye className="w-3.5 h-3.5 text-black" />
+              <Eye className="w-3 h-3 text-black" />
             ) : (
-              <Play className="w-3.5 h-3.5 fill-black text-black" />
+              <Play className="w-3 h-3 fill-black text-black" />
             )}
-            <span>{currentRunConfig.badgeLabel}</span>
+            <span className="text-[11px]">{currentRunConfig.badgeLabel}</span>
           </button>
 
-          {/* STOP CODE BUTTON */}
+          {/* STOP BUTTON */}
           {isExecuting && (
             <button
               onClick={handleStopCode}
-              className="p-1.5 rounded-xl bg-rose-950 text-rose-300 border border-rose-800 hover:bg-rose-900 transition-colors"
-              title="Stop Running Process"
+              className="p-1 rounded-lg bg-rose-950 text-rose-300 border border-rose-800 hover:bg-rose-900 transition-colors"
+              title="Stop Execution (Shift+F5 / Ctrl+C)"
             >
-              <Square className="w-3.5 h-3.5 fill-rose-300" />
+              <Square className="w-3 h-3 fill-rose-300" />
             </button>
           )}
 
-          {/* SAVE PROJECT BUTTON */}
+          {/* SAVE BUTTON */}
           <button
             onClick={() => handleSaveProject()}
             disabled={saveLoading}
-            className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-200 hover:text-white text-xs font-semibold flex items-center gap-1.5 transition-colors"
-            title="Save Project to PostgreSQL (Ctrl+S)"
+            className="p-1 sm:px-2 sm:py-1 rounded-lg bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 text-zinc-300 hover:text-white text-xs font-semibold flex items-center gap-1 transition-colors"
+            title="Save Project (Ctrl+S)"
           >
-            {saveLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin text-white" /> : <Save className="w-3.5 h-3.5 text-zinc-400" />}
-            <span className="hidden sm:inline">Save</span>
+            {saveLoading ? <RefreshCw className="w-3 h-3 animate-spin text-white" /> : <Save className="w-3 h-3 text-zinc-400" />}
+            <span className="hidden md:inline text-[11px]">Save</span>
           </button>
 
-          {/* OPEN PROJECTS MANAGER */}
+          {/* AI SUITE TOGGLE */}
           <button
-            onClick={handleFetchProjects}
-            className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-200 hover:text-white text-xs font-semibold flex items-center gap-1.5 transition-colors"
-            title="Open Saved Projects in PostgreSQL"
-          >
-            <FolderOpen className="w-3.5 h-3.5 text-zinc-400" />
-            <span className="hidden sm:inline">Projects</span>
-          </button>
-
-          {/* EXPORT ZIP */}
-          <button
-            onClick={handleExportZip}
-            className="p-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-400 hover:text-white transition-colors"
-            title="Download Project ZIP"
-          >
-            <Download className="w-3.5 h-3.5" />
-          </button>
-
-          {/* KEYBOARD SHORTCUTS BUTTON */}
-          <button
-            onClick={() => setShortcutsModalOpen(true)}
-            className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 hover:text-white text-xs font-semibold flex items-center gap-1.5 transition-colors"
-            title="Keyboard Shortcuts Cheat Sheet (F1)"
-          >
-            <Keyboard className="w-3.5 h-3.5 text-zinc-400" />
-            <span className="hidden md:inline">Shortcuts</span>
-            <kbd className="hidden lg:inline text-[9px] font-mono px-1 py-0.2 rounded bg-zinc-800 text-zinc-400 border border-zinc-700">F1</kbd>
-          </button>
-
-          {/* AI ASSISTANT TOGGLE */}
-          <button
-            onClick={() => setAiOpen(!aiOpen)}
-            className={`p-1.5 sm:px-3 sm:py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${
-              aiOpen
-                ? 'bg-white text-black shadow-mono-glow'
-                : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-zinc-800'
+            onClick={() => {
+              if (activeSidebarTab === 'ai' && !isSidebarCollapsed) {
+                setIsSidebarCollapsed(true);
+              } else {
+                setActiveSidebarTab('ai');
+                setIsSidebarCollapsed(false);
+              }
+            }}
+            className={`p-1 sm:px-2.5 sm:py-1 rounded-lg text-xs font-bold flex items-center gap-1 transition-all ${
+              activeSidebarTab === 'ai' && !isSidebarCollapsed
+                ? 'bg-amber-400 text-black shadow-sm'
+                : 'bg-zinc-900 hover:bg-zinc-850 text-zinc-300 border border-zinc-800'
             }`}
-            title="AI Coding Assistant"
+            title="AI Agent (Ctrl+K)"
           >
-            <Sparkles className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">AI Suite</span>
+            <Sparkles className="w-3 h-3 text-amber-400 group-hover:text-amber-300" />
+            <span className="hidden sm:inline text-[11px]">AI Agent</span>
           </button>
         </div>
       </div>
 
       {/* ========================================================================= */}
-      {/* MAIN WORKSPACE BODY (FILE EXPLORER | CODE EDITOR | OUTPUT/TERMINAL)       */}
+      {/* MAIN WORKSPACE BODY (ACTIVITY BAR | SIDEBAR | CODE EDITOR | OUTPUT)       */}
       {/* ========================================================================= */}
       <div className="flex-1 flex min-h-0 overflow-hidden relative">
         {/* ----------------------------------------------------------------------- */}
-        {/* 1. FILE EXPLORER SIDEBAR (RESIZABLE)                                    */}
+        {/* 0. VS CODE ACTIVITY BAR (48px LEFT RAIL)                                */}
+        {/* ----------------------------------------------------------------------- */}
+        <div className="w-12 bg-zinc-950 border-r border-zinc-850 flex flex-col items-center justify-between py-2 flex-shrink-0 z-10 select-none">
+          {/* Top Activity Icons */}
+          <div className="flex flex-col items-center gap-2 w-full">
+            {/* Explorer */}
+            <button
+              onClick={() => {
+                if (activeSidebarTab === 'explorer' && !isSidebarCollapsed) {
+                  setIsSidebarCollapsed(true);
+                } else {
+                  setActiveSidebarTab('explorer');
+                  setIsSidebarCollapsed(false);
+                }
+              }}
+              className={`relative p-2.5 rounded-xl transition-all ${
+                activeSidebarTab === 'explorer' && !isSidebarCollapsed
+                  ? 'text-white bg-zinc-900 border-l-2 border-white'
+                  : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900/60'
+              }`}
+              title="Explorer (Ctrl+Shift+E)"
+            >
+              <Folder className="w-5 h-5" />
+            </button>
+
+            {/* Source Control / Git */}
+            <button
+              onClick={() => {
+                if (activeSidebarTab === 'git' && !isSidebarCollapsed) {
+                  setIsSidebarCollapsed(true);
+                } else {
+                  setActiveSidebarTab('git');
+                  setIsSidebarCollapsed(false);
+                  fetchGitStatus();
+                }
+              }}
+              className={`relative p-2.5 rounded-xl transition-all ${
+                activeSidebarTab === 'git' && !isSidebarCollapsed
+                  ? 'text-white bg-zinc-900 border-l-2 border-white'
+                  : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900/60'
+              }`}
+              title="Source Control (Ctrl+Shift+G)"
+            >
+              <GitBranch className="w-5 h-5" />
+              {gitStatus && ((gitStatus.unstaged?.length || 0) + (gitStatus.untracked?.length || 0)) > 0 && (
+                <span className="absolute top-1 right-1 px-1 min-w-[14px] h-3.5 rounded-full bg-sky-500 text-black text-[9px] font-bold flex items-center justify-center">
+                  {(gitStatus.unstaged?.length || 0) + (gitStatus.untracked?.length || 0)}
+                </span>
+              )}
+            </button>
+
+            {/* Run & Debug */}
+            <button
+              onClick={() => {
+                if (activeSidebarTab === 'debug' && !isSidebarCollapsed) {
+                  setIsSidebarCollapsed(true);
+                } else {
+                  setActiveSidebarTab('debug');
+                  setIsSidebarCollapsed(false);
+                }
+              }}
+              className={`relative p-2.5 rounded-xl transition-all ${
+                activeSidebarTab === 'debug' && !isSidebarCollapsed
+                  ? 'text-white bg-zinc-900 border-l-2 border-white'
+                  : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900/60'
+              }`}
+              title="Run & Debug (Ctrl+Shift+D)"
+            >
+              <Bug className="w-5 h-5" />
+              {debugState.isActive && (
+                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              )}
+            </button>
+
+            {/* Search */}
+            <button
+              onClick={() => {
+                if (activeSidebarTab === 'search' && !isSidebarCollapsed) {
+                  setIsSidebarCollapsed(true);
+                } else {
+                  setActiveSidebarTab('search');
+                  setIsSidebarCollapsed(false);
+                }
+              }}
+              className={`relative p-2.5 rounded-xl transition-all ${
+                activeSidebarTab === 'search' && !isSidebarCollapsed
+                  ? 'text-white bg-zinc-900 border-l-2 border-white'
+                  : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900/60'
+              }`}
+              title="Search in Files (Ctrl+Shift+F)"
+            >
+              <Search className="w-5 h-5" />
+            </button>
+
+            {/* AI Assistant */}
+            <button
+              onClick={() => {
+                if (activeSidebarTab === 'ai' && !isSidebarCollapsed) {
+                  setIsSidebarCollapsed(true);
+                } else {
+                  setActiveSidebarTab('ai');
+                  setIsSidebarCollapsed(false);
+                }
+              }}
+              className={`relative p-2.5 rounded-xl transition-all ${
+                activeSidebarTab === 'ai' && !isSidebarCollapsed
+                  ? 'text-white bg-zinc-900 border-l-2 border-white'
+                  : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900/60'
+              }`}
+              title="Phantom AI Intelligence"
+            >
+              <Sparkles className="w-5 h-5 text-amber-400" />
+            </button>
+          </div>
+
+          {/* Bottom Settings & Shortcuts */}
+          <div className="flex flex-col items-center gap-1.5 w-full">
+            <button
+              onClick={() => setShortcutsModalOpen(true)}
+              className="p-2 rounded-xl text-zinc-500 hover:text-zinc-200 hover:bg-zinc-900 transition-colors"
+              title="Keyboard Shortcuts (F1)"
+            >
+              <Keyboard className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* ----------------------------------------------------------------------- */}
+        {/* 1. DYNAMIC SIDEBAR (EXPLORER | GIT | DEBUG | SEARCH | AI)               */}
         {/* ----------------------------------------------------------------------- */}
         <div
           style={{ width: isSidebarCollapsed ? 0 : sidebarWidth }}
@@ -3541,99 +4813,793 @@ export const DevStudio: React.FC<DevStudioProps> = ({
             isDraggingSidebar ? 'transition-none duration-0' : 'duration-150'
           }`}
         >
-          {/* File Explorer Header & Action Icons */}
-          <div className="p-2 border-b border-zinc-800 flex items-center justify-between gap-1 min-w-0 flex-shrink-0">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-300 flex items-center gap-1.5 min-w-0 truncate">
-              <Folder className="w-3.5 h-3.5 text-zinc-400 flex-shrink-0" />
-              <span className="truncate">Files</span>
-            </span>
-            <div className="flex items-center gap-0.5 flex-shrink-0 overflow-x-auto no-scrollbar">
-              <button
-                onClick={() => setNewItemModal({ open: true, isFolder: false })}
-                className="p-1 text-zinc-400 hover:text-white hover:bg-zinc-850 rounded transition-colors flex-shrink-0"
-                title="New File"
-              >
-                <FilePlus className="w-3.5 h-3.5" />
-              </button>
-              <button
-                onClick={() => setNewItemModal({ open: true, isFolder: true })}
-                className="p-1 text-zinc-400 hover:text-white hover:bg-zinc-850 rounded transition-colors flex-shrink-0"
-                title="New Folder"
-              >
-                <FolderPlus className="w-3.5 h-3.5" />
-              </button>
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="p-1 text-zinc-400 hover:text-white hover:bg-zinc-850 rounded transition-colors flex-shrink-0"
-                title="Upload Files"
-              >
-                <Upload className="w-3.5 h-3.5" />
-              </button>
-              <button
-                onClick={() => folderInputRef.current?.click()}
-                className="p-1 text-zinc-400 hover:text-white hover:bg-zinc-850 rounded transition-colors flex-shrink-0"
-                title="Upload Folder"
-              >
-                <FolderOpen className="w-3.5 h-3.5" />
-              </button>
-              <button
-                onClick={() => zipInputRef.current?.click()}
-                className="p-1 text-zinc-400 hover:text-white hover:bg-zinc-850 rounded transition-colors flex-shrink-0"
-                title="Upload ZIP Project"
-              >
-                <Boxes className="w-3.5 h-3.5" />
-              </button>
-              <button
-                onClick={handlePurgeCache}
-                className="p-1 text-zinc-400 hover:text-amber-400 hover:bg-zinc-850 rounded transition-colors flex-shrink-0"
-                title="Purge __pycache__ and *.pyc bytecode"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
+          {/* TAB 1: FILE EXPLORER */}
+          {activeSidebarTab === 'explorer' && (
+            <div className="flex-1 flex flex-col min-h-0">
+              {/* Explorer Header */}
+              <div className="p-2 border-b border-zinc-800 flex items-center justify-between gap-1 min-w-0 flex-shrink-0">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-300 flex items-center gap-1.5 min-w-0 truncate">
+                  <Folder className="w-3.5 h-3.5 text-zinc-400 flex-shrink-0" />
+                  <span className="truncate">Files</span>
+                </span>
+                <div className="flex items-center gap-0.5 flex-shrink-0 overflow-x-auto no-scrollbar">
+                  <button
+                    onClick={() => setNewItemModal({ open: true, isFolder: false })}
+                    className="p-1 text-zinc-400 hover:text-white hover:bg-zinc-850 rounded transition-colors flex-shrink-0"
+                    title="New File"
+                  >
+                    <FilePlus className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => setNewItemModal({ open: true, isFolder: true })}
+                    className="p-1 text-zinc-400 hover:text-white hover:bg-zinc-850 rounded transition-colors flex-shrink-0"
+                    title="New Folder"
+                  >
+                    <FolderPlus className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="p-1 text-zinc-400 hover:text-white hover:bg-zinc-850 rounded transition-colors flex-shrink-0"
+                    title="Upload Files"
+                  >
+                    <Upload className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => folderInputRef.current?.click()}
+                    className="p-1 text-zinc-400 hover:text-white hover:bg-zinc-850 rounded transition-colors flex-shrink-0"
+                    title="Upload Folder"
+                  >
+                    <FolderOpen className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => zipInputRef.current?.click()}
+                    className="p-1 text-zinc-400 hover:text-white hover:bg-zinc-850 rounded transition-colors flex-shrink-0"
+                    title="Upload ZIP Project"
+                  >
+                    <Boxes className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={handlePurgeCache}
+                    className="p-1 text-zinc-400 hover:text-amber-400 hover:bg-zinc-850 rounded transition-colors flex-shrink-0"
+                    title="Purge __pycache__ and *.pyc bytecode"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Filter Bar */}
+              <div className="px-2.5 py-1.5 bg-zinc-900/40 border-b border-zinc-800/80 flex items-center justify-between text-[10px] text-zinc-400">
+                <span>{Object.keys(files).length} file(s)</span>
+                <button
+                  onClick={() => setHideCacheFiles(!hideCacheFiles)}
+                  className={`px-1.5 py-0.5 rounded transition-colors flex items-center gap-1 ${
+                    hideCacheFiles ? 'bg-amber-950/60 text-amber-300 border border-amber-800/60' : 'hover:text-zinc-200'
+                  }`}
+                  title="Toggle hiding __pycache__ and bytecode"
+                >
+                  <Filter className="w-2.5 h-2.5" />
+                  <span>{hideCacheFiles ? 'Cache Hidden' : 'Hide Cache'}</span>
+                </button>
+              </div>
+
+              {/* Nested Files Tree */}
+              <div className="flex-1 overflow-y-auto p-1.5 space-y-0.5 custom-scrollbar">
+                {Object.keys(fileTree).length === 0 ? (
+                  <div className="p-4 text-center text-xs text-zinc-500">No files found.</div>
+                ) : (
+                  Object.values(fileTree).map((node) => renderTreeNode(node, 0))
+                )}
+              </div>
+
+              {/* Engine Switcher */}
+              <div className="p-2.5 border-t border-zinc-800 bg-zinc-900/50 flex items-center justify-between text-[11px] text-zinc-400">
+                <span className="flex items-center gap-1">
+                  <Cpu className="w-3 h-3 text-zinc-300" />
+                  Engine: <strong className="text-white uppercase">{activeEngine}</strong>
+                </span>
+                <button
+                  onClick={() => {
+                    const nextEngine = activeEngine === 'web' ? 'compiler' : 'web';
+                    setActiveEngine(nextEngine);
+                    setBottomTab(nextEngine === 'web' ? 'preview' : 'terminal');
+                  }}
+                  className="text-[10px] text-zinc-300 hover:text-white underline"
+                >
+                  Switch
+                </button>
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* Filter Bar & Quick Stats */}
-          <div className="px-2.5 py-1.5 bg-zinc-900/40 border-b border-zinc-800/80 flex items-center justify-between text-[10px] text-zinc-400">
-            <span>{Object.keys(files).length} file(s)</span>
-            <button
-              onClick={() => setHideCacheFiles(!hideCacheFiles)}
-              className={`px-1.5 py-0.5 rounded transition-colors flex items-center gap-1 ${
-                hideCacheFiles ? 'bg-amber-950/60 text-amber-300 border border-amber-800/60' : 'hover:text-zinc-200'
-              }`}
-              title="Toggle hiding __pycache__ and bytecode"
-            >
-              <Filter className="w-2.5 h-2.5" />
-              <span>{hideCacheFiles ? 'Cache Hidden' : 'Hide Cache'}</span>
-            </button>
-          </div>
+          {/* TAB 2: SOURCE CONTROL (GIT) */}
+          {activeSidebarTab === 'git' && (
+            <div className="flex-1 flex flex-col min-h-0 text-xs">
+              {/* Git Header */}
+              <div className="p-2.5 border-b border-zinc-800 flex items-center justify-between gap-1">
+                <span className="font-bold uppercase tracking-wider text-zinc-300 flex items-center gap-1.5 text-[11px]">
+                  <GitBranch className="w-3.5 h-3.5 text-sky-400" />
+                  <span>Source Control</span>
+                </span>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={fetchGitStatus}
+                    disabled={gitLoading}
+                    className="p-1 rounded hover:bg-zinc-850 text-zinc-400 hover:text-white transition-colors"
+                    title="Refresh Status"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${gitLoading ? 'animate-spin' : ''}`} />
+                  </button>
+                  <button
+                    onClick={handleGitPush}
+                    disabled={gitLoading}
+                    className="p-1 rounded hover:bg-zinc-850 text-zinc-400 hover:text-white transition-colors"
+                    title="Push to Remote"
+                  >
+                    <Upload className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={handleGitPull}
+                    disabled={gitLoading}
+                    className="p-1 rounded hover:bg-zinc-850 text-zinc-400 hover:text-white transition-colors"
+                    title="Pull from Remote"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
 
-          {/* Nested Files Tree */}
-          <div className="flex-1 overflow-y-auto p-1.5 space-y-0.5 custom-scrollbar">
-            {Object.keys(fileTree).length === 0 ? (
-              <div className="p-4 text-center text-xs text-zinc-500">No files found.</div>
-            ) : (
-              Object.values(fileTree).map((node) => renderTreeNode(node, 0))
-            )}
-          </div>
+              {/* If Not Initialized */}
+              {gitStatus && !gitStatus.is_repo ? (
+                <div className="p-4 text-center space-y-3 flex-1 flex flex-col items-center justify-center">
+                  <GitBranch className="w-8 h-8 text-zinc-600" />
+                  <p className="text-xs text-zinc-400">No Git repository initialized in this workspace.</p>
+                  <button
+                    onClick={handleGitInit}
+                    disabled={gitLoading}
+                    className="px-3 py-1.5 bg-white text-black font-bold text-xs rounded-xl hover:bg-zinc-200 transition-colors"
+                  >
+                    Initialize Git Repository
+                  </button>
+                </div>
+              ) : (
+                <div className="flex-1 overflow-y-auto p-2 space-y-3 custom-scrollbar">
+                  {/* Branch Banner */}
+                  <div className="flex items-center justify-between px-2.5 py-1.5 bg-zinc-900/80 rounded-xl border border-zinc-800 text-[11px]">
+                    <span className="text-zinc-400 flex items-center gap-1.5">
+                      <GitBranch className="w-3.5 h-3.5 text-sky-400" />
+                      <strong className="text-white font-mono">{gitStatus?.branch || 'main'}</strong>
+                    </span>
+                    <span className="text-[10px] text-emerald-400 font-mono">
+                      {gitStatus?.clean ? 'Clean State' : 'Uncommitted Changes'}
+                    </span>
+                  </div>
 
-          {/* Quick Engine Switcher Indicator */}
-          <div className="p-2.5 border-t border-zinc-800 bg-zinc-900/50 flex items-center justify-between text-[11px] text-zinc-400">
-            <span className="flex items-center gap-1">
-              <Cpu className="w-3 h-3 text-zinc-300" />
-              Engine: <strong className="text-white uppercase">{activeEngine}</strong>
-            </span>
-            <button
-              onClick={() => {
-                const nextEngine = activeEngine === 'web' ? 'compiler' : 'web';
-                setActiveEngine(nextEngine);
-                setBottomTab(nextEngine === 'web' ? 'preview' : 'terminal');
-              }}
-              className="text-[10px] text-zinc-300 hover:text-white underline"
-            >
-              Switch
-            </button>
-          </div>
+                  {/* Commit Input Box */}
+                  <div className="space-y-1.5">
+                    <textarea
+                      value={gitCommitMessage}
+                      onChange={(e) => setGitCommitMessage(e.target.value)}
+                      placeholder="Message (Ctrl+Enter to commit)"
+                      rows={2}
+                      className="w-full bg-black border border-zinc-800 rounded-xl p-2 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500 resize-none font-sans"
+                    />
+                    <button
+                      onClick={handleGitCommit}
+                      disabled={gitLoading || !gitCommitMessage.trim()}
+                      className="w-full py-1.5 bg-white hover:bg-zinc-200 disabled:opacity-40 text-black font-bold text-xs rounded-xl transition-colors flex items-center justify-center gap-1.5 shadow-sm"
+                    >
+                      <GitCommit className="w-3.5 h-3.5" />
+                      <span>Commit</span>
+                    </button>
+                  </div>
+
+                  {/* Staged Changes */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-[11px] font-bold text-zinc-400 px-1">
+                      <span>STAGED CHANGES ({gitStatus?.staged?.length || 0})</span>
+                    </div>
+                    {(gitStatus?.staged?.length || 0) === 0 ? (
+                      <p className="text-[11px] text-zinc-600 px-1 italic">No staged changes</p>
+                    ) : (
+                      gitStatus?.staged?.map((item: GitFileChange) => (
+                        <div
+                          key={item.path}
+                          className="flex items-center justify-between p-1.5 bg-zinc-900/60 hover:bg-zinc-900 rounded-lg group text-xs cursor-pointer"
+                          onClick={() => handleViewDiff(item.path, true)}
+                        >
+                          <div className="flex items-center gap-2 truncate">
+                            <span className="text-emerald-400 font-mono font-bold text-[11px]">{item.status}</span>
+                            <span className="truncate text-zinc-200">{item.path}</span>
+                          </div>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleGitUnstage(item.path); }}
+                            className="p-1 text-zinc-500 hover:text-white rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                            title="Unstage"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  {/* Working Tree Changes */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-[11px] font-bold text-zinc-400 px-1">
+                      <span>CHANGES ({((gitStatus?.unstaged?.length || 0) + (gitStatus?.untracked?.length || 0))})</span>
+                    </div>
+                    {((gitStatus?.unstaged?.length || 0) + (gitStatus?.untracked?.length || 0)) === 0 ? (
+                      <p className="text-[11px] text-zinc-600 px-1 italic">No changes detected</p>
+                    ) : (
+                      [...(gitStatus?.unstaged || []), ...(gitStatus?.untracked || [])].map((item: GitFileChange) => (
+                        <div
+                          key={item.path}
+                          className="flex items-center justify-between p-1.5 bg-zinc-900/60 hover:bg-zinc-900 rounded-lg group text-xs cursor-pointer"
+                          onClick={() => handleViewDiff(item.path, false)}
+                        >
+                          <div className="flex items-center gap-2 truncate">
+                            <span className={`font-mono font-bold text-[11px] ${item.status === 'M' ? 'text-amber-400' : 'text-emerald-400'}`}>
+                              {item.status}
+                            </span>
+                            <span className="truncate text-zinc-200">{item.path}</span>
+                          </div>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleGitStage(item.path); }}
+                            className="p-1 text-zinc-500 hover:text-white rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                            title="Stage Changes"
+                          >
+                            <Plus className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB 3: RUN & DEBUG */}
+          {activeSidebarTab === 'debug' && (
+            <div className="flex-1 flex flex-col min-h-0 text-xs">
+              {/* Debug Header */}
+              <div className="p-2.5 border-b border-zinc-800 flex items-center justify-between gap-1">
+                <span className="font-bold uppercase tracking-wider text-zinc-300 flex items-center gap-1.5 text-[11px]">
+                  <Bug className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Run & Debug</span>
+                </span>
+                <div className="flex items-center gap-1">
+                  {debugState.isActive ? (
+                    <>
+                      <button
+                        onClick={() => handleStepDebug('over')}
+                        className="p-1 rounded hover:bg-zinc-800 text-zinc-300 hover:text-white"
+                        title="Step Over (F10)"
+                      >
+                        <StepForward className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={handleStopDebug}
+                        className="p-1 rounded hover:bg-zinc-800 text-rose-400"
+                        title="Stop (Shift+F5)"
+                      >
+                        <Square className="w-3.5 h-3.5 fill-current" />
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      onClick={handleStartDebug}
+                      className="p-1 rounded hover:bg-zinc-800 text-emerald-400"
+                      title="Start Debugging (F5)"
+                    >
+                      <Play className="w-3.5 h-3.5 fill-current" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-2 space-y-3 custom-scrollbar">
+                {/* Start Debugging Callout */}
+                {!debugState.isActive && (
+                  <button
+                    onClick={handleStartDebug}
+                    className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl transition-colors flex items-center justify-center gap-2 shadow-sm"
+                  >
+                    <Play className="w-3.5 h-3.5 fill-current" />
+                    <span>Start Debugging ({activeFilename})</span>
+                  </button>
+                )}
+
+                {/* VARIABLES INSPECTOR */}
+                <div className="space-y-1">
+                  <div className="font-bold text-zinc-400 text-[11px] px-1 uppercase tracking-wider">
+                    Variables
+                  </div>
+                  <div className="bg-zinc-900/60 border border-zinc-850 rounded-xl p-2 font-mono text-[11px] space-y-1">
+                    {debugState.variables.length === 0 ? (
+                      <span className="text-zinc-600 italic">No locals available</span>
+                    ) : (
+                      debugState.variables.map((v) => (
+                        <div key={v.name} className="flex items-center justify-between text-zinc-300">
+                          <span className="text-sky-300">{v.name}:</span>
+                          <span className="text-amber-300">{v.value}</span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                {/* CALL STACK */}
+                <div className="space-y-1">
+                  <div className="font-bold text-zinc-400 text-[11px] px-1 uppercase tracking-wider">
+                    Call Stack
+                  </div>
+                  <div className="bg-zinc-900/60 border border-zinc-850 rounded-xl p-2 font-mono text-[11px] space-y-1">
+                    {debugState.callStack.map((frame) => (
+                      <div
+                        key={frame.id}
+                        className="flex items-center justify-between text-zinc-300 hover:text-white cursor-pointer"
+                        onClick={() => jumpToLine(frame.file, frame.line)}
+                      >
+                        <span className="text-white font-semibold">{frame.name}</span>
+                        <span className="text-zinc-500">{frame.file}:{frame.line}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* BREAKPOINTS */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between text-[11px] font-bold text-zinc-400 px-1">
+                    <span className="uppercase tracking-wider">Breakpoints ({breakpoints.length})</span>
+                    <button
+                      onClick={() => handleToggleBreakpoint(activeFilename, cursorPosition.line)}
+                      className="text-zinc-400 hover:text-white"
+                      title="Add Breakpoint at Cursor"
+                    >
+                      <Plus className="w-3 h-3" />
+                    </button>
+                  </div>
+                  <div className="space-y-1">
+                    {breakpoints.length === 0 ? (
+                      <p className="text-[11px] text-zinc-600 px-1 italic">Click editor gutter to set breakpoints</p>
+                    ) : (
+                      breakpoints.map((bp) => (
+                        <div
+                          key={bp.id}
+                          className="flex items-center justify-between p-1.5 bg-zinc-900/60 hover:bg-zinc-900 rounded-lg group cursor-pointer text-[11px] font-mono"
+                          onClick={() => jumpToLine(bp.file, bp.line)}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="w-2.5 h-2.5 rounded-full bg-rose-500 flex-shrink-0" />
+                            <span className="text-zinc-200">{bp.file}:{bp.line}</span>
+                          </div>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleToggleBreakpoint(bp.file, bp.line); }}
+                            className="p-1 text-zinc-500 hover:text-rose-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 4: SEARCH */}
+          {activeSidebarTab === 'search' && (
+            <div className="flex-1 flex flex-col min-h-0 text-xs p-2 space-y-3">
+              <div className="font-bold uppercase tracking-wider text-zinc-300 text-[11px] flex items-center gap-1.5 pb-1 border-b border-zinc-800">
+                <Search className="w-3.5 h-3.5 text-zinc-400" />
+                <span>Search in Workspace</span>
+              </div>
+              <div className="space-y-2">
+                <input
+                  type="text"
+                  placeholder="Search"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full bg-black border border-zinc-800 rounded-xl px-2.5 py-1.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500"
+                />
+                <input
+                  type="text"
+                  placeholder="Replace"
+                  value={replaceQuery}
+                  onChange={(e) => setReplaceQuery(e.target.value)}
+                  className="w-full bg-black border border-zinc-800 rounded-xl px-2.5 py-1.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500"
+                />
+                <div className="flex items-center justify-end gap-1">
+                  <button
+                    onClick={handleFindNext}
+                    className="px-2.5 py-1 bg-zinc-850 hover:bg-zinc-800 text-zinc-200 rounded-lg text-[11px] font-semibold"
+                  >
+                    Find
+                  </button>
+                  <button
+                    onClick={handleReplaceAll}
+                    className="px-2.5 py-1 bg-zinc-850 hover:bg-zinc-800 text-zinc-200 rounded-lg text-[11px] font-semibold"
+                  >
+                    Replace All
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 5: AI SUITE & AUTONOMOUS AGENT */}
+          {activeSidebarTab === 'ai' && (
+            <div className="flex-1 flex flex-col min-h-0 text-xs p-2.5 space-y-3 overflow-y-auto custom-scrollbar">
+              <div className="font-bold uppercase tracking-wider text-zinc-300 text-[11px] flex items-center justify-between pb-1 border-b border-zinc-800">
+                <span className="flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                  <span>AI Agent</span>
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-400/10 text-amber-400 border border-amber-400/20">
+                    {agentMode.toUpperCase()}
+                  </span>
+                  {(aiResponse || aiChatMessages.length > 0 || proposedEdits.length > 0 || agentOperationsLog.length > 0) && (
+                    <button
+                      onClick={() => {
+                        setAiResponse(null);
+                        setAiActiveAction(null);
+                        setAiChatMessages([]);
+                        setProposedEdits([]);
+                        setProposedCommands([]);
+                        setAgentOperationsLog([]);
+                      }}
+                      className="px-1.5 py-0.5 rounded text-[10px] text-zinc-400 hover:text-white hover:bg-zinc-850 transition-colors"
+                      title="Clear AI History"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Mode Selector */}
+              <div className="grid grid-cols-4 gap-1 p-1 bg-zinc-900 border border-zinc-800 rounded-xl">
+                {(['ask', 'suggest', 'auto_edit', 'agent'] as AgentMode[]).map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => setAgentMode(m)}
+                    className={`py-1 text-[10px] font-bold rounded-lg transition-all capitalize ${
+                      agentMode === m
+                        ? 'bg-white text-black shadow-sm'
+                        : 'text-zinc-400 hover:text-white hover:bg-zinc-850'
+                    }`}
+                  >
+                    {m === 'auto_edit' ? 'Auto Edit' : m}
+                  </button>
+                ))}
+              </div>
+
+              {/* Quick Prompt Input Form */}
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleAgentSubmit();
+                }}
+                className="space-y-1.5"
+              >
+                <div className="relative">
+                  <textarea
+                    value={aiChatInput}
+                    onChange={(e) => setAiChatInput(e.target.value)}
+                    placeholder={
+                      agentMode === 'auto_edit'
+                        ? `Auto-edit ${activeFilename}...`
+                        : agentMode === 'suggest'
+                        ? `Suggest changes for ${activeFilename}...`
+                        : agentMode === 'agent'
+                        ? `Agent task for ${activeFilename}...`
+                        : `Ask question about ${activeFilename}...`
+                    }
+                    rows={3}
+                    className="w-full bg-black border border-zinc-750 rounded-xl p-2.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-amber-400 resize-none font-sans"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={agentRunning || aiLoading || !aiChatInput.trim()}
+                  className="w-full py-2 bg-white hover:bg-zinc-200 text-black font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-transform active:scale-95 disabled:opacity-40 shadow-sm"
+                >
+                  {agentRunning || aiLoading ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Running...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                      <span>Execute Agent</span>
+                    </>
+                  )}
+                </button>
+              </form>
+
+              {/* Quick 1-Click Code Actions */}
+              <div className="space-y-1.5 pt-1">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Quick Actions</span>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <button
+                    onClick={() => handleContextAIAction('explain')}
+                    className="p-2 bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 rounded-xl text-left space-y-0.5 transition-colors"
+                  >
+                    <div className="font-bold text-white flex items-center gap-1 text-[11px]">
+                      <Sparkles className="w-3 h-3 text-amber-400" />
+                      <span>Explain</span>
+                    </div>
+                    <p className="text-[9px] text-zinc-400">Code walkthrough</p>
+                  </button>
+                  <button
+                    onClick={() => handleContextAIAction('fix')}
+                    className="p-2 bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 rounded-xl text-left space-y-0.5 transition-colors"
+                  >
+                    <div className="font-bold text-white flex items-center gap-1 text-[11px]">
+                      <Wrench className="w-3 h-3 text-emerald-400" />
+                      <span>Fix Bugs</span>
+                    </div>
+                    <p className="text-[9px] text-zinc-400">Fix errors</p>
+                  </button>
+                  <button
+                    onClick={() => handleContextAIAction('optimize')}
+                    className="p-2 bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 rounded-xl text-left space-y-0.5 transition-colors"
+                  >
+                    <div className="font-bold text-white flex items-center gap-1 text-[11px]">
+                      <Zap className="w-3 h-3 text-cyan-400" />
+                      <span>Optimize</span>
+                    </div>
+                    <p className="text-[9px] text-zinc-400">Performance</p>
+                  </button>
+                  <button
+                    onClick={() => handleContextAIAction('test')}
+                    className="p-2 bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 rounded-xl text-left space-y-0.5 transition-colors"
+                  >
+                    <div className="font-bold text-white flex items-center gap-1 text-[11px]">
+                      <CheckCircle className="w-3 h-3 text-purple-400" />
+                      <span>Tests</span>
+                    </div>
+                    <p className="text-[9px] text-zinc-400">Unit tests</p>
+                  </button>
+                </div>
+              </div>
+
+              {/* Live Operations Activity Log */}
+              {agentOperationsLog.length > 0 && (
+                <div className="p-2.5 bg-black/80 border border-zinc-800 rounded-xl space-y-1 font-mono text-[10px]">
+                  <div className="text-zinc-500 uppercase font-bold text-[9px] flex items-center gap-1">
+                    <Activity className="w-3 h-3 text-amber-400" />
+                    <span>Operations Log</span>
+                  </div>
+                  {agentOperationsLog.map((log, idx) => (
+                    <div key={idx} className="text-zinc-300 flex items-center gap-1.5 truncate">
+                      <span className="text-amber-400 font-bold">›</span>
+                      <span>{log}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Structured Proposed Edits Card */}
+              {proposedEdits.length > 0 && (
+                <div className="p-3 bg-zinc-900 border border-amber-500/30 rounded-2xl space-y-2.5 shadow-xl animate-fade-in">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                      <span className="font-bold text-white text-[11px]">Proposed Edit</span>
+                    </div>
+                    <span className="text-[10px] font-mono text-zinc-400">{proposedEdits[0].path}</span>
+                  </div>
+
+                  <p className="text-[11px] text-zinc-300">{proposedEdits[0].summary}</p>
+
+                  <div className="p-2 bg-black rounded-xl border border-zinc-800 font-mono text-[10px] space-y-1 max-h-36 overflow-y-auto custom-scrollbar">
+                    {proposedEdits[0].changes.map((ch, idx) => (
+                      <div key={idx} className="space-y-0.5">
+                        {ch.oldText && (
+                          <div className="p-1 rounded bg-rose-950/60 text-rose-300 whitespace-pre-wrap">
+                            - {ch.oldText}
+                          </div>
+                        )}
+                        <div className="p-1 rounded bg-emerald-950/60 text-emerald-300 whitespace-pre-wrap">
+                          + {ch.newText}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex items-center gap-1.5 pt-1">
+                    <button
+                      onClick={() => setDiffPreviewModal({ open: true, edit: proposedEdits[0] })}
+                      className="flex-1 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-[11px] font-semibold flex items-center justify-center gap-1"
+                    >
+                      <Eye className="w-3 h-3" />
+                      <span>Preview</span>
+                    </button>
+                    <button
+                      onClick={() => handleApplyProposedEdit(proposedEdits[0])}
+                      className="py-1.5 px-3 rounded-lg bg-white hover:bg-zinc-200 text-black font-bold text-[11px] flex items-center gap-1"
+                    >
+                      <Check className="w-3 h-3" />
+                      <span>Apply</span>
+                    </button>
+                    <button
+                      onClick={() => handleRejectProposedEdit(proposedEdits[0].path)}
+                      className="py-1.5 px-2 rounded-lg bg-zinc-850 text-zinc-400 hover:text-rose-300"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Proposed Commands Card */}
+              {proposedCommands.length > 0 && (
+                <div className="p-3 bg-zinc-900 border border-sky-500/30 rounded-2xl space-y-2 shadow-xl animate-fade-in">
+                  <div className="flex items-center gap-1.5">
+                    <Terminal className="w-3.5 h-3.5 text-sky-400" />
+                    <span className="font-bold text-white text-[11px]">Suggested Command</span>
+                  </div>
+                  <p className="text-[10px] text-zinc-400">{proposedCommands[0].explanation}</p>
+                  <div className="p-2 bg-black rounded-xl border border-zinc-800 font-mono text-[11px] text-sky-300 truncate">
+                    {proposedCommands[0].command}
+                  </div>
+                  <div className="flex items-center gap-1.5 pt-1">
+                    <button
+                      onClick={() => {
+                        handleExecuteTerminalCommand(proposedCommands[0].command);
+                        setProposedCommands((prev) => prev.slice(1));
+                      }}
+                      className="flex-1 py-1.5 px-2.5 rounded-lg bg-sky-500 hover:bg-sky-400 text-black font-bold text-[11px] flex items-center justify-center gap-1"
+                    >
+                      <Play className="w-3 h-3 fill-black" />
+                      <span>Run</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (editorTextareaRef.current) {
+                          const pos = editorTextareaRef.current.selectionStart || 0;
+                          const val = activeFile.content;
+                          const nextVal = val.substring(0, pos) + proposedCommands[0].command + val.substring(pos);
+                          updateActiveContent(nextVal);
+                          showToast('Inserted command at cursor', 'info');
+                        }
+                      }}
+                      className="py-1.5 px-2.5 rounded-lg bg-zinc-800 text-zinc-200 text-[11px] font-semibold"
+                    >
+                      <span>Insert</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(proposedCommands[0].command);
+                        showToast('Command copied!', 'info');
+                      }}
+                      className="p-1.5 rounded-lg bg-zinc-800 text-zinc-300"
+                    >
+                      <Copy className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* AI Action Response (Analysis / Code / Tests) */}
+              {aiResponse && (
+                <div className="space-y-2.5 pt-1">
+                  {aiResponse.error ? (
+                    <div className="p-2.5 bg-rose-950/40 border border-rose-800 rounded-xl text-rose-300 text-xs">
+                      {aiResponse.error}
+                    </div>
+                  ) : (
+                    <>
+                      {/* Analysis Explanation */}
+                      {aiResponse.result?.explanation && (
+                        <div className="p-2.5 bg-zinc-900 rounded-xl border border-zinc-800 text-zinc-200 leading-relaxed text-[11px]">
+                          <strong className="text-white block mb-1">Analysis:</strong>
+                          {aiResponse.result.explanation}
+                        </div>
+                      )}
+
+                      {/* Complexity Analysis */}
+                      {aiResponse.result?.time_complexity && (
+                        <div className="grid grid-cols-2 gap-1.5">
+                          <div className="p-2 bg-zinc-900 rounded-lg border border-zinc-800">
+                            <span className="text-[9px] text-zinc-400 uppercase font-bold">Time</span>
+                            <p className="font-mono text-white font-bold text-[11px]">{aiResponse.result.time_complexity}</p>
+                          </div>
+                          <div className="p-2 bg-zinc-900 rounded-lg border border-zinc-800">
+                            <span className="text-[9px] text-zinc-400 uppercase font-bold">Space</span>
+                            <p className="font-mono text-white font-bold text-[11px]">{aiResponse.result.space_complexity}</p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Fixed / Optimized Code with Apply Button */}
+                      {(aiResponse.result?.fixed_code || aiResponse.result?.optimized_code) && (
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-bold text-zinc-400 uppercase">Suggested Code:</span>
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => {
+                                  const code = aiResponse.result?.fixed_code || aiResponse.result?.optimized_code;
+                                  if (code) {
+                                    navigator.clipboard.writeText(code);
+                                    showToast('Copied to clipboard!', 'info');
+                                  }
+                                }}
+                                className="px-2 py-0.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded text-[10px] flex items-center gap-1 transition-colors"
+                                title="Copy Code"
+                              >
+                                <Copy className="w-2.5 h-2.5" />
+                                <span>Copy</span>
+                              </button>
+                              <button
+                                onClick={() => handleApplyAIFix()}
+                                className="px-2 py-0.5 bg-white hover:bg-zinc-200 text-black font-bold rounded text-[10px] flex items-center gap-1"
+                              >
+                                <Check className="w-2.5 h-2.5" />
+                                <span>Apply</span>
+                              </button>
+                            </div>
+                          </div>
+                          <pre className="p-2 bg-black border border-zinc-800 rounded-xl text-zinc-200 font-mono text-[10px] overflow-x-auto max-h-48 leading-4 custom-scrollbar">
+                            {aiResponse.result.fixed_code || aiResponse.result.optimized_code}
+                          </pre>
+                        </div>
+                      )}
+
+                      {/* Generated Test Cases */}
+                      {aiResponse.result?.test_cases && (
+                        <div className="space-y-1.5">
+                          <span className="text-[10px] font-bold text-zinc-400 uppercase block">Generated Tests:</span>
+                          {aiResponse.result.test_cases.map((tc: any, i: number) => (
+                            <div key={i} className="p-2 bg-zinc-900 rounded-lg border border-zinc-800 space-y-1 text-[10px]">
+                              <span className="font-bold text-white">{tc.name}</span>
+                              <p className="text-zinc-400">{tc.description}</p>
+                              <div className="font-mono text-zinc-300">
+                                <div>Input: <code>{tc.input || '(empty)'}</code></div>
+                                <div>Expected: <code>{tc.expected}</code></div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* Interactive Chat Messages */}
+              {aiChatMessages.length > 0 && (
+                <div className="space-y-2 pt-1">
+                  <div className="text-[9px] uppercase font-bold text-zinc-500 tracking-wider">Conversation</div>
+                  {aiChatMessages.map((msg, idx) => (
+                    <div
+                      key={idx}
+                      className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}
+                    >
+                      <div
+                        className={`p-2 rounded-xl max-w-[90%] text-[11px] leading-relaxed ${
+                          msg.role === 'user'
+                            ? 'bg-white text-black font-medium'
+                            : 'bg-zinc-900 border border-zinc-800 text-zinc-200'
+                        }`}
+                      >
+                        <div className="whitespace-pre-wrap">{msg.text}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div ref={aiChatEndRef} />
+            </div>
+          )}
         </div>
 
         {/* LEFT PANEL RESIZER HANDLE */}
@@ -3760,14 +5726,35 @@ export const DevStudio: React.FC<DevStudioProps> = ({
 
           {/* Editor Workspace (Gutter + Textarea) */}
           <div className="flex-1 flex overflow-hidden relative">
-            {/* Line Number Gutter */}
+            {/* Line Number Gutter with Clickable Breakpoints & Execution Pointer */}
             <div
               ref={gutterRef}
-              className="w-12 bg-zinc-950/80 text-zinc-600 font-mono text-xs py-3 select-none text-right pr-3 border-r border-zinc-850 overflow-hidden leading-6"
+              className="w-14 bg-zinc-950/90 text-zinc-600 font-mono text-xs py-3 select-none text-right pr-2 border-r border-zinc-850 overflow-hidden leading-6"
             >
-              {Array.from({ length: Math.max(1, lineCount) }).map((_, i) => (
-                <div key={i}>{i + 1}</div>
-              ))}
+              {Array.from({ length: Math.max(1, lineCount) }).map((_, i) => {
+                const lineNum = i + 1;
+                const hasBp = breakpoints.some((b) => b.file === activeFilename && b.line === lineNum);
+                const isDebugLine = debugState.isActive && debugState.currentLine === lineNum;
+                return (
+                  <div
+                    key={i}
+                    onClick={() => handleToggleBreakpoint(activeFilename, lineNum)}
+                    className="flex items-center justify-end gap-1 cursor-pointer group hover:text-white relative h-6"
+                    title={`Line ${lineNum} - Click to toggle breakpoint`}
+                  >
+                    {isDebugLine ? (
+                      <span className="text-amber-400 font-bold text-xs select-none">▶</span>
+                    ) : hasBp ? (
+                      <span className="w-2.5 h-2.5 rounded-full bg-rose-500 shadow-[0_0_6px_rgba(244,63,94,0.8)] inline-block flex-shrink-0" />
+                    ) : (
+                      <span className="w-2 h-2 rounded-full bg-rose-500/40 opacity-0 group-hover:opacity-100 transition-opacity inline-block flex-shrink-0" />
+                    )}
+                    <span className={`text-[11px] ${isDebugLine ? 'text-amber-300 font-bold' : hasBp ? 'text-rose-400 font-bold' : ''}`}>
+                      {lineNum}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
 
             {/* Code Input Textarea */}
@@ -3775,6 +5762,10 @@ export const DevStudio: React.FC<DevStudioProps> = ({
               ref={editorTextareaRef}
               value={activeFile.content}
               onChange={(e) => updateActiveContent(e.target.value)}
+              onSelect={handleEditorSelect}
+              onKeyUp={handleEditorSelect}
+              onClick={handleEditorSelect}
+              onContextMenu={handleEditorContextMenu}
               onKeyDown={handleEditorKeyDown}
               onScroll={handleEditorScroll}
               spellCheck={false}
@@ -3784,37 +5775,186 @@ export const DevStudio: React.FC<DevStudioProps> = ({
               className="flex-1 bg-black text-zinc-100 font-mono text-xs leading-6 p-3 resize-none focus:outline-none overflow-auto selection:bg-zinc-700 selection:text-white"
               placeholder="// Write code here..."
             />
+
+            {/* Editor Right-Click Context Menu Popup */}
+            {contextMenu.open && (
+              <>
+                <div
+                  className="fixed inset-0 z-50 bg-transparent"
+                  onClick={() => setContextMenu({ open: false, x: 0, y: 0, selectedText: '' })}
+                />
+                <div
+                  style={{
+                    top: Math.min(contextMenu.y, typeof window !== 'undefined' ? window.innerHeight - 260 : 300),
+                    left: Math.min(contextMenu.x, typeof window !== 'undefined' ? window.innerWidth - 230 : 300),
+                  }}
+                  className="fixed z-50 w-56 bg-zinc-950/98 border border-zinc-750 rounded-2xl shadow-2xl p-1.5 text-xs text-zinc-200 backdrop-blur-xl animate-fade-in"
+                >
+                  <div className="px-2.5 py-1 text-[10px] font-bold text-zinc-500 uppercase tracking-wider flex items-center gap-1 border-b border-zinc-850 pb-1.5 mb-1">
+                    <Sparkles className="w-3 h-3 text-amber-400" />
+                    <span>Phantom Context AI</span>
+                  </div>
+                  <button
+                    onClick={() => handleContextAIAction('explain')}
+                    className="w-full text-left px-2.5 py-1.5 rounded-xl hover:bg-zinc-850 flex items-center gap-2 text-zinc-200 hover:text-white transition-colors"
+                  >
+                    <HelpCircle className="w-3.5 h-3.5 text-sky-400" />
+                    <span>Explain Selection</span>
+                  </button>
+                  <button
+                    onClick={() => handleContextAIAction('fix')}
+                    className="w-full text-left px-2.5 py-1.5 rounded-xl hover:bg-zinc-850 flex items-center gap-2 text-zinc-200 hover:text-white transition-colors"
+                  >
+                    <Wrench className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Fix Code / Bugs</span>
+                  </button>
+                  <button
+                    onClick={() => handleContextAIAction('optimize')}
+                    className="w-full text-left px-2.5 py-1.5 rounded-xl hover:bg-zinc-850 flex items-center gap-2 text-zinc-200 hover:text-white transition-colors"
+                  >
+                    <Zap className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>Optimize Performance</span>
+                  </button>
+                  <button
+                    onClick={() => handleContextAIAction('test')}
+                    className="w-full text-left px-2.5 py-1.5 rounded-xl hover:bg-zinc-850 flex items-center gap-2 text-zinc-200 hover:text-white transition-colors"
+                  >
+                    <CheckCircle className="w-3.5 h-3.5 text-purple-400" />
+                    <span>Generate Unit Tests</span>
+                  </button>
+                  <div className="h-px bg-zinc-850 my-1" />
+                  <button
+                    onClick={() => {
+                      handleToggleBreakpoint(activeFilename, cursorPosition.line);
+                      setContextMenu({ open: false, x: 0, y: 0, selectedText: '' });
+                    }}
+                    className="w-full text-left px-2.5 py-1.5 rounded-xl hover:bg-zinc-850 flex items-center justify-between text-zinc-300 hover:text-white transition-colors"
+                  >
+                    <span className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-rose-500" />
+                      <span>Toggle Breakpoint</span>
+                    </span>
+                    <span className="text-[10px] text-zinc-500 font-mono">F9</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowFindReplace(true);
+                      setContextMenu({ open: false, x: 0, y: 0, selectedText: '' });
+                    }}
+                    className="w-full text-left px-2.5 py-1.5 rounded-xl hover:bg-zinc-850 flex items-center justify-between text-zinc-300 hover:text-white transition-colors"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Search className="w-3.5 h-3.5 text-zinc-400" />
+                      <span>Find in File</span>
+                    </span>
+                    <span className="text-[10px] text-zinc-500 font-mono">Ctrl+F</span>
+                  </button>
+                </div>
+              </>
+            )}
           </div>
 
-          {/* Editor Status Bar */}
-          <div className="h-6 bg-zinc-950 border-t border-zinc-850 px-3 flex items-center justify-between text-[11px] text-zinc-500 font-mono">
+          {/* Compilation Error Smart Action Banner */}
+          {compilationErrorBanner && (
+            <div className="bg-gradient-to-r from-rose-950/80 via-zinc-950 to-zinc-950 border-t border-rose-900/60 p-2.5 px-4 flex items-center justify-between gap-3 animate-slide-down select-none flex-shrink-0">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <AlertCircle className="w-4 h-4 text-rose-400 flex-shrink-0" />
+                <div className="min-w-0">
+                  <div className="text-xs font-bold text-rose-300 truncate">
+                    {compilationErrorBanner.message}
+                  </div>
+                  <div className="text-[11px] text-zinc-400 truncate">
+                    Compiler error detected in {compilationErrorBanner.file}:{compilationErrorBanner.line}
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <button
+                  onClick={() => {
+                    handleContextAIAction('explain');
+                  }}
+                  className="px-3 py-1 bg-zinc-850 hover:bg-zinc-800 text-zinc-200 border border-zinc-700 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                >
+                  <Sparkles className="w-3 h-3 text-amber-400" />
+                  <span>Explain Error</span>
+                </button>
+                <button
+                  onClick={() => {
+                    handleContextAIAction('fix');
+                  }}
+                  className="px-3 py-1 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors shadow-sm"
+                >
+                  <Wrench className="w-3 h-3" />
+                  <span>Auto-Fix Code</span>
+                </button>
+                <button
+                  onClick={() => setCompilationErrorBanner(null)}
+                  className="p-1 text-zinc-400 hover:text-white"
+                  title="Dismiss error banner"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Editor Status Bar (VS Code Style 24px Bar) */}
+          <div className="h-6 bg-zinc-950 border-t border-zinc-850 px-3 flex items-center justify-between text-[11px] text-zinc-500 font-mono select-none">
             <div className="flex items-center gap-3">
-              <span className="flex items-center gap-1.5 text-zinc-300">
-                <FileIcon filename={activeFilename} className="w-3 h-3 flex-shrink-0" />
-                <strong className="text-zinc-200">{activeFilename}</strong>
+              <button
+                onClick={() => setActiveSidebarTab('git')}
+                className="flex items-center gap-1.5 text-zinc-300 hover:text-white transition-colors"
+                title="Source Control"
+              >
+                <GitBranch className="w-3 h-3 text-sky-400" />
+                <span>{gitStatus?.branch || 'main'}</span>
+              </button>
+              <span className="flex items-center gap-1 text-zinc-400">
+                {syncStatus === 'synced' ? (
+                  <>
+                    <CheckCheck className="w-3 h-3 text-emerald-400" />
+                    <span>Synced</span>
+                  </>
+                ) : syncStatus === 'saving' ? (
+                  <>
+                    <RefreshCw className="w-3 h-3 animate-spin text-amber-400" />
+                    <span>Syncing...</span>
+                  </>
+                ) : (
+                  <>
+                    <CloudOff className="w-3 h-3 text-zinc-500" />
+                    <span>Unsaved</span>
+                  </>
+                )}
               </span>
-              <span>Lines: {lineCount}</span>
-              <span>Size: {activeFile.content.length} B</span>
-              <span>Lang: <strong className="text-zinc-300">{activeFile.language}</strong></span>
-              <span className="hidden sm:inline text-zinc-400">
-                Runner: <strong className="text-white uppercase">{currentRunConfig.runnerLanguage}</strong>
-              </span>
+              <button
+                onClick={() => setBottomTab('problems')}
+                className="flex items-center gap-1.5 text-zinc-400 hover:text-zinc-200 transition-colors"
+                title="View Problems"
+              >
+                <span className="flex items-center gap-0.5 text-rose-400">
+                  <AlertCircle className="w-3 h-3" />
+                  <span>{diagnostics.filter((d) => d.severity === 'error').length}</span>
+                </span>
+                <span className="flex items-center gap-0.5 text-amber-400">
+                  <AlertTriangle className="w-3 h-3" />
+                  <span>{diagnostics.filter((d) => d.severity === 'warning').length}</span>
+                </span>
+              </button>
             </div>
             <div className="flex items-center gap-3">
+              <span>Ln {cursorPosition.line}, Col {cursorPosition.column}</span>
+              <span>Spaces: {getIndentConfig(activeFile.language, activeFilename).size}</span>
               <span>UTF-8</span>
-              <span>Spaces: {getIndentConfig(activeFile.language, activeFilename).size} ({getIndentConfig(activeFile.language, activeFilename).label})</span>
+              <span className="text-zinc-300 uppercase font-semibold">{activeFile.language}</span>
               <button
                 onClick={() => setShortcutsModalOpen(true)}
-                className="hover:text-zinc-200 text-zinc-400 flex items-center gap-1 transition-colors px-1.5 py-0.5 rounded hover:bg-zinc-850"
-                title="View All Keyboard Shortcuts & Cheatsheet (F1)"
+                className="hover:text-zinc-200 text-zinc-400 flex items-center gap-1 transition-colors px-1 py-0.5 rounded hover:bg-zinc-850"
+                title="Keyboard Shortcuts (F1)"
               >
                 <Keyboard className="w-3 h-3 text-zinc-400" />
-                <span className="hidden md:inline">Shortcuts</span>
                 <span className="text-[10px] opacity-75">(F1)</span>
               </button>
-              <span className="text-emerald-400 flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Ready
-              </span>
             </div>
           </div>
         </div>
@@ -3832,7 +5972,7 @@ export const DevStudio: React.FC<DevStudioProps> = ({
         </div>
 
         {/* ----------------------------------------------------------------------- */}
-        {/* 3. RIGHT/BOTTOM: DUAL OUTPUT DRAWER (PREVIEW / MULTI-TAB TERMINAL / LOGS) */}
+        {/* 3. RIGHT/BOTTOM: DUAL OUTPUT DRAWER (PREVIEW / MULTI-TAB TERMINAL / PROBLEMS / DEBUG / LOGS) */}
         {/* ----------------------------------------------------------------------- */}
         <div
           style={{ width: isOutputCollapsed ? 0 : outputWidth }}
@@ -3867,6 +6007,42 @@ export const DevStudio: React.FC<DevStudioProps> = ({
               >
                 <Terminal className="w-3.5 h-3.5 text-emerald-400" />
                 <span>Terminal ({terminalTabs.length})</span>
+              </button>
+
+              <button
+                onClick={() => setBottomTab('problems')}
+                className={`px-2.5 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-colors flex-shrink-0 ${
+                  bottomTab === 'problems'
+                    ? 'bg-zinc-850 text-white border border-zinc-700'
+                    : 'text-zinc-400 hover:text-white'
+                }`}
+              >
+                <AlertCircle className={`w-3.5 h-3.5 ${diagnostics.filter((d) => d.severity === 'error').length > 0 ? 'text-rose-400' : 'text-zinc-400'}`} />
+                <span>Problems</span>
+                {diagnostics.length > 0 && (
+                  <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                    diagnostics.some((d) => d.severity === 'error')
+                      ? 'bg-rose-950 text-rose-400 border border-rose-800'
+                      : 'bg-amber-950 text-amber-400 border border-amber-800'
+                  }`}>
+                    {diagnostics.length}
+                  </span>
+                )}
+              </button>
+
+              <button
+                onClick={() => setBottomTab('debug')}
+                className={`px-2.5 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-colors flex-shrink-0 ${
+                  bottomTab === 'debug'
+                    ? 'bg-zinc-850 text-white border border-zinc-700'
+                    : 'text-zinc-400 hover:text-white'
+                }`}
+              >
+                <Bug className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Debug Console</span>
+                {debugState.isActive && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                )}
               </button>
 
               {activeEngine === 'web' && (
@@ -4375,7 +6551,229 @@ export const DevStudio: React.FC<DevStudioProps> = ({
               </div>
             )}
 
-            {/* 4. Intercepted Console Logs */}
+            {/* 3. Problems & Compiler Diagnostics Panel */}
+            {bottomTab === 'problems' && (
+              <div className="w-full h-full flex flex-col p-3 font-mono text-xs overflow-hidden bg-black selection:bg-zinc-800">
+                <div className="flex items-center justify-between pb-2 border-b border-zinc-850 flex-shrink-0 font-sans">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-white text-xs">Workspace Problems & Diagnostics</span>
+                    <span className="text-[11px] text-zinc-500 font-mono">({diagnostics.length} items)</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setDiagnostics([])}
+                      className="px-2.5 py-1 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded-lg text-xs transition-colors"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex-1 overflow-y-auto space-y-1.5 pt-2 custom-scrollbar">
+                  {diagnostics.length === 0 ? (
+                    <div className="text-center py-12 text-zinc-600 font-sans">
+                      <CheckCircle2 className="w-8 h-8 mx-auto mb-2 text-emerald-500 opacity-60" />
+                      <p className="text-zinc-400 font-medium">No problems detected in workspace</p>
+                      <p className="text-[11px] text-zinc-600 mt-1">Compiler and linter errors will appear here automatically</p>
+                    </div>
+                  ) : (
+                    diagnostics.map((item) => (
+                      <div
+                        key={item.id}
+                        onClick={() => jumpToLine(item.file, item.line)}
+                        className={`p-2.5 rounded-xl border flex items-start justify-between gap-3 cursor-pointer transition-all ${
+                          item.severity === 'error'
+                            ? 'bg-rose-950/20 hover:bg-rose-950/40 border-rose-900/40 text-rose-300'
+                            : item.severity === 'warning'
+                            ? 'bg-amber-950/20 hover:bg-amber-950/40 border-amber-900/40 text-amber-300'
+                            : 'bg-zinc-900/60 hover:bg-zinc-900 border-zinc-800 text-zinc-300'
+                        }`}
+                      >
+                        <div className="flex items-start gap-2.5 min-w-0">
+                          {item.severity === 'error' ? (
+                            <AlertCircle className="w-4 h-4 text-rose-400 flex-shrink-0 mt-0.5" />
+                          ) : item.severity === 'warning' ? (
+                            <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
+                          ) : (
+                            <Info className="w-4 h-4 text-sky-400 flex-shrink-0 mt-0.5" />
+                          )}
+                          <div className="min-w-0">
+                            <p className="text-xs font-mono whitespace-pre-wrap leading-relaxed">{item.message}</p>
+                            <span className="text-[10px] text-zinc-500 font-mono mt-1 block">
+                              {item.file} [{item.line}:{item.column || 1}] • {item.source || 'compiler'}
+                            </span>
+                          </div>
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            jumpToLine(item.file, item.line);
+                          }}
+                          className="px-2 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-[10px] font-sans rounded font-semibold flex-shrink-0"
+                        >
+                          Jump
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* 4. Debug Console Panel */}
+            {bottomTab === 'debug' && (
+              <div className="w-full h-full flex flex-col p-3 font-mono text-xs overflow-hidden bg-black selection:bg-zinc-800">
+                {/* Stepping Toolbar */}
+                <div className="flex items-center justify-between pb-2 border-b border-zinc-850 flex-shrink-0 font-sans">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-white text-xs flex items-center gap-1.5">
+                      <Bug className="w-4 h-4 text-emerald-400" />
+                      <span>Debug Session</span>
+                    </span>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${
+                      debugState.isActive
+                        ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
+                        : 'bg-zinc-900 text-zinc-500'
+                    }`}>
+                      {debugState.isActive ? (debugState.isPaused ? 'PAUSED' : 'RUNNING') : 'IDLE'}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-1">
+                    {debugState.isActive ? (
+                      <>
+                        <button
+                          onClick={() => handleStepDebug('continue')}
+                          className="px-2 py-1 bg-zinc-850 hover:bg-zinc-800 text-emerald-400 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors"
+                          title="Continue (F5)"
+                        >
+                          <Play className="w-3 h-3 fill-current" />
+                          <span>Continue</span>
+                        </button>
+                        <button
+                          onClick={() => handleStepDebug('over')}
+                          className="px-2 py-1 bg-zinc-850 hover:bg-zinc-800 text-zinc-200 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors"
+                          title="Step Over (F10)"
+                        >
+                          <StepForward className="w-3 h-3" />
+                          <span>Step Over</span>
+                        </button>
+                        <button
+                          onClick={() => handleStepDebug('into')}
+                          className="px-2 py-1 bg-zinc-850 hover:bg-zinc-800 text-zinc-200 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors"
+                          title="Step Into (F11)"
+                        >
+                          <ArrowDownToLine className="w-3 h-3" />
+                          <span>Step Into</span>
+                        </button>
+                        <button
+                          onClick={handleStopDebug}
+                          className="px-2 py-1 bg-rose-950/60 hover:bg-rose-900/60 text-rose-400 border border-rose-900/50 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors"
+                          title="Stop Debugging (Shift+F5)"
+                        >
+                          <Square className="w-3 h-3 fill-current" />
+                          <span>Stop</span>
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        onClick={handleStartDebug}
+                        className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors shadow-sm"
+                      >
+                        <Play className="w-3.5 h-3.5 fill-current" />
+                        <span>Start Debugging (F5)</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Debug Output Stream & Variables */}
+                <div className="flex-1 overflow-y-auto space-y-3 pt-2 custom-scrollbar">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 font-sans">
+                    {/* Local Variables */}
+                    <div className="p-3 bg-zinc-900/60 border border-zinc-850 rounded-xl space-y-2">
+                      <div className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider flex items-center justify-between">
+                        <span>Variables</span>
+                        <span className="text-[10px] font-mono text-zinc-600">{debugState.variables.length} locals</span>
+                      </div>
+                      <div className="space-y-1 font-mono text-xs">
+                        {debugState.variables.length === 0 ? (
+                          <span className="text-zinc-600 italic">No variables in scope</span>
+                        ) : (
+                          debugState.variables.map((v) => (
+                            <div key={v.name} className="flex items-center justify-between p-1 bg-black/40 rounded border border-zinc-850">
+                              <span className="text-sky-300 font-semibold">{v.name} ({v.type || 'var'}):</span>
+                              <span className="text-amber-300 font-bold">{v.value}</span>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Call Stack Frames */}
+                    <div className="p-3 bg-zinc-900/60 border border-zinc-850 rounded-xl space-y-2">
+                      <div className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider flex items-center justify-between">
+                        <span>Call Stack</span>
+                        <span className="text-[10px] font-mono text-zinc-600">{debugState.callStack.length} frames</span>
+                      </div>
+                      <div className="space-y-1 font-mono text-xs">
+                        {debugState.callStack.length === 0 ? (
+                          <span className="text-zinc-600 italic">No active stack frame</span>
+                        ) : (
+                          debugState.callStack.map((f) => (
+                            <div
+                              key={f.id}
+                              onClick={() => jumpToLine(f.file, f.line)}
+                              className="flex items-center justify-between p-1 bg-black/40 hover:bg-zinc-850 rounded border border-zinc-850 cursor-pointer text-zinc-300 hover:text-white"
+                            >
+                              <span className="text-white font-medium">{f.name}</span>
+                              <span className="text-zinc-500 text-[10px]">{f.file}:{f.line}</span>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Breakpoints */}
+                  <div className="p-3 bg-zinc-900/60 border border-zinc-850 rounded-xl space-y-2 font-sans">
+                    <div className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider flex items-center justify-between">
+                      <span>Breakpoints</span>
+                      <span className="text-[10px] font-mono text-zinc-600">{breakpoints.length} active</span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 font-mono text-xs">
+                      {breakpoints.length === 0 ? (
+                        <span className="text-zinc-600 italic">No breakpoints set. Click on editor line numbers to set breakpoints.</span>
+                      ) : (
+                        breakpoints.map((bp) => (
+                          <div
+                            key={bp.id}
+                            onClick={() => jumpToLine(bp.file, bp.line)}
+                            className="flex items-center justify-between p-1.5 bg-black/50 hover:bg-zinc-850 rounded-lg border border-zinc-850 cursor-pointer"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="w-2.5 h-2.5 rounded-full bg-rose-500 shadow-[0_0_6px_rgba(244,63,94,0.8)]" />
+                              <span className="text-zinc-200">{bp.file}:{bp.line}</span>
+                            </div>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleToggleBreakpoint(bp.file, bp.line);
+                              }}
+                              className="p-1 text-zinc-500 hover:text-rose-400"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 5. Intercepted Console Logs */}
             {bottomTab === 'console' && (
               <div className="w-full h-full p-2 overflow-y-auto font-mono text-xs space-y-1 custom-scrollbar">
                 {consoleLogs.length === 0 ? (
@@ -4405,269 +6803,6 @@ export const DevStudio: React.FC<DevStudioProps> = ({
           </div>
         </div>
       </div>
-
-      {/* ========================================================================= */}
-      {/* 4. DOCKABLE AI CODING ASSISTANT FLYOUT PANEL                              */}
-      {/* ========================================================================= */}
-      {aiOpen && (
-        <>
-          {/* Backdrop for small screens */}
-          <div
-            onClick={() => setAiOpen(false)}
-            className="fixed inset-0 bg-black/50 backdrop-blur-xs z-30 lg:hidden"
-          />
-
-          <div className="absolute top-0 right-0 bottom-0 w-full sm:w-[420px] max-w-full bg-zinc-950/98 backdrop-blur-xl border-l border-zinc-800 shadow-2xl flex flex-col z-40 overflow-hidden animate-fade-in">
-            {/* AI Header - Sticky & Always Pinned */}
-            <div className="h-12 px-3.5 border-b border-zinc-850 flex items-center justify-between flex-shrink-0 bg-zinc-950 z-10 select-none">
-              <div className="flex items-center gap-2 min-w-0">
-                <div className="p-1 rounded-lg bg-white/10 border border-white/20 text-white flex-shrink-0">
-                  <Sparkles className="w-4 h-4" />
-                </div>
-                <div className="flex flex-col min-w-0">
-                  <h3 className="text-xs font-bold text-white tracking-wide flex items-center gap-1.5 truncate">
-                    <span>AI Assistant</span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-850 text-zinc-400 font-mono font-normal truncate max-w-[120px]">
-                      {activeFilename}
-                    </span>
-                  </h3>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-1.5 flex-shrink-0">
-                {(aiResponse || aiChatMessages.length > 0) && (
-                  <button
-                    onClick={() => {
-                      setAiResponse(null);
-                      setAiActiveAction(null);
-                      setAiChatMessages([]);
-                    }}
-                    className="px-2 py-1 rounded-lg text-[10px] text-zinc-400 hover:text-white hover:bg-zinc-900 border border-zinc-800 transition-colors"
-                    title="Clear AI History"
-                  >
-                    Clear
-                  </button>
-                )}
-                <button
-                  onClick={() => setAiOpen(false)}
-                  className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-850 border border-transparent hover:border-zinc-700 transition-all flex items-center gap-1 group"
-                  title="Close AI Assistant (Esc)"
-                >
-                  <span className="text-[10px] text-zinc-500 group-hover:text-zinc-300 hidden sm:inline font-mono">Esc</span>
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-
-            {/* 1-Click Action Buttons - Pinned */}
-            <div className="p-2.5 border-b border-zinc-850 grid grid-cols-2 gap-1.5 flex-shrink-0 bg-zinc-900/30 select-none">
-              <button
-                onClick={() => handleTriggerAI('fix')}
-                disabled={aiLoading}
-                className={`py-1.5 px-2.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all ${
-                  aiActiveAction === 'fix'
-                    ? 'bg-white text-black border-white shadow-mono-glow'
-                    : 'bg-zinc-900 hover:bg-zinc-850 text-zinc-200 border-zinc-800'
-                }`}
-              >
-                <Zap className="w-3.5 h-3.5 text-amber-400" />
-                <span>⚡ Fix Code</span>
-              </button>
-
-              <button
-                onClick={() => handleTriggerAI('explain')}
-                disabled={aiLoading}
-                className={`py-1.5 px-2.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all ${
-                  aiActiveAction === 'explain'
-                    ? 'bg-white text-black border-white shadow-mono-glow'
-                    : 'bg-zinc-900 hover:bg-zinc-850 text-zinc-200 border-zinc-800'
-                }`}
-              >
-                <HelpCircle className="w-3.5 h-3.5 text-sky-400" />
-                <span>💡 Explain</span>
-              </button>
-
-              <button
-                onClick={() => handleTriggerAI('optimize')}
-                disabled={aiLoading}
-                className={`py-1.5 px-2.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all ${
-                  aiActiveAction === 'optimize'
-                    ? 'bg-white text-black border-white shadow-mono-glow'
-                    : 'bg-zinc-900 hover:bg-zinc-850 text-zinc-200 border-zinc-800'
-                }`}
-              >
-                <Activity className="w-3.5 h-3.5 text-emerald-400" />
-                <span>🚀 Optimize</span>
-              </button>
-
-              <button
-                onClick={() => handleTriggerAI('generate_tests')}
-                disabled={aiLoading}
-                className={`py-1.5 px-2.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all ${
-                  aiActiveAction === 'generate_tests'
-                    ? 'bg-white text-black border-white shadow-mono-glow'
-                    : 'bg-zinc-900 hover:bg-zinc-850 text-zinc-200 border-zinc-800'
-                }`}
-              >
-                <CheckCircle className="w-3.5 h-3.5 text-purple-400" />
-                <span>🧪 Tests</span>
-              </button>
-            </div>
-
-            {/* AI Scrollable Body (Responses + Conversation) */}
-            <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3 text-xs custom-scrollbar">
-              {/* 1. Action Response */}
-              {aiResponse && (
-                <div className="space-y-3">
-                  {aiResponse.error ? (
-                    <div className="p-3 bg-rose-950/40 border border-rose-800 rounded-xl text-rose-300">
-                      {aiResponse.error}
-                    </div>
-                  ) : (
-                    <>
-                      {/* Summary / Explanation */}
-                      {aiResponse.result?.explanation && (
-                        <div className="p-3 bg-zinc-900 rounded-xl border border-zinc-800 text-zinc-200 leading-relaxed">
-                          <strong className="text-white block mb-1">Analysis:</strong>
-                          {aiResponse.result.explanation}
-                        </div>
-                      )}
-
-                      {/* Complexity Analysis */}
-                      {aiResponse.result?.time_complexity && (
-                        <div className="grid grid-cols-2 gap-2">
-                          <div className="p-2.5 bg-zinc-900 rounded-xl border border-zinc-800">
-                            <span className="text-[10px] text-zinc-400 uppercase font-bold">Time</span>
-                            <p className="font-mono text-white font-bold">{aiResponse.result.time_complexity}</p>
-                          </div>
-                          <div className="p-2.5 bg-zinc-900 rounded-xl border border-zinc-800">
-                            <span className="text-[10px] text-zinc-400 uppercase font-bold">Space</span>
-                            <p className="font-mono text-white font-bold">{aiResponse.result.space_complexity}</p>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Fixed / Optimized Code with Apply Button */}
-                      {(aiResponse.result?.fixed_code || aiResponse.result?.optimized_code) && (
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[11px] font-bold text-white">Suggested Code:</span>
-                            <div className="flex items-center gap-1.5">
-                              <button
-                                onClick={() => {
-                                  const code = aiResponse.result?.fixed_code || aiResponse.result?.optimized_code;
-                                  if (code) {
-                                    navigator.clipboard.writeText(code);
-                                    showToast('Copied to clipboard!', 'info');
-                                  }
-                                }}
-                                className="px-2 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg text-[11px] flex items-center gap-1 transition-colors"
-                                title="Copy Code"
-                              >
-                                <Copy className="w-3 h-3" />
-                                <span>Copy</span>
-                              </button>
-                              <button
-                                onClick={() => handleApplyAIFix()}
-                                className="px-2.5 py-1 bg-white hover:bg-zinc-200 text-black font-bold rounded-lg text-xs transition-transform active:scale-95 flex items-center gap-1 shadow-mono-glow"
-                              >
-                                <Check className="w-3 h-3" />
-                                <span>Apply to Editor</span>
-                              </button>
-                            </div>
-                          </div>
-                          <pre className="p-3 bg-black border border-zinc-800 rounded-xl text-zinc-200 font-mono text-[11px] overflow-x-auto max-h-60 leading-5 custom-scrollbar">
-                            {aiResponse.result.fixed_code || aiResponse.result.optimized_code}
-                          </pre>
-                        </div>
-                      )}
-
-                      {/* Generated Test Cases */}
-                      {aiResponse.result?.test_cases && (
-                        <div className="space-y-2">
-                          <strong className="text-white block">Generated Test Cases:</strong>
-                          {aiResponse.result.test_cases.map((tc: any, i: number) => (
-                            <div key={i} className="p-2 bg-zinc-900 rounded-lg border border-zinc-800 space-y-1">
-                              <span className="font-bold text-white">{tc.name}</span>
-                              <p className="text-zinc-400 text-[11px]">{tc.description}</p>
-                              <div className="font-mono text-[10px] text-zinc-300">
-                                <div>Input: <code>{tc.input || '(empty)'}</code></div>
-                                <div>Expected: <code>{tc.expected}</code></div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-              )}
-
-              {/* 2. Interactive Chat Messages */}
-              {aiChatMessages.length > 0 && (
-                <div className="space-y-2.5 pt-2">
-                  <div className="text-[10px] uppercase font-bold text-zinc-500 tracking-wider">Conversation</div>
-                  {aiChatMessages.map((msg, idx) => (
-                    <div
-                      key={idx}
-                      className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}
-                    >
-                      <div
-                        className={`p-2.5 rounded-2xl max-w-[90%] text-xs leading-relaxed ${
-                          msg.role === 'user'
-                            ? 'bg-white text-black font-medium'
-                            : 'bg-zinc-900 border border-zinc-800 text-zinc-200'
-                        }`}
-                      >
-                        <div className="whitespace-pre-wrap">{msg.text}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* 3. Loading Indicator */}
-              {aiLoading && (
-                <div className="flex flex-col items-center justify-center py-8 text-center text-zinc-400 space-y-2">
-                  <RefreshCw className="w-5 h-5 animate-spin text-white" />
-                  <p className="text-xs">Analyzing code with AI...</p>
-                </div>
-              )}
-
-              {/* 4. Empty State */}
-              {!aiResponse && aiChatMessages.length === 0 && !aiLoading && (
-                <div className="text-center py-12 text-zinc-500 space-y-2">
-                  <Sparkles className="w-8 h-8 mx-auto text-zinc-600" />
-                  <p className="text-xs">Select an AI action above or ask questions below.</p>
-                </div>
-              )}
-
-              <div ref={aiChatEndRef} />
-            </div>
-
-            {/* Pinned Bottom Chat Input */}
-            <div className="p-2.5 border-t border-zinc-800 bg-zinc-950 flex-shrink-0">
-              <form onSubmit={handleSendAIChat} className="flex items-center gap-1.5">
-                <input
-                  type="text"
-                  value={aiChatInput}
-                  onChange={(e) => setAiChatInput(e.target.value)}
-                  placeholder={`Ask AI about ${activeFilename}...`}
-                  className="flex-1 bg-black border border-zinc-700 rounded-xl px-3 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-white font-sans"
-                />
-                <button
-                  type="submit"
-                  disabled={aiLoading || !aiChatInput.trim()}
-                  className="p-2 rounded-xl bg-white hover:bg-zinc-200 text-black disabled:opacity-40 transition-colors flex-shrink-0"
-                  title="Send message"
-                >
-                  <Send className="w-3.5 h-3.5" />
-                </button>
-              </form>
-            </div>
-          </div>
-        </>
-      )}
 
       {/* ========================================================================= */}
       {/* 5. MODALS (SAVE PROJECT | OPEN PROJECTS | NEW FILE)                      */}
@@ -5254,6 +7389,297 @@ export const DevStudio: React.FC<DevStudioProps> = ({
               >
                 Got It
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* COMMAND PALETTE MODAL (Ctrl+Shift+P) */}
+      {commandPaletteOpen && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center pt-20 p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+          <div className="w-full max-w-xl bg-zinc-950 border border-zinc-800 rounded-2xl p-4 space-y-3 shadow-2xl">
+            <div className="flex items-center gap-2 bg-black border border-zinc-700 rounded-xl px-3 py-2 text-xs">
+              <Search className="w-4 h-4 text-zinc-400" />
+              <input
+                type="text"
+                value={commandPaletteQuery}
+                onChange={(e) => setCommandPaletteQuery(e.target.value)}
+                placeholder="Type a command or search actions..."
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') setCommandPaletteOpen(false);
+                }}
+                className="bg-transparent text-white placeholder-zinc-500 w-full focus:outline-none"
+              />
+              <kbd className="text-[10px] text-zinc-500 font-mono px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-800">
+                ESC
+              </kbd>
+            </div>
+
+            <div className="max-h-80 overflow-y-auto space-y-1 custom-scrollbar">
+              {IDE_COMMANDS.filter((cmd) => {
+                const q = commandPaletteQuery.toLowerCase().trim();
+                if (!q) return true;
+                return cmd.title.toLowerCase().includes(q) || cmd.category.toLowerCase().includes(q);
+              }).map((cmd) => (
+                <div
+                  key={cmd.id}
+                  onClick={() => {
+                    setCommandPaletteOpen(false);
+                    if (cmd.action) {
+                      cmd.action();
+                    } else {
+                      executeCommand(cmd.id);
+                    }
+                  }}
+                  className="flex items-center justify-between p-2.5 rounded-xl hover:bg-zinc-900 cursor-pointer transition-colors group"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-900 text-zinc-400 border border-zinc-800 uppercase font-semibold">
+                      {cmd.category}
+                    </span>
+                    <span className="text-xs text-zinc-200 group-hover:text-white font-medium">{cmd.title}</span>
+                  </div>
+                  {cmd.shortcut && (
+                    <kbd className="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-900 text-zinc-400 border border-zinc-800">
+                      {cmd.shortcut}
+                    </kbd>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* QUICK OPEN FILE MODAL (Ctrl+P) */}
+      {quickOpenModal && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center pt-20 p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+          <div className="w-full max-w-lg bg-zinc-950 border border-zinc-800 rounded-2xl p-4 space-y-3 shadow-2xl">
+            <div className="flex items-center gap-2 bg-black border border-zinc-700 rounded-xl px-3 py-2 text-xs">
+              <Search className="w-4 h-4 text-zinc-400" />
+              <input
+                type="text"
+                value={quickOpenQuery}
+                onChange={(e) => setQuickOpenQuery(e.target.value)}
+                placeholder="Search files by name..."
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') setQuickOpenModal(false);
+                }}
+                className="bg-transparent text-white placeholder-zinc-500 w-full focus:outline-none"
+              />
+              <kbd className="text-[10px] text-zinc-500 font-mono px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-800">
+                ESC
+              </kbd>
+            </div>
+
+            <div className="max-h-72 overflow-y-auto space-y-1 custom-scrollbar">
+              {Object.keys(files)
+                .filter((f) => f.toLowerCase().includes(quickOpenQuery.toLowerCase().trim()))
+                .map((f) => (
+                  <div
+                    key={f}
+                    onClick={() => {
+                      setQuickOpenModal(false);
+                      handleOpenTab(f);
+                    }}
+                    className="flex items-center justify-between p-2 rounded-xl hover:bg-zinc-900 cursor-pointer transition-colors group"
+                  >
+                    <div className="flex items-center gap-2">
+                      <FileIcon filename={f} className="w-3.5 h-3.5 text-zinc-400" />
+                      <span className="text-xs text-zinc-200 group-hover:text-white font-mono">{f}</span>
+                    </div>
+                    <span className="text-[10px] text-zinc-500 font-mono uppercase">
+                      {files[f]?.language || 'text'}
+                    </span>
+                  </div>
+                ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* GIT DIFF MODAL */}
+      {gitDiffModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fade-in">
+          <div className="w-full max-w-3xl bg-zinc-950 border border-zinc-800 rounded-3xl p-6 space-y-4 shadow-2xl max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-zinc-850 pb-3 flex-shrink-0">
+              <div className="flex items-center gap-2">
+                <GitCommit className="w-5 h-5 text-sky-400" />
+                <div>
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2 font-mono">
+                    <span>{gitDiffModal.file || 'Workspace Diff'}</span>
+                    <span className={`text-[10px] font-sans px-2 py-0.5 rounded-full ${
+                      gitDiffModal.staged ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-amber-950 text-amber-400 border border-amber-800'
+                    }`}>
+                      {gitDiffModal.staged ? 'Staged' : 'Working Tree'}
+                    </span>
+                  </h3>
+                  <p className="text-[11px] text-zinc-400">Review changes before staging or committing</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setGitDiffModal({ open: false, file: '', staged: false, diffText: '' })}
+                className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-850 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-auto bg-black border border-zinc-850 rounded-2xl p-4 font-mono text-xs leading-5 custom-scrollbar min-h-0">
+              {gitDiffModal.diffText.split('\n').map((line, idx) => {
+                let colorClass = 'text-zinc-400';
+                let bgClass = 'bg-transparent';
+                if (line.startsWith('+') && !line.startsWith('+++')) {
+                  colorClass = 'text-emerald-300';
+                  bgClass = 'bg-emerald-950/20';
+                } else if (line.startsWith('-') && !line.startsWith('---')) {
+                  colorClass = 'text-rose-300';
+                  bgClass = 'bg-rose-950/20';
+                } else if (line.startsWith('@@')) {
+                  colorClass = 'text-cyan-400 font-bold';
+                  bgClass = 'bg-cyan-950/10';
+                }
+                return (
+                  <div key={idx} className={`${colorClass} ${bgClass} px-2 py-0.5 rounded whitespace-pre`}>
+                    {line || ' '}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="flex items-center justify-between pt-2 border-t border-zinc-850 flex-shrink-0">
+              <span className="text-[11px] text-zinc-500 font-mono">Git Diff Inspector</span>
+              <div className="flex items-center gap-2">
+                {gitDiffModal.file && (
+                  <button
+                    onClick={() => {
+                      if (gitDiffModal.staged) {
+                        handleGitUnstage(gitDiffModal.file!);
+                      } else {
+                        handleGitStage(gitDiffModal.file!);
+                      }
+                      setGitDiffModal({ open: false, file: '', staged: false, diffText: '' });
+                    }}
+                    className="px-3 py-1.5 bg-zinc-850 hover:bg-zinc-800 text-white rounded-xl text-xs font-semibold transition-colors"
+                  >
+                    {gitDiffModal.staged ? 'Unstage Changes' : 'Stage Changes'}
+                  </button>
+                )}
+                <button
+                  onClick={() => setGitDiffModal({ open: false, file: '', staged: false, diffText: '' })}
+                  className="px-4 py-1.5 bg-white hover:bg-zinc-200 text-black rounded-xl text-xs font-bold transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* STRUCTURED AI CODE EDIT DIFF PREVIEW MODAL */}
+      {diffPreviewModal.open && diffPreviewModal.edit && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fade-in">
+          <div className="w-full max-w-4xl bg-zinc-950 border border-amber-500/30 rounded-3xl p-6 space-y-4 shadow-2xl max-h-[88vh] flex flex-col">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-zinc-850 pb-3 flex-shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-2xl bg-amber-400/20 text-amber-400">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2 font-mono">
+                    <span>{diffPreviewModal.edit.path}</span>
+                    <span className="text-[10px] font-sans px-2 py-0.5 rounded-full bg-amber-950 text-amber-300 border border-amber-800">
+                      AI Auto Edit Preview
+                    </span>
+                  </h3>
+                  <p className="text-xs text-zinc-400 mt-0.5">{diffPreviewModal.edit.summary}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setDiffPreviewModal({ open: false, edit: null })}
+                className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-850 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Diff Comparison Body */}
+            <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3 min-h-0 overflow-hidden">
+              {/* Original Code */}
+              <div className="flex flex-col bg-black border border-zinc-800 rounded-2xl overflow-hidden min-h-0">
+                <div className="px-3 py-1.5 bg-zinc-900 border-b border-zinc-800 text-[11px] font-bold text-rose-400 flex items-center justify-between flex-shrink-0">
+                  <span>Original Version</span>
+                  <span className="text-[10px] font-mono text-zinc-500">Before</span>
+                </div>
+                <div className="flex-1 p-3 font-mono text-xs overflow-auto custom-scrollbar leading-5 text-zinc-300">
+                  {(diffPreviewModal.edit.originalContent || '').split('\n').map((line, idx) => {
+                    const lineNum = idx + 1;
+                    const isChanged = diffPreviewModal.edit?.changes.some((ch) => lineNum >= ch.startLine && lineNum <= ch.endLine);
+                    return (
+                      <div
+                        key={idx}
+                        className={`flex items-start gap-3 px-1 py-0.5 rounded ${
+                          isChanged ? 'bg-rose-950/40 text-rose-300 font-semibold' : 'text-zinc-400'
+                        }`}
+                      >
+                        <span className="text-zinc-600 select-none w-6 text-right text-[10px]">{lineNum}</span>
+                        <span className="whitespace-pre flex-1">{line || ' '}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Modified Code */}
+              <div className="flex flex-col bg-black border border-zinc-800 rounded-2xl overflow-hidden min-h-0">
+                <div className="px-3 py-1.5 bg-zinc-900 border-b border-zinc-800 text-[11px] font-bold text-emerald-400 flex items-center justify-between flex-shrink-0">
+                  <span>Proposed AI Version</span>
+                  <span className="text-[10px] font-mono text-zinc-500">After Edit</span>
+                </div>
+                <div className="flex-1 p-3 font-mono text-xs overflow-auto custom-scrollbar leading-5 text-zinc-300">
+                  {(diffPreviewModal.edit.modifiedContent || '').split('\n').map((line, idx) => {
+                    const lineNum = idx + 1;
+                    const isChanged = diffPreviewModal.edit?.changes.some((ch) => lineNum >= ch.startLine && lineNum <= ch.endLine);
+                    return (
+                      <div
+                        key={idx}
+                        className={`flex items-start gap-3 px-1 py-0.5 rounded ${
+                          isChanged ? 'bg-emerald-950/40 text-emerald-300 font-semibold' : 'text-zinc-300'
+                        }`}
+                      >
+                        <span className="text-zinc-600 select-none w-6 text-right text-[10px]">{lineNum}</span>
+                        <span className="whitespace-pre flex-1">{line || ' '}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* Footer Action Buttons */}
+            <div className="flex items-center justify-between pt-3 border-t border-zinc-850 flex-shrink-0">
+              <span className="text-xs text-zinc-500 font-mono">
+                {diffPreviewModal.edit.changes.length} structured change block(s)
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleRejectProposedEdit(diffPreviewModal.edit!.path)}
+                  className="px-3.5 py-1.5 bg-zinc-900 hover:bg-zinc-850 text-zinc-400 hover:text-rose-300 rounded-xl text-xs font-semibold transition-colors"
+                >
+                  Reject Edit
+                </button>
+                <button
+                  onClick={() => handleApplyProposedEdit(diffPreviewModal.edit!)}
+                  className="px-5 py-1.5 bg-white hover:bg-zinc-200 text-black rounded-xl text-xs font-bold transition-transform active:scale-95 shadow-mono-glow flex items-center gap-1.5"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  <span>Apply Edit to File</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>

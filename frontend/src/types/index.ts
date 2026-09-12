@@ -238,3 +238,111 @@ export interface ImageGenResult {
   session_id?: string;
 }
 
+// Git / Source Control Types
+export interface GitFileChange {
+  path: string;
+  status: 'M' | 'A' | 'D' | 'R' | 'C' | '?';
+}
+
+export interface GitStatusResult {
+  is_repo: boolean;
+  branch: string;
+  staged: GitFileChange[];
+  unstaged: GitFileChange[];
+  untracked: GitFileChange[];
+  clean: boolean;
+}
+
+// Problems & Diagnostics Types
+export interface ProblemDiagnostic {
+  id: string;
+  severity: 'error' | 'warning' | 'info';
+  message: string;
+  file: string;
+  line: number;
+  column?: number;
+  source?: string;
+}
+
+// Debugger Types
+export interface DebugVariable {
+  name: string;
+  value: string;
+  type?: string;
+}
+
+export interface DebugStackFrame {
+  id: number;
+  name: string;
+  file: string;
+  line: number;
+}
+
+export interface BreakpointItem {
+  id: string;
+  file: string;
+  line: number;
+  enabled: boolean;
+}
+
+export interface DebugSessionState {
+  sessionId?: string;
+  isActive: boolean;
+  isPaused: boolean;
+  currentLine?: number;
+  variables: DebugVariable[];
+  callStack: DebugStackFrame[];
+}
+
+// Command Palette & Menus
+export interface CommandPaletteItem {
+  id: string;
+  title: string;
+  category: string;
+  shortcut?: string;
+  icon?: string;
+  action?: () => void;
+}
+
+// AI Agent & File-Editing Pipeline Types
+export type AgentMode = 'ask' | 'suggest' | 'auto_edit' | 'agent';
+
+export interface AgentEditChange {
+  startLine: number;
+  endLine: number;
+  newText: string;
+  oldText?: string;
+}
+
+export interface ProposedFileEdit {
+  path: string;
+  changes: AgentEditChange[];
+  originalContent: string;
+  modifiedContent: string;
+  summary: string;
+}
+
+export interface ProposedCommand {
+  command: string;
+  explanation: string;
+  is_destructive?: boolean;
+}
+
+export interface CreatedFileItem {
+  path: string;
+  content: string;
+}
+
+export interface AgentExecutionResult {
+  success: boolean;
+  mode: AgentMode;
+  explanation: string;
+  operations_log: string[];
+  proposed_edits?: ProposedFileEdit[];
+  proposed_commands?: ProposedCommand[];
+  created_files?: CreatedFileItem[];
+  applied_changes?: boolean;
+  files?: Record<string, string>;
+  error?: string;
+}
+

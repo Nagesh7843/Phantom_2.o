@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import rehypeHighlight from 'rehype-highlight';
 import {
   Copy,
   Check,
@@ -17,9 +18,24 @@ import {
   ChevronUp,
   SmilePlus,
   Plus,
+  Code2,
+  FileCode,
+  Info,
+  Lightbulb,
+  AlertCircle,
+  AlertTriangle,
+  AlertOctagon,
+  Cpu,
+  GitCommit,
+  Quote,
+  Hash,
+  Layers,
+  Bug,
+  Play,
 } from 'lucide-react';
 import { ChatMessage, Role } from '@/types';
 import { EmojiPickerPopover } from './EmojiPickerPopover';
+import { PhantomIconSvg } from '../common/PhantomLogo';
 
 interface MessageItemProps {
   message: ChatMessage;
@@ -178,33 +194,33 @@ export const MessageItem: React.FC<MessageItemProps> = ({
             </div>
           )
         ) : (
-          <div className="w-8 h-8 rounded-xl bg-white p-0.5 shadow-mono-glow">
-            <div className="w-full h-full bg-black rounded-[10px] flex items-center justify-center">
-              <Sparkles className="w-4 h-4 text-white" />
-            </div>
+          <div className="w-7 h-7 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-300 shadow-sm">
+            <PhantomIconSvg className="w-4 h-4 text-white" />
           </div>
         )}
       </div>
 
-      {/* Message Bubble Content */}
-      <div className={`flex flex-col max-w-[88%] sm:max-w-[80%] ${isUser ? 'items-end' : 'items-start'}`}>
-        {/* Meta Header */}
-        <div className="flex items-center gap-2 mb-1 text-[11px] text-zinc-400">
-          <span className="font-semibold text-zinc-300">{isUser ? 'You' : 'Phantom AI 2.0'}</span>
-          <span>•</span>
-          <span>
-            {message.timestamp
-              ? new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-              : 'Just now'}
-          </span>
-        </div>
+      {/* Message Content */}
+      <div className={`flex flex-col ${isUser ? 'max-w-[88%] sm:max-w-[80%] items-end' : 'flex-1 min-w-0 items-start'}`}>
+        {/* User Meta Header (Only for User) */}
+        {isUser && (
+          <div className="flex items-center gap-2 mb-1 text-[11px] text-zinc-400">
+            <span className="font-semibold text-zinc-300">You</span>
+            <span>•</span>
+            <span>
+              {message.timestamp
+                ? new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                : 'Just now'}
+            </span>
+          </div>
+        )}
 
-        {/* Bubble Box */}
+        {/* Message Body (Open Layout for AI, Sleek Bubble for User) */}
         <div
-          className={`p-4 rounded-2xl text-sm leading-relaxed ${
+          className={`text-sm leading-relaxed ${
             isUser
-              ? 'user-bubble text-white rounded-tr-none shadow-mono-card'
-              : 'ai-bubble text-white rounded-tl-none shadow-mono-card'
+              ? 'user-bubble text-white p-3.5 rounded-2xl rounded-tr-none shadow-mono-card'
+              : 'w-full text-zinc-100 py-0.5'
           }`}
         >
 
@@ -265,63 +281,400 @@ export const MessageItem: React.FC<MessageItemProps> = ({
           ) : isUser ? (
             <p className="whitespace-pre-wrap">{textContent}</p>
           ) : (
-            <div className="prose-phantom overflow-hidden">
+            <div className="prose-phantom overflow-hidden w-full">
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
+                rehypePlugins={[rehypeHighlight]}
                 components={{
+                  pre({ children }: any) {
+                    return <>{children}</>;
+                  },
                   code({ node, className, children, ...props }: any) {
-                    const match = /language-(\w+)/.exec(className || '');
-                    const codeString = String(children).replace(/\n$/, '');
-                    const isInline = !match && !codeString.includes('\n');
-                    const codeId = `code_${Math.random()}`;
+                    const match = /language-([^\s]+)/.exec(className || '');
+                    let rawLang = match ? match[1].toLowerCase() : '';
+                    let detectedFileName = '';
 
-                    if (isInline) {
-                      return <code className={className} {...props}>{children}</code>;
+                    // Check if language tag includes a file name (e.g. language-python:app.py)
+                    if (rawLang.includes(':')) {
+                      const parts = rawLang.split(':');
+                      rawLang = parts[0];
+                      detectedFileName = parts.slice(1).join(':');
                     }
 
-                    const lang = match ? match[1] : 'text';
+                    const codeString = String(children).replace(/\n$/, '');
+                    const isInline = (!match && !className?.includes('hljs') && !codeString.includes('\n')) || (!rawLang && !codeString.includes('\n'));
+                    const codeId = `code_${Math.random().toString(36).substring(2, 9)}`;
 
-                    return (
-                      <div className="my-3 rounded-xl overflow-hidden border border-zinc-800 bg-black font-mono text-xs shadow-mono-card">
-                        {/* Code Header Bar */}
-                        <div className="flex items-center justify-between px-3.5 py-2 bg-zinc-900 border-b border-zinc-800">
-                          <span className="text-[11px] font-semibold text-white uppercase tracking-wider">
-                            {lang}
-                          </span>
-                          <div className="flex items-center gap-2">
-                            {onSendToIDE && (
+                    if (isInline) {
+                      return (
+                        <code
+                          className="px-1.5 py-0.5 mx-0.5 rounded-md bg-zinc-800/90 border border-zinc-700/60 font-mono text-[12px] text-zinc-200 font-medium select-all"
+                          {...props}
+                        >
+                          {children}
+                        </code>
+                      );
+                    }
+
+                    // Extract file name from comment in first line if not specified in language tag
+                    if (!detectedFileName && codeString) {
+                      const firstLine = codeString.split('\n')[0].trim();
+                      const fileCommentMatch = /^(?:\/\/\s*|#\s*|\/\*\s*|<!--\s*)([a-zA-Z0-9_\-./]+\.[a-zA-Z0-9]+)(?:\s*\*\/|\s*-->)?$/.exec(firstLine);
+                      if (fileCommentMatch) {
+                        detectedFileName = fileCommentMatch[1];
+                      }
+                    }
+
+                    const displayLang = rawLang || 'text';
+                    const isCommand = ['bash', 'sh', 'shell', 'zsh', 'cmd', 'powershell', 'ps1', 'bat', 'terminal', 'cli'].includes(displayLang);
+                    const isDiff = ['diff', 'patch'].includes(displayLang);
+                    const isError = ['error', 'stderr', 'traceback', 'exception'].includes(displayLang);
+
+                    // 1. Line-by-Line Code Diff Viewer
+                    if (isDiff) {
+                      const diffLines = codeString.split('\n');
+                      return (
+                        <div className="my-3.5 rounded-xl overflow-hidden border border-zinc-800 bg-black font-mono text-xs shadow-sm">
+                          <div className="flex items-center justify-between px-4 py-2 bg-zinc-900 border-b border-zinc-800 select-none">
+                            <div className="flex items-center gap-2 text-xs font-mono text-zinc-300 font-medium">
+                              <GitCommit className="w-3.5 h-3.5 text-zinc-400" />
+                              <span className="lowercase">diff viewer</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleCopyCode(codeString, codeId)}
+                              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors"
+                            >
+                              {copiedCodeId === codeId ? (
+                                <>
+                                  <Check className="w-3.5 h-3.5 text-emerald-400" />
+                                  <span className="text-emerald-400">Copied</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Copy className="w-3.5 h-3.5" />
+                                  <span>Copy</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                          <div className="px-5 py-3.5 overflow-x-auto text-[12px] leading-relaxed bg-black space-y-0.5">
+                            {diffLines.map((line, idx) => {
+                              const isAdd = line.startsWith('+') && !line.startsWith('+++');
+                              const isDel = line.startsWith('-') && !line.startsWith('---');
+                              const isHdr = line.startsWith('@@');
+
+                              return (
+                                <div
+                                  key={idx}
+                                  className={`px-2 py-0.5 rounded font-mono ${
+                                    isAdd
+                                      ? 'bg-emerald-950/40 text-emerald-300 font-medium'
+                                      : isDel
+                                      ? 'bg-rose-950/40 text-rose-300 font-medium'
+                                      : isHdr
+                                      ? 'bg-indigo-950/30 text-indigo-300 font-semibold'
+                                      : 'text-zinc-300'
+                                  }`}
+                                >
+                                  {line}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    // 2. Error / Diagnostic Block
+                    if (isError) {
+                      return (
+                        <div className="my-3.5 rounded-xl overflow-hidden border border-rose-900/50 bg-rose-950/20 font-mono text-xs shadow-sm">
+                          <div className="flex items-center justify-between px-4 py-2 bg-rose-950/40 border-b border-rose-900/40 select-none">
+                            <div className="flex items-center gap-2 text-xs font-mono text-rose-300 font-semibold uppercase tracking-wider">
+                              <AlertOctagon className="w-3.5 h-3.5 text-rose-400" />
+                              <span>Error / Diagnostic</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleCopyCode(codeString, codeId)}
+                              className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-medium text-rose-300 hover:text-white hover:bg-rose-900/40 transition-colors"
+                            >
+                              {copiedCodeId === codeId ? (
+                                <>
+                                  <Check className="w-3.5 h-3.5 text-emerald-400" />
+                                  <span className="text-emerald-400">Copied</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Copy className="w-3.5 h-3.5" />
+                                  <span>Copy</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                          <pre className="code-pre overflow-x-auto text-rose-200 leading-relaxed font-mono text-[13px] bg-black/40">
+                            <code className="block">{children}</code>
+                          </pre>
+                        </div>
+                      );
+                    }
+
+                    // 3. Terminal / Command Card
+                    if (isCommand) {
+                      return (
+                        <div className="my-3.5 rounded-xl overflow-hidden border border-zinc-800 bg-[#09090b] font-mono text-xs shadow-sm">
+                          <div className="flex items-center justify-between px-4 py-2 bg-zinc-900 border-b border-zinc-800 select-none">
+                            <div className="flex items-center gap-2 text-xs font-mono text-emerald-400 font-medium">
+                              <Terminal className="w-3.5 h-3.5 text-emerald-400" />
+                              <span className="lowercase">{displayLang}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {onSendToIDE && (
+                                <button
+                                  type="button"
+                                  onClick={() => onSendToIDE(codeString, displayLang)}
+                                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium text-emerald-400 hover:text-emerald-300 hover:bg-zinc-800 transition-colors"
+                                  title="Run Command in Dev Studio Terminal"
+                                >
+                                  <Terminal className="w-3.5 h-3.5" />
+                                  <span>Run Command</span>
+                                </button>
+                              )}
                               <button
-                                onClick={() => onSendToIDE(codeString, lang)}
-                                className="flex items-center gap-1 px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 hover:text-white transition-colors text-[11px] border border-zinc-700"
-                                title="Run this code in Web Editor / Dev Studio"
+                                type="button"
+                                onClick={() => handleCopyCode(codeString, codeId)}
+                                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors"
                               >
-                                <Terminal className="w-3 h-3 text-white" />
+                                {copiedCodeId === codeId ? (
+                                  <>
+                                    <Check className="w-3.5 h-3.5 text-emerald-400" />
+                                    <span className="text-emerald-400">Copied</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Copy className="w-3.5 h-3.5" />
+                                    <span>Copy</span>
+                                  </>
+                                )}
+                              </button>
+                            </div>
+                          </div>
+                          <pre className="code-pre overflow-x-auto text-zinc-100 selection:bg-zinc-800 leading-relaxed font-mono text-[13px] bg-black">
+                            <code className={`block ${className || ''}`}>{children}</code>
+                          </pre>
+                        </div>
+                      );
+                    }
+
+                    // 4. Syntax-Highlighted Code Box (Java, Python, JS, TS, HTML, CSS, etc.)
+                    return (
+                      <div className="my-3.5 rounded-xl overflow-hidden border border-zinc-800 bg-[#09090b] font-mono text-xs shadow-sm">
+                        {/* Header Bar */}
+                        <div className="flex items-center justify-between px-4 py-2 bg-zinc-900 border-b border-zinc-800 select-none">
+                          <div className="flex items-center gap-2 text-xs font-mono text-zinc-300 font-medium">
+                            {detectedFileName ? (
+                              <>
+                                <FileCode className="w-3.5 h-3.5 text-zinc-400" />
+                                <span className="text-zinc-200 font-semibold">{detectedFileName}</span>
+                                <span className="text-[11px] text-zinc-500 lowercase">({displayLang})</span>
+                              </>
+                            ) : (
+                              <>
+                                <Code2 className="w-3.5 h-3.5 text-zinc-400" />
+                                <span className="text-zinc-400 lowercase">{displayLang}</span>
+                              </>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {onSendToIDE && displayLang !== 'text' && (
+                              <button
+                                type="button"
+                                onClick={() => onSendToIDE(codeString, displayLang)}
+                                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors"
+                                title="Run in Dev Studio"
+                              >
+                                <Play className="w-3.5 h-3.5 text-emerald-400" />
                                 <span>Run in IDE</span>
                               </button>
                             )}
                             <button
+                              type="button"
                               onClick={() => handleCopyCode(codeString, codeId)}
-                              className="flex items-center gap-1 px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 hover:text-white transition-colors text-[11px] border border-zinc-700"
+                              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors"
                             >
                               {copiedCodeId === codeId ? (
                                 <>
-                                  <Check className="w-3 h-3 text-white" />
-                                  <span className="text-white">Copied</span>
+                                  <Check className="w-3.5 h-3.5 text-emerald-400" />
+                                  <span className="text-emerald-400">Copied</span>
                                 </>
                               ) : (
                                 <>
-                                  <Copy className="w-3 h-3" />
+                                  <Copy className="w-3.5 h-3.5" />
                                   <span>Copy</span>
                                 </>
                               )}
                             </button>
                           </div>
                         </div>
-                        {/* Code Block Content */}
-                        <pre className="p-4 overflow-x-auto text-zinc-100 bg-black selection:bg-zinc-700">
-                          <code>{children}</code>
+
+                        {/* Highlighted Code Area */}
+                        <pre className="code-pre overflow-x-auto text-zinc-100 bg-[#0c0c0e] selection:bg-zinc-800 leading-relaxed font-mono text-[13px]">
+                          <code className={`block ${className || ''}`}>{children}</code>
                         </pre>
                       </div>
+                    );
+                  },
+                  blockquote({ children }: any) {
+                    const extractText = (node: any): string => {
+                      if (!node) return '';
+                      if (typeof node === 'string') return node;
+                      if (Array.isArray(node)) return node.map(extractText).join(' ');
+                      if (node.props?.children) return extractText(node.props.children);
+                      return '';
+                    };
+
+                    const text = extractText(children).toLowerCase().trim();
+
+                    let title = 'Note';
+                    let icon = <Info className="w-3.5 h-3.5 text-sky-400" />;
+                    let borderClass = 'border-l-4 border-sky-400 border-zinc-800 bg-zinc-900/60';
+                    let badgeClass = 'text-sky-400';
+
+                    if (text.includes('[!tip]') || text.includes('tip:') || text.includes('pro tip') || text.includes('💡')) {
+                      title = 'Pro Tip';
+                      icon = <Lightbulb className="w-3.5 h-3.5 text-emerald-400" />;
+                      borderClass = 'border-l-4 border-emerald-400 border-zinc-800 bg-emerald-950/15';
+                      badgeClass = 'text-emerald-400';
+                    } else if (text.includes('[!warning]') || text.includes('warning:') || text.includes('⚠️')) {
+                      title = 'Warning';
+                      icon = <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />;
+                      borderClass = 'border-l-4 border-amber-400 border-zinc-800 bg-amber-950/15';
+                      badgeClass = 'text-amber-400';
+                    } else if (text.includes('[!error]') || text.includes('error:') || text.includes('problem:') || text.includes('bug:') || text.includes('🛑')) {
+                      title = 'Error / Problem Diagnosis';
+                      icon = <AlertOctagon className="w-3.5 h-3.5 text-rose-400" />;
+                      borderClass = 'border-l-4 border-rose-400 border-zinc-800 bg-rose-950/15';
+                      badgeClass = 'text-rose-400';
+                    } else if (text.includes('[!important]') || text.includes('important:') || text.includes('caution:') || text.includes('⚡')) {
+                      title = 'Important Note';
+                      icon = <AlertCircle className="w-3.5 h-3.5 text-violet-400" />;
+                      borderClass = 'border-l-4 border-violet-400 border-zinc-800 bg-violet-950/15';
+                      badgeClass = 'text-violet-400';
+                    } else if (text.includes('quote:') || text.startsWith('"')) {
+                      title = 'Quote';
+                      icon = <Quote className="w-3.5 h-3.5 text-zinc-400" />;
+                      borderClass = 'border-l-4 border-zinc-500 border-zinc-800 bg-zinc-900/40';
+                      badgeClass = 'text-zinc-400';
+                    }
+
+                    return (
+                      <div className={`my-3.5 p-3.5 rounded-xl border ${borderClass} text-zinc-200 text-xs leading-relaxed space-y-1.5 shadow-sm`}>
+                        <div className={`flex items-center gap-1.5 text-[11px] font-bold ${badgeClass} uppercase tracking-wider select-none`}>
+                          {icon}
+                          <span>{title}</span>
+                        </div>
+                        <div className="text-zinc-300 [&>p]:mb-1 [&>p:last-child]:mb-0">{children}</div>
+                      </div>
+                    );
+                  },
+                  p({ children }: any) {
+                    return <p className="mb-3 last:mb-0 leading-relaxed text-zinc-200 text-sm">{children}</p>;
+                  },
+                  h1({ children }: any) {
+                    return (
+                      <h1 className="text-lg font-bold text-white mt-5 mb-2 pb-1.5 border-b border-zinc-800 tracking-tight">
+                        {children}
+                      </h1>
+                    );
+                  },
+                  h2({ children }: any) {
+                    return (
+                      <h2 className="text-base font-bold text-zinc-100 mt-4 mb-2 tracking-tight">
+                        {children}
+                      </h2>
+                    );
+                  },
+                  h3({ children }: any) {
+                    return (
+                      <h3 className="text-sm font-semibold text-zinc-200 mt-3.5 mb-1.5 tracking-tight">
+                        {children}
+                      </h3>
+                    );
+                  },
+                  h4({ children }: any) {
+                    return (
+                      <h4 className="text-xs font-semibold text-zinc-300 mt-2.5 mb-1 uppercase tracking-wider">
+                        {children}
+                      </h4>
+                    );
+                  },
+                  ol({ children }: any) {
+                    return (
+                      <ol className="my-3 list-decimal pl-5 space-y-1.5 text-zinc-200 text-sm leading-relaxed marker:text-zinc-400 marker:font-semibold">
+                        {children}
+                      </ol>
+                    );
+                  },
+                  ul({ children }: any) {
+                    return (
+                      <ul className="my-3 list-disc pl-5 space-y-1.5 text-zinc-200 text-sm leading-relaxed marker:text-zinc-500">
+                        {children}
+                      </ul>
+                    );
+                  },
+                  li({ children }: any) {
+                    return <li className="leading-relaxed pl-0.5 mb-1">{children}</li>;
+                  },
+                  a({ href, children, ...props }: any) {
+                    return (
+                      <a
+                        href={href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-sky-400 hover:text-sky-300 font-medium underline underline-offset-2 transition-colors"
+                        {...props}
+                      >
+                        <span>{children}</span>
+                        <ExternalLink className="w-2.5 h-2.5 text-sky-400/80" />
+                      </a>
+                    );
+                  },
+                  img({ src, alt, ...props }: any) {
+                    return (
+                      <div className="my-3.5 rounded-xl overflow-hidden border border-zinc-800 bg-zinc-950 p-1.5 shadow-sm max-w-lg">
+                        <img
+                          src={src}
+                          alt={alt || 'Image'}
+                          className="w-full rounded-lg object-contain max-h-80"
+                          loading="lazy"
+                          {...props}
+                        />
+                        {alt && <p className="mt-1 px-2 text-[11px] text-zinc-400 italic text-center">{alt}</p>}
+                      </div>
+                    );
+                  },
+                  table({ children }: any) {
+                    return (
+                      <div className="my-3.5 overflow-x-auto rounded-xl border border-zinc-800 bg-zinc-950/60 shadow-sm">
+                        <table className="w-full text-xs text-left text-zinc-200 border-collapse">
+                          {children}
+                        </table>
+                      </div>
+                    );
+                  },
+                  th({ children }: any) {
+                    return (
+                      <th className="px-3.5 py-2.5 bg-zinc-900 border-b border-zinc-800 font-bold text-white text-[11px] uppercase tracking-wider">
+                        {children}
+                      </th>
+                    );
+                  },
+                  td({ children }: any) {
+                    return (
+                      <td className="px-3.5 py-2 border-b border-zinc-850 text-zinc-300 hover:bg-zinc-900/30 transition-colors">
+                        {children}
+                      </td>
                     );
                   },
                 }}

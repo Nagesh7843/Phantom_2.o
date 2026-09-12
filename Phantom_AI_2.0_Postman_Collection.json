@@ -1,0 +1,2345 @@
+{
+  "info": {
+    "_postman_id": "phantom-ai-2.0-collection",
+    "name": "Phantom AI 2.0 - Complete API Collection",
+    "description": "Comprehensive Postman collection for all Phantom AI 2.0 IDE & Dev OS endpoints including AI Agent, Workspace Tools, Compiler, Terminal Sessions, Git, Debugger, Chat, Projects, Auth, and System Intelligence.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:5000",
+      "type": "string"
+    },
+    {
+      "key": "projectId",
+      "value": "default",
+      "type": "string"
+    },
+    {
+      "key": "sessionId",
+      "value": "test_session_1",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. AI Agent & Workspace Tools",
+      "item": [
+        {
+          "name": "Workspace Sync Files to Disk",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/workspace/sync",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "workspace",
+                "sync"
+              ]
+            },
+            "description": "Persists in-memory virtual files to physical disk workspace.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"project_id\": \"default\",\n  \"files\": {\n    \"main.py\": \"print('Hello from synced workspace')\",\n    \"hello.java\": \"public class hello {\\n    public static void main(String[] args) {\\n        int b = 454645630;\\n    }\\n}\"\n  }\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "AI Agent Execute",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/agent/execute",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "agent",
+                "execute"
+              ]
+            },
+            "description": "Executes AI Agent in ask, suggest, auto_edit, or agent modes with tool operations.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"project_id\": \"default\",\n  \"prompt\": \"Change int b = 454645630; to int b = 100;\",\n  \"mode\": \"auto_edit\",\n  \"filename\": \"hello.java\",\n  \"code\": \"public class hello {\\n    public static void main(String[] args) {\\n        int b = 454645630;\\n    }\\n}\",\n  \"language\": \"java\",\n  \"files\": {\n    \"hello.java\": \"public class hello {\\n    public static void main(String[] args) {\\n        int b = 454645630;\\n    }\\n}\"\n  }\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "AI Agent Apply Edit",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/agent/apply_edit",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "agent",
+                "apply_edit"
+              ]
+            },
+            "description": "Applies structured line-level patch directly to workspace file on disk.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"project_id\": \"default\",\n  \"path\": \"hello.java\",\n  \"changes\": [\n    {\n      \"startLine\": 3,\n      \"endLine\": 3,\n      \"newText\": \"        int b = 100;\"\n    }\n  ]\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Workspace List Files",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/workspace/files?project_id=default",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "workspace",
+                "files"
+              ],
+              "query": [
+                {
+                  "key": "project_id",
+                  "value": "default"
+                }
+              ]
+            },
+            "description": "Scans and returns all file paths and contents in persistent workspace."
+          },
+          "response": []
+        },
+        {
+          "name": "Workspace Read File",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/workspace/read_file",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "workspace",
+                "read_file"
+              ]
+            },
+            "description": "Reads file contents and line array from workspace.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"project_id\": \"default\",\n  \"path\": \"hello.java\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Workspace Edit File",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/workspace/edit_file",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "workspace",
+                "edit_file"
+              ]
+            },
+            "description": "Applies atomic line-level edit to workspace file.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"project_id\": \"default\",\n  \"path\": \"hello.java\",\n  \"changes\": [\n    {\n      \"startLine\": 1,\n      \"endLine\": 1,\n      \"newText\": \"public class hello {\"\n    }\n  ]\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Workspace Create File",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/workspace/create_file",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "workspace",
+                "create_file"
+              ]
+            },
+            "description": "Creates a new file and any required subdirectories in workspace.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"project_id\": \"default\",\n  \"path\": \"Calculator.java\",\n  \"content\": \"public class Calculator {\\n    public Calculator() {}\\n}\\n\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Workspace Rename File",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/workspace/rename_file",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "workspace",
+                "rename_file"
+              ]
+            },
+            "description": "Renames an existing file or directory inside workspace.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"project_id\": \"default\",\n  \"old_path\": \"Calculator.java\",\n  \"new_path\": \"CalcHelper.java\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Workspace Search Files",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/workspace/search_files",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "workspace",
+                "search_files"
+              ]
+            },
+            "description": "Performs recursive text or regex search across workspace files.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"project_id\": \"default\",\n  \"query\": \"class\",\n  \"is_regex\": false\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Workspace Delete File",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/workspace/delete_file",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "workspace",
+                "delete_file"
+              ]
+            },
+            "description": "Deletes a file from workspace.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"project_id\": \"default\",\n  \"path\": \"CalcHelper.java\",\n  \"confirmed\": true\n}"
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "2. Compiler & Terminal Subsystem",
+      "item": [
+        {
+          "name": "Run Code (Multi-Language)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/run_code",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "run_code"
+              ]
+            },
+            "description": "Compiles and runs code directly in persistent workspace.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"project_id\": \"default\",\n  \"filename\": \"hello.java\",\n  \"language\": \"java\",\n  \"code\": \"public class hello {\\n    public static void main(String[] args) {\\n        System.out.println(\\\"Java Runner OK\\\");\\n    }\\n}\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Stop Code Execution",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/stop_code",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "stop_code"
+              ]
+            },
+            "description": "Kills running compilation or execution process.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Terminal Single Command Exec",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/terminal/exec",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "terminal",
+                "exec"
+              ]
+            },
+            "description": "Executes a command synchronously in the workspace directory.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"project_id\": \"default\",\n  \"command\": \"dir\",\n  \"tab_id\": \"term-1\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Terminal Kill Command",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/terminal/kill",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "terminal",
+                "kill"
+              ]
+            },
+            "description": "Sends SIGKILL/interrupt to the active terminal process.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tab_id\": \"term-1\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Terminal AI Assist (Natural Command)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/terminal/ai_assist",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "terminal",
+                "ai_assist"
+              ]
+            },
+            "description": "Translates natural language developer intent into shell commands.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"natural_command\",\n  \"query\": \"Show git commit status\",\n  \"files\": [\n    \"hello.java\",\n    \"main.py\"\n  ]\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Terminal AI Assist (Explain Error)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/terminal/ai_assist",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "terminal",
+                "ai_assist"
+              ]
+            },
+            "description": "Diagnoses terminal error and generates instant fix command.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"explain_error\",\n  \"command\": \"python script.py\",\n  \"stderr\": \"ModuleNotFoundError: No module named 'requests'\",\n  \"exit_code\": 1\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Terminal Active Ports Monitor",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/terminal/ports",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "terminal",
+                "ports"
+              ]
+            },
+            "description": "Inspects listening developer ports on localhost (3000, 5000, 8000, 5432, etc.)."
+          },
+          "response": []
+        },
+        {
+          "name": "Terminal Shell Session Create",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/terminal/session/create",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "terminal",
+                "session",
+                "create"
+              ]
+            },
+            "description": "Spawns persistent interactive shell session.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"project_id\": \"default\",\n  \"tab_id\": \"term-session-1\",\n  \"shell\": \"powershell\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Terminal Shell Session Input",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/terminal/session/input",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "terminal",
+                "session",
+                "input"
+              ]
+            },
+            "description": "Pipes interactive stdin to the persistent shell session.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"project_id\": \"default\",\n  \"tab_id\": \"term-session-1\",\n  \"input\": \"echo 'Session Active'\\n\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Terminal Shell Session Read",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/terminal/session/read?project_id=default&tab_id=term-session-1&since_id=0",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "terminal",
+                "session",
+                "read"
+              ],
+              "query": [
+                {
+                  "key": "project_id",
+                  "value": "default"
+                },
+                {
+                  "key": "tab_id",
+                  "value": "term-session-1"
+                },
+                {
+                  "key": "since_id",
+                  "value": "0"
+                }
+              ]
+            },
+            "description": "Streams live stdout and stderr from persistent shell ring buffer."
+          },
+          "response": []
+        },
+        {
+          "name": "Terminal Shell Session Interrupt",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/terminal/session/interrupt",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "terminal",
+                "session",
+                "interrupt"
+              ]
+            },
+            "description": "Sends Ctrl+C SIGINT interrupt to active shell process.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"project_id\": \"default\",\n  \"tab_id\": \"term-session-1\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Terminal Shell Session Kill",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/terminal/session/kill",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "terminal",
+                "session",
+                "kill"
+              ]
+            },
+            "description": "Terminates interactive shell session.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"project_id\": \"default\",\n  \"tab_id\": \"term-session-1\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Compiler Contextual AI Action",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/compiler/ai_action",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "compiler",
+                "ai_action"
+              ]
+            },
+            "description": "Contextual code analysis (explain, fix, optimize, generate_tests).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"explain\",\n  \"code\": \"def fib(n):\\n    return n if n <= 1 else fib(n-1) + fib(n-2)\",\n  \"language\": \"python\",\n  \"filename\": \"fib.py\"\n}"
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "3. Visual Git Controller",
+      "item": [
+        {
+          "name": "Git Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/git/status?project_id=default",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "git",
+                "status"
+              ],
+              "query": [
+                {
+                  "key": "project_id",
+                  "value": "default"
+                }
+              ]
+            },
+            "description": "Returns git repository branch, staged, unstaged, and untracked files."
+          },
+          "response": []
+        },
+        {
+          "name": "Git Init",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/git/init",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "git",
+                "init"
+              ]
+            },
+            "description": "Initializes a new Git repository in the persistent workspace.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"project_id\": \"default\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Git Stage Files",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/git/stage",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "git",
+                "stage"
+              ]
+            },
+            "description": "Stages modified files in the git index.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"project_id\": \"default\",\n  \"files\": [\n    \".\"\n  ]\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Git Unstage Files",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/git/unstage",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "git",
+                "unstage"
+              ]
+            },
+            "description": "Unstages files from the git index.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"project_id\": \"default\",\n  \"files\": [\n    \".\"\n  ]\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Git Commit",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/git/commit",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "git",
+                "commit"
+              ]
+            },
+            "description": "Commits staged files with author and message.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"project_id\": \"default\",\n  \"message\": \"Commit from Postman test\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Git Diff",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/git/diff?project_id=default&staged=false",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "git",
+                "diff"
+              ],
+              "query": [
+                {
+                  "key": "project_id",
+                  "value": "default"
+                },
+                {
+                  "key": "staged",
+                  "value": "false"
+                }
+              ]
+            },
+            "description": "Returns unified git diff for unstaged or staged changes."
+          },
+          "response": []
+        },
+        {
+          "name": "Git Push",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/git/push",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "git",
+                "push"
+              ]
+            },
+            "description": "Pushes local commits to remote Git repository.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"project_id\": \"default\",\n  \"remote\": \"origin\",\n  \"branch\": \"main\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Git Pull",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/git/pull",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "git",
+                "pull"
+              ]
+            },
+            "description": "Pulls changes from remote Git repository.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"project_id\": \"default\",\n  \"remote\": \"origin\",\n  \"branch\": \"main\"\n}"
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "4. Interactive Debugger",
+      "item": [
+        {
+          "name": "Debugger Start",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/debug/start",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "debug",
+                "start"
+              ]
+            },
+            "description": "Starts a debug session paused at the first breakpoint.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"project_id\": \"default\",\n  \"filename\": \"main.py\",\n  \"code\": \"a = 10\\nb = 20\\nsum = a + b\\nprint(sum)\",\n  \"breakpoints\": [\n    {\n      \"line\": 3\n    }\n  ]\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Debugger Step",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/debug/step",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "debug",
+                "step"
+              ]
+            },
+            "description": "Steps over, into, or continues execution in active debug session.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"session_id\": \"test_session_id\",\n  \"action\": \"over\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Debugger Stop",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/debug/stop",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "debug",
+                "stop"
+              ]
+            },
+            "description": "Terminates active debug session.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"session_id\": \"test_session_id\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Debugger Variables",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/debug/variables?session_id=test_session_id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "debug",
+                "variables"
+              ],
+              "query": [
+                {
+                  "key": "session_id",
+                  "value": "test_session_id"
+                }
+              ]
+            },
+            "description": "Inspects variables and call stack in active debug session."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "5. AI Chat & Conversations",
+      "item": [
+        {
+          "name": "AI Chat Completion",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/chat",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "chat"
+              ]
+            },
+            "description": "Sends user message and returns structured assistant response with session history.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"Explain how Dijkstra's algorithm works concisely.\",\n  \"session_id\": \"{{sessionId}}\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "AI Chat Stream (SSE)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/chat/stream",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "chat",
+                "stream"
+              ]
+            },
+            "description": "Streams real-time token-by-token response via Server-Sent Events.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"Write a quick Python hello world function.\",\n  \"session_id\": \"{{sessionId}}\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "New Chat Session",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/new_chat_session",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "new_chat_session"
+              ]
+            },
+            "description": "Creates a fresh AI chat conversation session ID.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Chat Sessions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/all_sessions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "all_sessions"
+              ]
+            },
+            "description": "Lists all chat conversation histories and session summaries."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Session History",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/history/{{sessionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "history",
+                "{{sessionId}}"
+              ]
+            },
+            "description": "Fetches all messages in a specific chat session."
+          },
+          "response": []
+        },
+        {
+          "name": "Pin Chat Session",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/session/{{sessionId}}/pin",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "session",
+                "{{sessionId}}",
+                "pin"
+              ]
+            },
+            "description": "Toggles pinned state for a chat session.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Archive Chat Session",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/session/{{sessionId}}/archive",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "session",
+                "{{sessionId}}",
+                "archive"
+              ]
+            },
+            "description": "Archives a completed chat session.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Manage Session (Update Title / Delete)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/session/{{sessionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "session",
+                "{{sessionId}}"
+              ]
+            },
+            "description": "Renames or deletes a chat session.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Updated Session Title\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Dynamic Trending Prompt Suggestions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/suggestions/dynamic?offset=0",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "suggestions",
+                "dynamic"
+              ],
+              "query": [
+                {
+                  "key": "offset",
+                  "value": "0"
+                }
+              ]
+            },
+            "description": "Returns live dynamic prompt suggestions based on web search and trending tech."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "6. Project Management",
+      "item": [
+        {
+          "name": "List All Projects",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/projects",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "projects"
+              ]
+            },
+            "description": "Lists all saved projects in database."
+          },
+          "response": []
+        },
+        {
+          "name": "Save / Create Project",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/projects",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "projects"
+              ]
+            },
+            "description": "Saves project and all virtual files to PostgreSQL cloud storage.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Postman Test Project\",\n  \"template\": \"web\",\n  \"files\": {\n    \"index.html\": \"<!DOCTYPE html><html><body><h1>Postman</h1></body></html>\",\n    \"style.css\": \"body { background: #000; color: #fff; }\",\n    \"script.js\": \"console.log('Postman test loaded');\"\n  }\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Single Project",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/projects/default",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "projects",
+                "default"
+              ]
+            },
+            "description": "Loads single project with full file contents."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Project",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/projects/temp_to_delete",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "projects",
+                "temp_to_delete"
+              ]
+            },
+            "description": "Deletes a saved project from PostgreSQL database."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "7. User Profile & Auth",
+      "item": [
+        {
+          "name": "Register User",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "register"
+              ]
+            },
+            "description": "Registers a new user account.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"displayName\": \"Test Developer\",\n  \"username\": \"testdev_postman\",\n  \"password\": \"Password123!\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Login User",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "login"
+              ]
+            },
+            "description": "Authenticates user and sets session cookie.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"testdev_postman\",\n  \"password\": \"Password123!\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get User Profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/user/profile",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "user",
+                "profile"
+              ]
+            },
+            "description": "Returns authenticated user profile information."
+          },
+          "response": []
+        },
+        {
+          "name": "Update User Profile",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/update_profile",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "update_profile"
+              ]
+            },
+            "description": "Updates user display preferences.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"displayName\": \"Lead Engineer\",\n  \"theme\": \"dark\",\n  \"language\": \"en\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get User Settings",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/user/settings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "user",
+                "settings"
+              ]
+            },
+            "description": "Fetches developer settings, keybindings, and AI configurations."
+          },
+          "response": []
+        },
+        {
+          "name": "Update User Settings",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/user/settings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "user",
+                "settings"
+              ]
+            },
+            "description": "Saves user editor configurations.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"theme\": \"dark\",\n  \"fontSize\": 14,\n  \"wordWrap\": true\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get User Subscription Tier",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/user/subscription",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "user",
+                "subscription"
+              ]
+            },
+            "description": "Returns billing tier and compilation / AI quota."
+          },
+          "response": []
+        },
+        {
+          "name": "Upgrade Subscription",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/user/subscription/upgrade",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "user",
+                "subscription",
+                "upgrade"
+              ]
+            },
+            "description": "Upgrades plan to Plus or Pro.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tier\": \"pro\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Cancel Subscription",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/user/subscription/cancel",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "user",
+                "subscription",
+                "cancel"
+              ]
+            },
+            "description": "Cancels active recurring subscription.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Logout User",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/logout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "logout"
+              ]
+            },
+            "description": "Clears session and logs out user."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "8. Plugins, Tasks & Cloud",
+      "item": [
+        {
+          "name": "Get Enabled Plugins",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/plugins",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plugins"
+              ]
+            },
+            "description": "Lists enabled developer plugins (Web Search, Terminal, Git, etc.)."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Plugin State",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/plugins",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plugins"
+              ]
+            },
+            "description": "Enables or disables an IDE plugin.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"plugin_id\": \"web_search\",\n  \"enabled\": true\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Direct Web Search Plugin",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/plugins/web_search",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "plugins",
+                "web_search"
+              ]
+            },
+            "description": "Searches the live web and returns summarized technical results.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"Next.js 15 features\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "AI Image Generation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/generate_image",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "generate_image"
+              ]
+            },
+            "description": "Generates AI asset image from prompt.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prompt\": \"Modern developer terminal glowing in cyber aesthetic\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Generated Images",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/images",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "images"
+              ]
+            },
+            "description": "Returns history of AI generated images."
+          },
+          "response": []
+        },
+        {
+          "name": "List Scheduled Tasks",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/scheduled/tasks",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "scheduled",
+                "tasks"
+              ]
+            },
+            "description": "Returns active recurring cron tasks and timers."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Scheduled Task",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/scheduled/tasks",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "scheduled",
+                "tasks"
+              ]
+            },
+            "description": "Schedules a new automated recurring task.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Daily Code Review\",\n  \"prompt\": \"Review open PRs and check for security issues\",\n  \"cron\": \"0 0 * * *\",\n  \"action\": \"code_review\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Dispatch Push Notification",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/notifications/push",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "notifications",
+                "push"
+              ]
+            },
+            "description": "Sends real-time notification alert.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Build Passed\",\n  \"body\": \"Your project build completed with 0 errors.\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Payment Session (Stripe)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/create_payment_session",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "create_payment_session"
+              ]
+            },
+            "description": "Creates Stripe checkout session.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tier\": \"pro\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Stripe Webhook",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/webhook/stripe",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "webhook",
+                "stripe"
+              ]
+            },
+            "description": "Handles incoming Stripe billing webhook events.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"checkout.session.completed\",\n  \"data\": {}\n}"
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "9. Dev OS & System Views",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "health"
+              ]
+            },
+            "description": "Returns backend server online health status."
+          },
+          "response": []
+        },
+        {
+          "name": "Dev OS System Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/dev_os/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "dev_os",
+                "status"
+              ]
+            },
+            "description": "Returns OS, Python, MongoDB, and AI provider statuses."
+          },
+          "response": []
+        },
+        {
+          "name": "Dev Hub Metrics",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/dev_hub/metrics",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "dev_hub",
+                "metrics"
+              ]
+            },
+            "description": "Returns rate limiter RPM, tokens, and active LLM models."
+          },
+          "response": []
+        },
+        {
+          "name": "Security Layer Logs & Audit",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/security_layer/logs",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "security_layer",
+                "logs"
+              ]
+            },
+            "description": "Returns CORS, ProxyFix, and security audit log."
+          },
+          "response": []
+        },
+        {
+          "name": "Web App Home / Studio View",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": []
+            },
+            "description": "Renders main Phantom DevStudio web interface."
+          },
+          "response": []
+        },
+        {
+          "name": "Dashboard View",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/dashboard",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "dashboard"
+              ]
+            },
+            "description": "Renders Developer Dashboard."
+          },
+          "response": []
+        },
+        {
+          "name": "Dev OS View",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/dev_os",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "dev_os"
+              ]
+            },
+            "description": "Renders Dev OS monitoring view."
+          },
+          "response": []
+        },
+        {
+          "name": "Dev Hub View",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/dev_hub",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "dev_hub"
+              ]
+            },
+            "description": "Renders Dev Hub metrics view."
+          },
+          "response": []
+        },
+        {
+          "name": "Security Layer View",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/security_layer",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "security_layer"
+              ]
+            },
+            "description": "Renders Security Layer view."
+          },
+          "response": []
+        },
+        {
+          "name": "Cloud Storage View",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/cloud",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "cloud"
+              ]
+            },
+            "description": "Renders Cloud Storage explorer view."
+          },
+          "response": []
+        },
+        {
+          "name": "Dev Intelligence View",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/dev_intelligence",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "dev_intelligence"
+              ]
+            },
+            "description": "Renders Dev Intelligence view."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

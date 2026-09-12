@@ -11,6 +11,17 @@ import {
   ImageGenResult,
   TerminalAIAssistResponse,
   PortStatus,
+  GitStatusResult,
+  GitFileChange,
+  DebugVariable,
+  DebugStackFrame,
+  BreakpointItem,
+  DebugSessionState,
+  ProblemDiagnostic,
+  AgentMode,
+  AgentEditChange,
+  ProposedFileEdit,
+  AgentExecutionResult,
 } from '@/types';
 
 const CP1252_MAP: Record<number, number> = {
@@ -362,11 +373,12 @@ export const api = {
     files?: Record<string, string>,
     stdin?: string,
     tabId?: string,
-    confirmed?: boolean
+    confirmed?: boolean,
+    projectId?: string
   ): Promise<CodeExecutionResult> => {
     return request<CodeExecutionResult>('/api/terminal/exec', {
       method: 'POST',
-      body: JSON.stringify({ command, files, stdin, tab_id: tabId, confirmed }),
+      body: JSON.stringify({ command, files, stdin, tab_id: tabId, confirmed, project_id: projectId }),
     });
   },
 
@@ -389,6 +401,157 @@ export const api = {
     return request<TerminalAIAssistResponse>('/api/terminal/ai_assist', {
       method: 'POST',
       body: JSON.stringify(params),
+    });
+  },
+
+  // --- Persistent Workspace & File Sync ---
+  syncWorkspace: async (projectId: string, files: Record<string, any>): Promise<{ success: boolean; workspace_dir: string; files: Record<string, string> }> => {
+    return request<{ success: boolean; workspace_dir: string; files: Record<string, string> }>('/api/workspace/sync', {
+      method: 'POST',
+      body: JSON.stringify({ project_id: projectId, files }),
+    });
+  },
+
+  getWorkspaceFiles: async (projectId: string): Promise<{ success: boolean; workspace_dir: string; files: Record<string, string> }> => {
+    return request<{ success: boolean; workspace_dir: string; files: Record<string, string> }>(`/api/workspace/files?project_id=${encodeURIComponent(projectId)}`);
+  },
+
+  // --- Persistent Shell Terminal Sessions ---
+  terminalSessionCreate: async (
+    projectId: string,
+    tabId: string,
+    shell = 'powershell',
+    files?: Record<string, any>
+  ): Promise<{ success: boolean; session_key: string; cwd: string; is_alive: boolean }> => {
+    return request<{ success: boolean; session_key: string; cwd: string; is_alive: boolean }>('/api/terminal/session/create', {
+      method: 'POST',
+      body: JSON.stringify({ project_id: projectId, tab_id: tabId, shell, files }),
+    });
+  },
+
+  terminalSessionInput: async (
+    projectId: string,
+    tabId: string,
+    input: string,
+    files?: Record<string, any>
+  ): Promise<{ success: boolean; is_alive: boolean }> => {
+    return request<{ success: boolean; is_alive: boolean }>('/api/terminal/session/input', {
+      method: 'POST',
+      body: JSON.stringify({ project_id: projectId, tab_id: tabId, input, files }),
+    });
+  },
+
+  terminalSessionRead: async (
+    projectId: string,
+    tabId: string,
+    sinceId = 0
+  ): Promise<{ success: boolean; entries: Array<{ id: number; text: string; timestamp: string }>; last_id: number; is_alive: boolean }> => {
+    return request<{ success: boolean; entries: Array<{ id: number; text: string; timestamp: string }>; last_id: number; is_alive: boolean }>(
+      `/api/terminal/session/read?project_id=${encodeURIComponent(projectId)}&tab_id=${encodeURIComponent(tabId)}&since_id=${sinceId}`
+    );
+  },
+
+  terminalSessionInterrupt: async (projectId: string, tabId: string): Promise<{ success: boolean; message: string }> => {
+    return request<{ success: boolean; message: string }>('/api/terminal/session/interrupt', {
+      method: 'POST',
+      body: JSON.stringify({ project_id: projectId, tab_id: tabId }),
+    });
+  },
+
+  terminalSessionKill: async (projectId: string, tabId: string): Promise<{ success: boolean; killed: boolean }> => {
+    return request<{ success: boolean; killed: boolean }>('/api/terminal/session/kill', {
+      method: 'POST',
+      body: JSON.stringify({ project_id: projectId, tab_id: tabId }),
+    });
+  },
+
+  // --- Visual Git Controller ---
+  gitStatus: async (projectId: string): Promise<GitStatusResult> => {
+    return request<GitStatusResult>(`/api/git/status?project_id=${encodeURIComponent(projectId)}`);
+  },
+
+  gitInit: async (projectId: string): Promise<{ success: boolean; stdout?: string; stderr?: string }> => {
+    return request<{ success: boolean; stdout?: string; stderr?: string }>('/api/git/init', {
+      method: 'POST',
+      body: JSON.stringify({ project_id: projectId }),
+    });
+  },
+
+  gitStage: async (projectId: string, files: string[] = ['.']): Promise<{ success: boolean; stdout?: string; stderr?: string }> => {
+    return request<{ success: boolean; stdout?: string; stderr?: string }>('/api/git/stage', {
+      method: 'POST',
+      body: JSON.stringify({ project_id: projectId, files }),
+    });
+  },
+
+  gitUnstage: async (projectId: string, files: string[] = ['.']): Promise<{ success: boolean; stdout?: string; stderr?: string }> => {
+    return request<{ success: boolean; stdout?: string; stderr?: string }>('/api/git/unstage', {
+      method: 'POST',
+      body: JSON.stringify({ project_id: projectId, files }),
+    });
+  },
+
+  gitCommit: async (projectId: string, message: string): Promise<{ success: boolean; stdout?: string; stderr?: string }> => {
+    return request<{ success: boolean; stdout?: string; stderr?: string }>('/api/git/commit', {
+      method: 'POST',
+      body: JSON.stringify({ project_id: projectId, message }),
+    });
+  },
+
+  gitPush: async (projectId: string, remote = 'origin', branch = 'main'): Promise<{ success: boolean; stdout?: string; stderr?: string }> => {
+    return request<{ success: boolean; stdout?: string; stderr?: string }>('/api/git/push', {
+      method: 'POST',
+      body: JSON.stringify({ project_id: projectId, remote, branch }),
+    });
+  },
+
+  gitPull: async (projectId: string, remote = 'origin', branch = 'main'): Promise<{ success: boolean; stdout?: string; stderr?: string }> => {
+    return request<{ success: boolean; stdout?: string; stderr?: string }>('/api/git/pull', {
+      method: 'POST',
+      body: JSON.stringify({ project_id: projectId, remote, branch }),
+    });
+  },
+
+  gitDiff: async (projectId: string, file?: string, staged = false): Promise<{ diff: string; stderr?: string; success: boolean }> => {
+    const query = new URLSearchParams({ project_id: projectId });
+    if (file) query.append('file', file);
+    if (staged) query.append('staged', 'true');
+    return request<{ diff: string; stderr?: string; success: boolean }>(`/api/git/diff?${query.toString()}`);
+  },
+
+  // --- Debugger Controller ---
+  debugStart: async (payload: {
+    projectId: string;
+    filename: string;
+    code: string;
+    breakpoints?: Array<{ line: number }>;
+  }): Promise<{ success: boolean; session_id: string; variables: DebugVariable[]; call_stack: DebugStackFrame[]; current_line: number; status: string }> => {
+    return request<any>('/api/debug/start', {
+      method: 'POST',
+      body: JSON.stringify({
+        project_id: payload.projectId,
+        filename: payload.filename,
+        code: payload.code,
+        breakpoints: payload.breakpoints,
+      }),
+    });
+  },
+
+  debugStep: async (sessionId: string, type: 'over' | 'into' | 'out' = 'over'): Promise<{ success: boolean; current_line: number; variables: DebugVariable[]; call_stack: DebugStackFrame[]; status: string }> => {
+    return request<any>('/api/debug/step', {
+      method: 'POST',
+      body: JSON.stringify({ session_id: sessionId, type }),
+    });
+  },
+
+  debugGetVariables: async (sessionId: string): Promise<{ variables: DebugVariable[]; call_stack: DebugStackFrame[]; current_line: number }> => {
+    return request<any>(`/api/debug/variables?session_id=${encodeURIComponent(sessionId)}`);
+  },
+
+  debugStop: async (sessionId: string): Promise<{ success: boolean; message: string }> => {
+    return request<{ success: boolean; message: string }>('/api/debug/stop', {
+      method: 'POST',
+      body: JSON.stringify({ session_id: sessionId }),
     });
   },
 
@@ -453,6 +616,78 @@ export const api = {
         language: 'generic',
         filename: 'source',
       }),
+    });
+  },
+
+  // --- AI Agent File-Editing & Execution Engine ---
+  agentExecute: async (payload: {
+    project_id: string;
+    prompt: string;
+    mode?: AgentMode;
+    active_file?: string;
+    language?: string;
+    diagnostics?: ProblemDiagnostic[];
+    open_files?: string[];
+    current_files?: Record<string, any>;
+    tab_id?: string;
+  }): Promise<AgentExecutionResult> => {
+    return request<AgentExecutionResult>('/api/agent/execute', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  agentApplyEdit: async (
+    projectId: string,
+    path: string,
+    changes: AgentEditChange[],
+    oldTextMatch?: string
+  ): Promise<{ success: boolean; path: string; updated_content?: string; diff?: string; files?: Record<string, string>; error?: string }> => {
+    return request<any>('/api/agent/apply_edit', {
+      method: 'POST',
+      body: JSON.stringify({ project_id: projectId, path, changes, old_text_match: oldTextMatch }),
+    });
+  },
+
+  workspaceReadFile: async (projectId: string, path: string): Promise<{ success: boolean; path: string; content: string; lines: string[]; line_count: number; error?: string }> => {
+    return request<any>('/api/workspace/read_file', {
+      method: 'POST',
+      body: JSON.stringify({ project_id: projectId, path }),
+    });
+  },
+
+  workspaceEditFile: async (projectId: string, path: string, changes: AgentEditChange[], oldTextMatch?: string): Promise<{ success: boolean; path: string; updated_content: string; diff: string; files: Record<string, string>; error?: string }> => {
+    return request<any>('/api/workspace/edit_file', {
+      method: 'POST',
+      body: JSON.stringify({ project_id: projectId, path, changes, old_text_match: oldTextMatch }),
+    });
+  },
+
+  workspaceCreateFile: async (projectId: string, path: string, content: string = ''): Promise<{ success: boolean; path: string; content: string; files: Record<string, string>; error?: string }> => {
+    return request<any>('/api/workspace/create_file', {
+      method: 'POST',
+      body: JSON.stringify({ project_id: projectId, path, content }),
+    });
+  },
+
+  workspaceRenameFile: async (projectId: string, oldPath: string, newPath: string): Promise<{ success: boolean; old_path: string; new_path: string; files: Record<string, string>; error?: string }> => {
+    return request<any>('/api/workspace/rename_file', {
+      method: 'POST',
+      body: JSON.stringify({ project_id: projectId, old_path: oldPath, new_path: newPath }),
+    });
+  },
+
+  workspaceDeleteFile: async (projectId: string, path: string, confirmed = false): Promise<{ success: boolean; path: string; requires_confirmation?: boolean; warning?: string; files?: Record<string, string>; error?: string }> => {
+    return request<any>('/api/workspace/delete_file', {
+      method: 'POST',
+      body: JSON.stringify({ project_id: projectId, path, confirmed }),
+    });
+  },
+
+  workspaceSearchFiles: async (projectId: string, query: string, isRegex = false): Promise<{ success: boolean; matches: Array<{ path: string; line: number; text: string }>; error?: string }> => {
+    return request<any>('/api/workspace/search_files', {
+      method: 'POST',
+      body: JSON.stringify({ project_id: projectId, query, is_regex: isRegex }),
     });
   },
 

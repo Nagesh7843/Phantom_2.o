@@ -451,17 +451,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-zinc-200 hover:text-white hover:bg-zinc-800 text-left transition-colors"
                     >
                       <Settings className="w-3.5 h-3.5 text-zinc-400" />
-                      <span>System Preferences</span>
-                    </button>
-                    <button
-                      onClick={() => {
-                        onOpenPlugins?.();
-                        setShowMoreMenu(false);
-                      }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-zinc-200 hover:text-white hover:bg-zinc-800 text-left transition-colors"
-                    >
-                      <Sparkles className="w-3.5 h-3.5 text-zinc-400" />
-                      <span>AI Subprocess Engine</span>
+                      <span>Preferences</span>
                     </button>
                     <button
                       onClick={() => {
@@ -471,7 +461,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-zinc-200 hover:text-white hover:bg-zinc-800 text-left transition-colors"
                     >
                       <User className="w-3.5 h-3.5 text-zinc-400" />
-                      <span>Subscription & Billing</span>
+                      <span>Account & Plans</span>
                     </button>
                   </div>
                 )}
