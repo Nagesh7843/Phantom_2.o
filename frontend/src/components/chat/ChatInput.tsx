@@ -627,7 +627,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
               {/* Minimal Clean Attachment Dropdown */}
               {showAttachMenu && (
-                <div className="absolute bottom-full left-0 mb-2 w-56 p-1 rounded-xl glass-dropdown border border-zinc-700 shadow-xl z-50 bg-zinc-950/95 backdrop-blur-xl animate-fade-in">
+                <div className="absolute bottom-full left-0 mb-2 w-64 p-1.5 rounded-xl glass-dropdown border border-zinc-700/80 shadow-2xl z-50 bg-zinc-950/95 backdrop-blur-xl animate-fade-in">
+                  <div className="px-2.5 py-1.5 mb-1 border-b border-zinc-800/80">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-semibold text-zinc-200">Multimodal Uploads</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-mono">Chat: Unlimited</span>
+                    </div>
+                  </div>
                   <div className="space-y-0.5">
                     {attachmentOptions.map((opt) => {
                       const Icon = opt.icon;
@@ -643,6 +649,16 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                         </button>
                       );
                     })}
+                  </div>
+                  <div className="mt-1.5 pt-1.5 border-t border-zinc-850/80 px-2.5 py-1 text-[10px] text-zinc-500 space-y-0.5">
+                    <div className="flex justify-between text-zinc-400">
+                      <span>• Guest: 2/day (5MB)</span>
+                      <span>• Free: 10/day (15MB)</span>
+                    </div>
+                    <div className="flex justify-between text-cyan-400/90 font-medium">
+                      <span>• Plus: 100/day (50MB)</span>
+                      <span>• Pro: Unlimited</span>
+                    </div>
                   </div>
                 </div>
               )}

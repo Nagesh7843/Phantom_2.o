@@ -8,6 +8,7 @@ import {
   Sparkles,
   Globe,
   Volume2,
+  VolumeX,
   CreditCard,
   Layers,
   BarChart3,
@@ -34,11 +35,24 @@ import {
   FileText,
   CheckCircle2,
   ArrowUpRight,
+  Play,
+  Square,
+  RotateCcw,
+  Gauge,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { UserSettings, UserProfile, SubscriptionTier, SubscriptionInfo } from '@/types';
 import { PhantomLogo, PhantomIconSvg } from '../common/PhantomLogo';
 import { api } from '@/lib/api';
-import { isMaleVoice, findBestMaleVoice, applyMaleVoiceSettings } from '@/lib/voiceUtils';
+import {
+  isMaleVoice,
+  isFemaleVoice,
+  findBestMaleVoice,
+  findBestFemaleVoice,
+  getCuratedTopVoices,
+  applyVoiceCustomSettings,
+  CuratedVoiceItem,
+} from '@/lib/voiceUtils';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -82,7 +96,7 @@ const SETTINGS_SECTIONS: NavSection[] = [
   { id: 'notifications', label: 'Notifications', icon: Bell, description: 'Notification banners, sounds, and email alerts' },
   { id: 'personalization', label: 'Personalization', icon: Sparkles, description: 'Custom AI instructions, persona, and memory' },
   { id: 'plugins', label: 'Plugins', icon: Globe, description: 'Code sandbox, web browser, and developer extensions' },
-  { id: 'voice', label: 'Voice', icon: Volume2, description: 'Speech synthesis voice persona and auto-read' },
+  { id: 'voice', label: 'Voice & Audio', icon: Volume2, description: 'Curated 5 Male / 5 Female voices, speech rate & pitch' },
   { id: 'billing', label: 'Billing', icon: CreditCard, description: 'Subscription plans, payment methods, and invoices' },
   { id: 'usage', label: 'Usage', icon: Layers, description: 'Token consumption, quotas, and execution compute' },
   { id: 'analytics', label: 'Analytics', icon: BarChart3, description: 'Performance metrics, compilation logs, and latency' },
@@ -119,8 +133,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [language, setLanguage] = useState(settings.language || 'English');
   const [voice, setVoice] = useState(settings.voice || '');
   const [autoSpeak, setAutoSpeak] = useState(settings.autoSpeak || false);
+  const [speechRate, setSpeechRate] = useState<number>(settings.speechRate ?? 1.0);
+  const [speechPitch, setSpeechPitch] = useState<number>(settings.speechPitch ?? 1.0);
+  const [genderTab, setGenderTab] = useState<'male' | 'female'>('male');
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [isPlayingPreview, setIsPlayingPreview] = useState(false);
+
+  // Sync state on open or settings update
+  useEffect(() => {
+    if (isOpen) {
+      setTheme(settings.theme || 'theme-dark');
+      setLanguage(settings.language || 'English');
+      setVoice(settings.voice || '');
+      setAutoSpeak(settings.autoSpeak || false);
+      setSpeechRate(settings.speechRate ?? 1.0);
+      setSpeechPitch(settings.speechPitch ?? 1.0);
+    }
+  }, [isOpen, settings]);
 
   // Extra Mock Settings for complete ChatGPT-like capability
   const [soundEnabled, setSoundEnabled] = useState(true);
@@ -148,20 +177,59 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     }
   }, []);
 
-  const handleTestVoice = () => {
+  // Curated 5 Male / 5 Female voices catalog
+  const curatedCatalog = useMemo(() => {
+    return getCuratedTopVoices(availableVoices, language);
+  }, [availableVoices, language]);
+
+  // Set gender tab to female if current selected voice matches a female persona
+  useEffect(() => {
+    if (voice) {
+      const isFem = curatedCatalog.topFemale.some(
+        (f) => f.name.toLowerCase() === voice.toLowerCase() || f.id === voice || f.voiceName === voice
+      );
+      if (isFem) {
+        setGenderTab('female');
+      }
+    }
+  }, [voice, curatedCatalog]);
+
+  const handleTestVoice = (customVoiceName?: string, customRate?: number, customPitch?: number) => {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
     try {
       window.speechSynthesis.cancel();
       setIsPlayingPreview(true);
-      const sampleText = "Hello! I am Phantom AI, configured with natural male voice synthesis.";
+
+      const targetVoice = customVoiceName !== undefined ? customVoiceName : voice;
+      const targetRate = customRate !== undefined ? customRate : speechRate;
+      const targetPitch = customPitch !== undefined ? customPitch : speechPitch;
+
+      const personaLabel = targetVoice ? targetVoice : (genderTab === 'female' ? 'Nova Female' : 'Orion Male');
+      const sampleText = `Hello! I am Phantom AI, configured with ${personaLabel} voice synthesis at ${targetRate.toFixed(2)}x speed.`;
+      
       const utterance = new SpeechSynthesisUtterance(sampleText);
-      applyMaleVoiceSettings(utterance, availableVoices, voice, language);
+      applyVoiceCustomSettings(utterance, availableVoices, targetVoice, language, targetRate, targetPitch);
+      
       utterance.onend = () => setIsPlayingPreview(false);
       utterance.onerror = () => setIsPlayingPreview(false);
       window.speechSynthesis.speak(utterance);
     } catch {
       setIsPlayingPreview(false);
     }
+  };
+
+  const handleStopPreview = () => {
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+    setIsPlayingPreview(false);
+  };
+
+  const handleResetVoiceDefaults = () => {
+    setVoice('');
+    setSpeechRate(1.0);
+    setSpeechPitch(1.0);
+    handleStopPreview();
   };
 
   // Fetch subscription info from backend
@@ -229,11 +297,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   if (!isOpen) return null;
 
   const handleSave = () => {
+    handleStopPreview();
     onSaveSettings({
       theme,
       language,
       voice,
       autoSpeak,
+      speechRate,
+      speechPitch,
     });
     onClose();
   };
@@ -455,64 +526,274 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
             {/* 5. VOICE & SPEECH */}
             {activeSection === 'voice' && (
-              <div className="space-y-4">
+              <div className="space-y-6">
+                {/* Auto-Read Toggle */}
                 <div className="flex items-center justify-between p-3.5 rounded-2xl bg-zinc-900/60 border border-zinc-800">
                   <div>
                     <span className="text-xs font-bold text-zinc-200">Auto-Read AI Answers</span>
-                    <p className="text-[11px] text-zinc-400">Automatically speak text answers upon generation</p>
+                    <p className="text-[11px] text-zinc-400">Automatically synthesize and speak text answers upon generation</p>
                   </div>
                   <input
                     type="checkbox"
                     checked={autoSpeak}
                     onChange={(e) => setAutoSpeak(e.target.checked)}
-                    className="w-4 h-4 accent-white"
+                    className="w-4 h-4 accent-white cursor-pointer"
                   />
                 </div>
 
-                <div className="p-3.5 rounded-2xl bg-zinc-900/60 border border-zinc-800 space-y-3">
-                  <div className="flex items-center justify-between">
+                {/* Curated Top 5 Male / Female Voice Selector */}
+                <div className="p-4 rounded-2xl bg-zinc-900/60 border border-zinc-800 space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <div>
-                      <span className="text-xs font-bold text-zinc-200">Voice Synthesis Model</span>
-                      <p className="text-[11px] text-zinc-400">Default voice is configured to high-clarity natural Male voice</p>
+                      <div className="flex items-center gap-2">
+                        <Volume2 className="w-4 h-4 text-white" />
+                        <span className="text-xs font-bold text-zinc-100 uppercase tracking-wide">
+                          Curated Voice Engine (Top 5 Male & 5 Female)
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-zinc-400 mt-0.5">
+                        Selected: <strong className="text-white font-mono">{voice ? voice : (genderTab === 'male' ? 'Orion (Default Male)' : 'Nova (Default Female)')}</strong>
+                      </p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={handleTestVoice}
-                      disabled={isPlayingPreview}
-                      className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-xs text-white font-medium flex items-center gap-1.5 transition-all disabled:opacity-50"
-                    >
-                      <Volume2 className={`w-3.5 h-3.5 ${isPlayingPreview ? 'animate-pulse text-cyan-400' : 'text-zinc-300'}`} />
-                      <span>{isPlayingPreview ? 'Playing...' : 'Test Voice'}</span>
-                    </button>
+
+                    {/* Gender Segmented Tab Switcher */}
+                    <div className="flex items-center p-1 bg-zinc-950 border border-zinc-800 rounded-xl">
+                      <button
+                        type="button"
+                        onClick={() => setGenderTab('male')}
+                        className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                          genderTab === 'male'
+                            ? 'bg-zinc-800 text-white shadow-mono-subtle border border-zinc-700'
+                            : 'text-zinc-400 hover:text-zinc-200'
+                        }`}
+                      >
+                        <span>♂</span>
+                        <span>Top 5 Male</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setGenderTab('female')}
+                        className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                          genderTab === 'female'
+                            ? 'bg-zinc-800 text-white shadow-mono-subtle border border-zinc-700'
+                            : 'text-zinc-400 hover:text-zinc-200'
+                        }`}
+                      >
+                        <span>♀</span>
+                        <span>Top 5 Female</span>
+                      </button>
+                    </div>
                   </div>
 
-                  {availableVoices.length > 0 ? (
-                    <select
-                      value={voice}
-                      onChange={(e) => setVoice(e.target.value)}
-                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-zinc-600 font-sans"
+                  {/* 5 Curated Voice Cards */}
+                  <div className="grid grid-cols-1 gap-2.5">
+                    {(genderTab === 'male' ? curatedCatalog.topMale : curatedCatalog.topFemale).map((item) => {
+                      const isSelected =
+                        voice === item.name ||
+                        voice === item.id ||
+                        (!voice && genderTab === 'male' && item.id === 'male-1') ||
+                        (!voice && genderTab === 'female' && item.id === 'female-1');
+
+                      return (
+                        <div
+                          key={item.id}
+                          onClick={() => setVoice(item.name)}
+                          className={`p-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
+                            isSelected
+                              ? 'bg-zinc-900 border-white text-white ring-1 ring-white/50 shadow-mono-glow'
+                              : 'bg-zinc-950/60 border-zinc-800/80 text-zinc-300 hover:border-zinc-700 hover:bg-zinc-900/40'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            {/* Radio indicator */}
+                            <div
+                              className={`w-4 h-4 rounded-full border flex items-center justify-center flex-shrink-0 transition-all ${
+                                isSelected ? 'border-white bg-white' : 'border-zinc-600 bg-zinc-900'
+                              }`}
+                            >
+                              {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-black" />}
+                            </div>
+
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-xs font-bold text-white tracking-wide">
+                                  {genderTab === 'male' ? '♂' : '♀'} {item.name}
+                                </span>
+                                <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-zinc-800 text-zinc-300 border border-zinc-700">
+                                  {item.accent}
+                                </span>
+                                <span
+                                  className={`text-[9px] font-mono px-1.5 py-0.2 rounded font-semibold ${
+                                    item.badge === 'Natural Neural'
+                                      ? 'bg-cyan-950 text-cyan-300 border border-cyan-800'
+                                      : item.badge === 'Studio HD'
+                                      ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
+                                      : 'bg-zinc-800 text-zinc-400 border border-zinc-700'
+                                  }`}
+                                >
+                                  {item.badge}
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-zinc-400 truncate mt-0.5">{item.persona}</p>
+                            </div>
+                          </div>
+
+                          {/* Quick Audition Button */}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setVoice(item.name);
+                              handleTestVoice(item.name);
+                            }}
+                            className="px-2.5 py-1 rounded-lg bg-zinc-850 hover:bg-zinc-750 border border-zinc-700 text-[11px] text-zinc-200 hover:text-white flex items-center gap-1 flex-shrink-0 transition-colors"
+                            title={`Audition ${item.name}`}
+                          >
+                            <Play className="w-3 h-3 text-cyan-400" />
+                            <span>Audition</span>
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Speech Rate & Pitch Customization Controls */}
+                <div className="p-4 rounded-2xl bg-zinc-900/60 border border-zinc-800 space-y-5">
+                  <div className="flex items-center gap-2">
+                    <SlidersHorizontal className="w-4 h-4 text-white" />
+                    <span className="text-xs font-bold text-zinc-100 uppercase tracking-wide">
+                      Acoustic & Modulation Controls
+                    </span>
+                  </div>
+
+                  {/* 1. Speech Rate (Speed) Slider */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-1.5">
+                        <Gauge className="w-3.5 h-3.5 text-zinc-400" />
+                        <span className="font-semibold text-zinc-200">Speech Rate (Speed)</span>
+                      </div>
+                      <span className="font-mono font-bold text-white text-xs bg-zinc-950 px-2 py-0.5 rounded border border-zinc-800">
+                        {speechRate.toFixed(2)}x {speechRate === 1.0 ? '(Normal)' : speechRate < 1.0 ? '(Relaxed)' : '(Fast)'}
+                      </span>
+                    </div>
+
+                    <input
+                      type="range"
+                      min="0.5"
+                      max="2.0"
+                      step="0.05"
+                      value={speechRate}
+                      onChange={(e) => setSpeechRate(parseFloat(e.target.value))}
+                      className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-white"
+                    />
+
+                    {/* Speed Presets */}
+                    <div className="flex items-center gap-1.5 pt-1">
+                      <span className="text-[10px] text-zinc-500 font-mono">Presets:</span>
+                      {[
+                        { label: '0.8x Relaxed', val: 0.8 },
+                        { label: '1.0x Normal', val: 1.0 },
+                        { label: '1.25x Dynamic', val: 1.25 },
+                        { label: '1.5x Turbo', val: 1.5 },
+                      ].map((p) => (
+                        <button
+                          key={p.label}
+                          type="button"
+                          onClick={() => setSpeechRate(p.val)}
+                          className={`px-2 py-0.5 rounded text-[10px] font-mono transition-colors border ${
+                            Math.abs(speechRate - p.val) < 0.02
+                              ? 'bg-zinc-800 text-white border-zinc-600 font-bold'
+                              : 'bg-zinc-950 text-zinc-400 border-zinc-800 hover:text-zinc-200'
+                          }`}
+                        >
+                          {p.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* 2. Voice Pitch Slider */}
+                  <div className="space-y-2 pt-2 border-t border-zinc-800">
+                    <div className="flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-1.5">
+                        <Sliders className="w-3.5 h-3.5 text-zinc-400" />
+                        <span className="font-semibold text-zinc-200">Voice Pitch (Tone)</span>
+                      </div>
+                      <span className="font-mono font-bold text-white text-xs bg-zinc-950 px-2 py-0.5 rounded border border-zinc-800">
+                        {speechPitch.toFixed(2)}{' '}
+                        {speechPitch === 1.0 ? '(Balanced)' : speechPitch < 1.0 ? '(Deeper Tone)' : '(Higher Tone)'}
+                      </span>
+                    </div>
+
+                    <input
+                      type="range"
+                      min="0.5"
+                      max="1.5"
+                      step="0.05"
+                      value={speechPitch}
+                      onChange={(e) => setSpeechPitch(parseFloat(e.target.value))}
+                      className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-white"
+                    />
+
+                    {/* Pitch Presets */}
+                    <div className="flex items-center gap-1.5 pt-1">
+                      <span className="text-[10px] text-zinc-500 font-mono">Presets:</span>
+                      {[
+                        { label: '0.85 Deep Bass', val: 0.85 },
+                        { label: '1.00 Balanced', val: 1.0 },
+                        { label: '1.15 Bright Studio', val: 1.15 },
+                      ].map((p) => (
+                        <button
+                          key={p.label}
+                          type="button"
+                          onClick={() => setSpeechPitch(p.val)}
+                          className={`px-2 py-0.5 rounded text-[10px] font-mono transition-colors border ${
+                            Math.abs(speechPitch - p.val) < 0.02
+                              ? 'bg-zinc-800 text-white border-zinc-600 font-bold'
+                              : 'bg-zinc-950 text-zinc-400 border-zinc-800 hover:text-zinc-200'
+                          }`}
+                        >
+                          {p.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Audio Test and Reset Action Controls */}
+                  <div className="pt-3 border-t border-zinc-800 flex items-center justify-between flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={handleResetVoiceDefaults}
+                      className="px-3 py-1.5 rounded-xl bg-zinc-950 hover:bg-zinc-900 border border-zinc-800 text-xs text-zinc-400 hover:text-white flex items-center gap-1.5 transition-colors font-medium"
                     >
-                      <option value="">Default Male Voice (Phantom Natural Male)</option>
-                      {/* Sort: Male voices first, then others */}
-                      {[...availableVoices]
-                        .sort((a, b) => {
-                          const aMale = isMaleVoice(a) ? 1 : 0;
-                          const bMale = isMaleVoice(b) ? 1 : 0;
-                          return bMale - aMale;
-                        })
-                        .map((v) => {
-                          const male = isMaleVoice(v);
-                          return (
-                            <option key={v.name} value={v.name}>
-                              {male ? '♂ [Male] ' : '♀ [Voice] '}
-                              {v.name} ({v.lang})
-                            </option>
-                          );
-                        })}
-                    </select>
-                  ) : (
-                    <p className="text-xs text-zinc-500 italic">No system synthesis voices detected in browser.</p>
-                  )}
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      <span>Reset to Defaults</span>
+                    </button>
+
+                    <div className="flex items-center gap-2">
+                      {isPlayingPreview ? (
+                        <button
+                          type="button"
+                          onClick={handleStopPreview}
+                          className="px-4 py-1.5 rounded-xl bg-rose-900/80 hover:bg-rose-800 border border-rose-700 text-xs text-rose-100 font-bold flex items-center gap-1.5 transition-all"
+                        >
+                          <Square className="w-3.5 h-3.5 fill-current" />
+                          <span>Stop Audio</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleTestVoice()}
+                          className="px-4 py-1.5 rounded-xl bg-white hover:bg-zinc-200 border border-white text-xs text-black font-bold flex items-center gap-1.5 shadow-mono-glow transition-all active:scale-95"
+                        >
+                          <Play className="w-3.5 h-3.5 fill-current" />
+                          <span>Test Voice Preview</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
@@ -568,20 +849,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
                         <div className="space-y-1.5 pt-2 border-t border-zinc-800 text-xs text-zinc-300">
                           <div className="flex items-center gap-2">
+                            <Check className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                            <span><strong className="text-white">Unlimited</strong> AI chat & prompt refinement</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Check className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                            <span><strong className="text-white">Full Refine Engine</strong> & search grounding</span>
+                          </div>
+                          <div className="flex items-center gap-2">
                             <Check className="w-3.5 h-3.5 text-zinc-400 flex-shrink-0" />
-                            <span><strong>20</strong> AI chat messages / day</span>
+                            <span><strong>10</strong> image & document uploads / day</span>
                           </div>
                           <div className="flex items-center gap-2">
                             <Check className="w-3.5 h-3.5 text-zinc-400 flex-shrink-0" />
                             <span><strong>10</strong> code compilations / day</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Check className="w-3.5 h-3.5 text-zinc-400 flex-shrink-0" />
-                            <span>Phantom Basic / Core model</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Check className="w-3.5 h-3.5 text-zinc-400 flex-shrink-0" />
-                            <span>Local storage engine</span>
                           </div>
                         </div>
                       </div>
@@ -625,25 +906,25 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
                         <div>
                           <div className="text-2xl font-black text-white">$20 <span className="text-xs font-normal text-zinc-400">/ mo</span></div>
-                          <p className="text-[11px] text-zinc-400">Enhanced power for active developers</p>
+                          <p className="text-[11px] text-zinc-400">Accelerated speed and higher multimodal quotas</p>
                         </div>
 
                         <div className="space-y-1.5 pt-2 border-t border-zinc-800 text-xs text-zinc-300">
                           <div className="flex items-center gap-2">
+                            <Check className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                            <span><strong className="text-white">Unlimited</strong> AI chat across models</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Check className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                            <span><strong className="text-white">Turbo Refine Engine</strong> priority</span>
+                          </div>
+                          <div className="flex items-center gap-2">
                             <Check className="w-3.5 h-3.5 text-white flex-shrink-0" />
-                            <span><strong>500</strong> AI chat messages / day</span>
+                            <span><strong>100</strong> high-speed attachments / day (50MB)</span>
                           </div>
                           <div className="flex items-center gap-2">
                             <Check className="w-3.5 h-3.5 text-white flex-shrink-0" />
                             <span><strong>100</strong> high-speed compilations / day</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Check className="w-3.5 h-3.5 text-white flex-shrink-0" />
-                            <span>Phantom Turbo & Sonnet 3.5</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Check className="w-3.5 h-3.5 text-white flex-shrink-0" />
-                            <span>PostgreSQL cloud sync & history</span>
                           </div>
                         </div>
                       </div>
@@ -690,25 +971,25 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
                         <div>
                           <div className="text-2xl font-black text-white">$50 <span className="text-xs font-normal text-zinc-400">/ mo</span></div>
-                          <p className="text-[11px] text-zinc-400">Full unlimited access to every AI model & compiler</p>
+                          <p className="text-[11px] text-zinc-400">Full unlimited access to every AI model, attachment & compiler</p>
                         </div>
 
                         <div className="space-y-1.5 pt-2 border-t border-zinc-800 text-xs text-zinc-200">
                           <div className="flex items-center gap-2">
+                            <Check className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                            <span><strong className="text-white">Unlimited</strong> AI chat & reasoning</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Check className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                            <span><strong className="text-white">Ultra Refine Engine</strong> with web grounding</span>
+                          </div>
+                          <div className="flex items-center gap-2">
                             <Check className="w-3.5 h-3.5 text-white flex-shrink-0" />
-                            <span><strong>Unlimited</strong> AI messages & reasoning</span>
+                            <span><strong className="text-white">Unlimited</strong> multimodal uploads (100MB, 4K)</span>
                           </div>
                           <div className="flex items-center gap-2">
                             <Check className="w-3.5 h-3.5 text-white flex-shrink-0" />
                             <span><strong>Unlimited</strong> 30+ language code execution</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Check className="w-3.5 h-3.5 text-white flex-shrink-0" />
-                            <span>Claude 3.5 Sonnet & GPT-4o Omnimodal</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Check className="w-3.5 h-3.5 text-white flex-shrink-0" />
-                            <span>Unlimited 4K UHD Image Studio</span>
                           </div>
                           <div className="flex items-center gap-2">
                             <Check className="w-3.5 h-3.5 text-white flex-shrink-0" />
@@ -741,29 +1022,45 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     <span className="text-[11px] font-mono text-zinc-400">Resets daily at 00:00 UTC</span>
                   </div>
 
-                  <div className="space-y-2.5">
-                    {/* AI Messages Meter */}
+                  <div className="space-y-3">
+                    {/* AI Messages & Refine Engine Meter */}
                     <div className="space-y-1">
                       <div className="flex items-center justify-between text-xs">
-                        <span className="text-zinc-400">AI Chat Messages</span>
+                        <span className="text-zinc-400 flex items-center gap-1.5">
+                          <span>AI Chat & Refine Engine</span>
+                          <span className="px-1.5 py-0.2 rounded text-[10px] bg-emerald-950 text-emerald-400 border border-emerald-800/60 font-semibold">Unlimited</span>
+                        </span>
+                        <span className="font-mono text-emerald-400 font-semibold text-xs">
+                          Unlimited across all models
+                        </span>
+                      </div>
+                      <div className="w-full bg-zinc-800 h-1.5 rounded-full overflow-hidden">
+                        <div className="bg-emerald-500 h-full w-full" />
+                      </div>
+                    </div>
+
+                    {/* Multimodal Attachments Meter */}
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-zinc-400">Image & Document Attachments</span>
                         <span className="font-mono text-zinc-200">
                           {currentTier === 'pro'
-                            ? 'Unlimited'
+                            ? 'Unlimited (up to 100MB)'
                             : currentTier === 'plus'
-                            ? `${subData?.usage?.messages_today || 12} / 500 used`
-                            : `${subData?.usage?.messages_today || 8} / 20 used`}
+                            ? `${subData?.usage?.attachments_today || 0} / 100 used`
+                            : `${subData?.usage?.attachments_today || 0} / 10 used`}
                         </span>
                       </div>
                       <div className="w-full bg-zinc-800 h-1.5 rounded-full overflow-hidden">
                         <div
-                          className="bg-white h-full transition-all"
+                          className="bg-cyan-400 h-full transition-all"
                           style={{
                             width:
                               currentTier === 'pro'
                                 ? '100%'
                                 : currentTier === 'plus'
-                                ? `${Math.min(100, ((subData?.usage?.messages_today || 12) / 500) * 100)}%`
-                                : `${Math.min(100, ((subData?.usage?.messages_today || 8) / 20) * 100)}%`,
+                                ? `${Math.min(100, (((subData?.usage?.attachments_today || 0) / 100) * 100))}%`
+                                : `${Math.min(100, (((subData?.usage?.attachments_today || 0) / 10) * 100))}%`,
                           }}
                         />
                       </div>
@@ -777,8 +1074,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           {currentTier === 'pro'
                             ? 'Unlimited (30+ languages)'
                             : currentTier === 'plus'
-                            ? `${subData?.usage?.compilations_today || 14} / 100 used`
-                            : `${subData?.usage?.compilations_today || 3} / 10 used`}
+                            ? `${subData?.usage?.compilations_today || 0} / 100 used`
+                            : `${subData?.usage?.compilations_today || 0} / 10 used`}
                         </span>
                       </div>
                       <div className="w-full bg-zinc-800 h-1.5 rounded-full overflow-hidden">
@@ -789,8 +1086,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                               currentTier === 'pro'
                                 ? '100%'
                                 : currentTier === 'plus'
-                                ? `${Math.min(100, ((subData?.usage?.compilations_today || 14) / 100) * 100)}%`
-                                : `${Math.min(100, ((subData?.usage?.compilations_today || 3) / 10) * 100)}%`,
+                                ? `${Math.min(100, (((subData?.usage?.compilations_today || 0) / 100) * 100))}%`
+                                : `${Math.min(100, (((subData?.usage?.compilations_today || 0) / 10) * 100))}%`,
                           }}
                         />
                       </div>

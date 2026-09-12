@@ -16,7 +16,7 @@ import { PluginsModal } from '@/components/modals/PluginsModal';
 import { VoiceChatModal } from '@/components/modals/VoiceChatModal';
 import { PhantomIconSvg, SidebarExpandIconSvg } from '@/components/common/PhantomLogo';
 import { api } from '@/lib/api';
-import { applyMaleVoiceSettings, cleanTextForSpeech } from '@/lib/voiceUtils';
+import { applyVoiceCustomSettings, applyMaleVoiceSettings, cleanTextForSpeech, splitTextIntoSpeechChunks } from '@/lib/voiceUtils';
 import { ChatMessage, ChatSession, UserProfile, UserSettings } from '@/types';
 import { ArrowLeft, Home as HomeIcon, User } from 'lucide-react';
 
@@ -143,7 +143,14 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ onNavigateHome }) =>
         if (profile?.authenticated) {
           loadAllSessions(profile);
         } else {
+          // Vanish Mode: Wipe all ephemeral storage on refresh for guest users
+          try {
+            sessionStorage.clear();
+          } catch {}
           setSessions([]);
+          setMessages([]);
+          const freshGuestId = 'guest_' + Date.now();
+          setActiveSessionId(freshGuestId);
         }
       } catch (err) {
         console.warn('Profile fetch note:', err);
@@ -151,6 +158,19 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ onNavigateHome }) =>
     };
     loadProfile();
   }, []);
+
+  // Vanish Mode: Purge ephemeral storage on page unload/refresh for guests
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (!userProfile?.authenticated) {
+        try {
+          sessionStorage.clear();
+        } catch {}
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [userProfile?.authenticated]);
 
   const loadAllSessions = async (profileOverride?: UserProfile | null) => {
     const isAuth = profileOverride !== undefined ? profileOverride?.authenticated : userProfile?.authenticated;
@@ -485,60 +505,103 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ onNavigateHome }) =>
     );
   };
 
-  // Text-To-Speech (TTS)
+  // Text-To-Speech (TTS) with Seamless Long Document Chunk Queueing
   const activeTtsUtterance = useRef<SpeechSynthesisUtterance | null>(null);
   const ttsResumeTimer = useRef<any>(null);
+  const ttsChunksQueue = useRef<string[]>([]);
+  const isSpeakingQueue = useRef<boolean>(false);
+  const activeSpeakingText = useRef<string>('');
+
+  const stopSpeaking = () => {
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+    ttsChunksQueue.current = [];
+    isSpeakingQueue.current = false;
+    activeSpeakingText.current = '';
+    activeTtsUtterance.current = null;
+    if (ttsResumeTimer.current) {
+      clearInterval(ttsResumeTimer.current);
+      ttsResumeTimer.current = null;
+    }
+  };
 
   const handleSpeak = (text: string) => {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
-    try {
-      if (ttsResumeTimer.current) {
-        clearInterval(ttsResumeTimer.current);
-        ttsResumeTimer.current = null;
+    
+    // Toggle off if currently speaking the exact same text
+    if (isSpeakingQueue.current && activeSpeakingText.current === text) {
+      stopSpeaking();
+      return;
+    }
+
+    stopSpeaking();
+
+    if (window.speechSynthesis.paused) {
+      window.speechSynthesis.resume();
+    }
+
+    const chunks = splitTextIntoSpeechChunks(text);
+    if (chunks.length === 0) return;
+
+    ttsChunksQueue.current = [...chunks];
+    isSpeakingQueue.current = true;
+    activeSpeakingText.current = text;
+
+    const voices = window.speechSynthesis.getVoices();
+
+    const speakNextChunk = () => {
+      if (!isSpeakingQueue.current || ttsChunksQueue.current.length === 0) {
+        stopSpeaking();
+        return;
       }
-      window.speechSynthesis.cancel();
-      if (window.speechSynthesis.paused) {
-        window.speechSynthesis.resume();
+
+      const nextText = ttsChunksQueue.current.shift();
+      if (!nextText || !nextText.trim()) {
+        speakNextChunk();
+        return;
       }
 
-      const cleanText = cleanTextForSpeech(text);
-      if (!cleanText) return;
+      try {
+        const utterance = new SpeechSynthesisUtterance(nextText);
+        activeTtsUtterance.current = utterance;
+        applyVoiceCustomSettings(
+          utterance,
+          voices,
+          settings.voice,
+          settings.language || 'en-US',
+          settings.speechRate ?? 1.0,
+          settings.speechPitch ?? 1.0
+        );
 
-      const utterance = new SpeechSynthesisUtterance(cleanText);
-      activeTtsUtterance.current = utterance;
+        utterance.onend = () => {
+          activeTtsUtterance.current = null;
+          speakNextChunk();
+        };
 
-      const voices = window.speechSynthesis.getVoices();
-      applyMaleVoiceSettings(utterance, voices, settings.voice, settings.language || 'en-US');
+        utterance.onerror = (e) => {
+          console.warn('TTS chunk notice:', e);
+          activeTtsUtterance.current = null;
+          speakNextChunk();
+        };
 
-      utterance.onend = () => {
-        activeTtsUtterance.current = null;
-        if (ttsResumeTimer.current) {
-          clearInterval(ttsResumeTimer.current);
-          ttsResumeTimer.current = null;
-        }
-      };
+        window.speechSynthesis.speak(utterance);
+      } catch (err) {
+        console.warn('SpeechSynthesis execution notice:', err);
+        stopSpeaking();
+      }
+    };
 
-      utterance.onerror = (e) => {
-        console.warn('TTS status:', e);
-        activeTtsUtterance.current = null;
-        if (ttsResumeTimer.current) {
-          clearInterval(ttsResumeTimer.current);
-          ttsResumeTimer.current = null;
-        }
-      };
-
-      // Chromium keep-alive pulse for speech synthesis
-      ttsResumeTimer.current = setInterval(() => {
-        if (typeof window !== 'undefined' && 'speechSynthesis' in window && window.speechSynthesis.speaking) {
+    // Chromium keep-alive pulse for long documents
+    ttsResumeTimer.current = setInterval(() => {
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        if (window.speechSynthesis.speaking && window.speechSynthesis.paused) {
           window.speechSynthesis.resume();
         }
-      }, 5000);
+      }
+    }, 4000);
 
-      window.speechSynthesis.speak(utterance);
-    } catch (e) {
-      console.warn('TTS execution error:', e);
-      activeTtsUtterance.current = null;
-    }
+    speakNextChunk();
   };
 
   const handleSendToIDE = (code: string, language: string) => {
@@ -817,6 +880,8 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ onNavigateHome }) =>
         activeSessionId={activeSessionId || undefined}
         userVoice={settings.voice}
         language={settings.language}
+        speechRate={settings.speechRate}
+        speechPitch={settings.speechPitch}
         onSessionUpdated={(sId, sTitle) => {
           if (sId && sId !== activeSessionId) {
             setActiveSessionId(sId);

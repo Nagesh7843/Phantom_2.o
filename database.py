@@ -91,6 +91,7 @@ def init_database():
                         subscription_tier VARCHAR(32) DEFAULT 'pro',
                         messages_today INTEGER DEFAULT 0,
                         compilations_today INTEGER DEFAULT 0,
+                        attachments_today INTEGER DEFAULT 0,
                         last_usage_reset TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                         last_login TIMESTAMP WITH TIME ZONE,
                         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
@@ -99,6 +100,7 @@ def init_database():
                     ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_tier VARCHAR(32) DEFAULT 'pro';
                     ALTER TABLE users ADD COLUMN IF NOT EXISTS messages_today INTEGER DEFAULT 0;
                     ALTER TABLE users ADD COLUMN IF NOT EXISTS compilations_today INTEGER DEFAULT 0;
+                    ALTER TABLE users ADD COLUMN IF NOT EXISTS attachments_today INTEGER DEFAULT 0;
                     ALTER TABLE users ADD COLUMN IF NOT EXISTS last_usage_reset TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP;
                     
                     CREATE TABLE IF NOT EXISTS chat_sessions (
@@ -220,6 +222,7 @@ def init_database():
                     subscription_tier TEXT DEFAULT 'pro',
                     messages_today INTEGER DEFAULT 0,
                     compilations_today INTEGER DEFAULT 0,
+                    attachments_today INTEGER DEFAULT 0,
                     last_usage_reset TEXT,
                     last_login TEXT,
                     created_at TEXT
@@ -258,8 +261,8 @@ def init_database():
                     id TEXT PRIMARY KEY,
                     user_id TEXT NOT NULL,
                     name TEXT NOT NULL,
-                    template TEXT DEFAULT 'web',
-                    files TEXT NOT NULL,
+                    description TEXT DEFAULT '',
+                    file_tree TEXT DEFAULT '[]',
                     created_at TEXT,
                     last_updated TEXT
                 );
@@ -276,12 +279,11 @@ def init_database():
                 CREATE TABLE IF NOT EXISTS scheduled_tasks (
                     id TEXT PRIMARY KEY,
                     user_id TEXT NOT NULL,
-                    name TEXT NOT NULL,
-                    schedule TEXT NOT NULL,
-                    prompt TEXT NOT NULL,
-                    target TEXT DEFAULT 'chat',
-                    active INTEGER DEFAULT 1,
-                    push_enabled INTEGER DEFAULT 1,
+                    task_name TEXT NOT NULL,
+                    cron_schedule TEXT NOT NULL,
+                    ai_instruction TEXT NOT NULL,
+                    action_type TEXT DEFAULT 'reminder',
+                    is_active INTEGER DEFAULT 1,
                     last_run TEXT,
                     next_run TEXT,
                     created_at TEXT
@@ -308,6 +310,7 @@ def init_database():
                 "ALTER TABLE users ADD COLUMN subscription_tier TEXT DEFAULT 'pro';",
                 "ALTER TABLE users ADD COLUMN messages_today INTEGER DEFAULT 0;",
                 "ALTER TABLE users ADD COLUMN compilations_today INTEGER DEFAULT 0;",
+                "ALTER TABLE users ADD COLUMN attachments_today INTEGER DEFAULT 0;",
                 "ALTER TABLE users ADD COLUMN last_usage_reset TEXT;"
             ]:
                 try:
@@ -461,24 +464,49 @@ def update_user_profile(user_id, updates: dict):
 # =========================================================================
 
 SUBSCRIPTION_PLANS = {
+    'guest': {
+        'id': 'guest',
+        'name': 'Phantom Guest (Unregistered)',
+        'price': '$0',
+        'period': 'preview',
+        'badge': 'Guest',
+        'daily_messages': 999999,
+        'daily_compilations': 5,
+        'daily_attachments': 2,
+        'max_attachment_mb': 5,
+        'refine_engine': 'Full Access',
+        'image_generation_daily': 2,
+        'max_image_res': '1024x1024',
+        'cloud_storage': 'Session Only',
+        'speed': 'Standard',
+        'features': [
+            'Unlimited AI chat & prompt refinement',
+            'Full Refine Engine & live search citations',
+            '2 multimodal image/document attachments / day (up to 5MB)',
+            'Instant guest preview without sign-in'
+        ]
+    },
     'free': {
         'id': 'free',
         'name': 'Phantom Free',
         'price': '$0',
         'period': 'forever',
         'badge': 'Starter',
-        'daily_messages': 20,
+        'daily_messages': 999999,
         'daily_compilations': 10,
+        'daily_attachments': 10,
+        'max_attachment_mb': 15,
+        'refine_engine': 'Full Access',
         'image_generation_daily': 5,
         'max_image_res': '1024x1024',
-        'cloud_storage': 'Local Storage',
+        'cloud_storage': 'Local & Cloud Storage',
         'speed': 'Standard',
         'features': [
-            '20 AI chat messages / day',
+            'Unlimited AI chat & prompt refinement',
+            'Full Refine Engine & live search citations',
+            '10 multimodal image & document uploads / day (up to 15MB)',
             '10 code runs & compilations / day',
-            'Core AI model (Phantom Basic / Flash)',
-            'Standard compiler execution speed',
-            'Local history & settings storage'
+            'Local & persistent history sync'
         ]
     },
     'plus': {
@@ -487,16 +515,20 @@ SUBSCRIPTION_PLANS = {
         'price': '$20',
         'period': '/ month',
         'badge': 'Popular',
-        'daily_messages': 500,
+        'daily_messages': 999999,
         'daily_compilations': 100,
+        'daily_attachments': 100,
+        'max_attachment_mb': 50,
+        'refine_engine': 'Turbo Priority',
         'image_generation_daily': 50,
         'max_image_res': '2048x2048',
         'cloud_storage': 'PostgreSQL Cloud Sync',
         'speed': 'Turbo Accelerated',
         'features': [
-            '500 AI chat messages / day',
+            'Unlimited AI chat across all models',
+            '100 high-speed multimodal attachments / day (up to 50MB)',
+            'Turbo Refine Engine & high-speed search synthesis',
             '100 high-speed code compilations / day',
-            'Phantom Turbo & Sonnet fast models',
             'PostgreSQL Cloud database sync',
             'Advanced Dev Studio diagnostics',
             'Priority response queue'
@@ -510,41 +542,54 @@ SUBSCRIPTION_PLANS = {
         'badge': 'Enterprise',
         'daily_messages': 999999,
         'daily_compilations': 999999,
+        'daily_attachments': 999999,
+        'max_attachment_mb': 100,
+        'refine_engine': 'Ultra Zero-Latency',
         'image_generation_daily': 999999,
         'max_image_res': '4096x4096 (4K UHD)',
         'cloud_storage': 'PostgreSQL Dedicated Cloud DB',
         'speed': 'Ultra Zero-Latency',
         'features': [
             'Unlimited AI chat & reasoning models',
+            'Unlimited multimodal attachments & high-res media (up to 100MB)',
+            'Ultra Refine Engine with real-time web grounding',
             'Unlimited multi-language code compilation (30+ langs)',
             'Ultra 4K UHD image generation',
             'Full PostgreSQL Enterprise persistence',
-            'Real-Time Web Search & System Terminal execution',
             '24/7 VIP priority support'
         ]
     }
 }
 
 def get_user_subscription(user_id):
-    user = get_user_by_id(user_id) if user_id else None
-    tier = 'free'
-    messages_today = 0
-    compilations_today = 0
+    is_guest = not user_id or str(user_id).startswith('guest')
+    user = get_user_by_id(user_id) if (user_id and not is_guest) else None
     
-    if user:
+    if is_guest:
+        tier = 'guest'
+        plan = SUBSCRIPTION_PLANS['guest']
+        messages_today = 0
+        compilations_today = 0
+        attachments_today = 0
+    elif user:
         tier = user.get('subscription_tier') or 'pro'
         if tier not in SUBSCRIPTION_PLANS:
             tier = 'pro'
+        plan = SUBSCRIPTION_PLANS.get(tier, SUBSCRIPTION_PLANS['free'])
         messages_today = int(user.get('messages_today') or 0)
         compilations_today = int(user.get('compilations_today') or 0)
+        attachments_today = int(user.get('attachments_today') or 0)
     else:
         tier = 'free'
+        plan = SUBSCRIPTION_PLANS['free']
+        messages_today = 0
+        compilations_today = 0
+        attachments_today = 0
     
-    plan = SUBSCRIPTION_PLANS.get(tier, SUBSCRIPTION_PLANS['free'])
-    invoices = get_user_invoices(user_id) if user_id else []
+    invoices = get_user_invoices(user_id) if (user_id and not is_guest) else []
     
     # If no invoices yet for user, generate initial record
-    if not invoices and user_id:
+    if not invoices and user_id and not is_guest:
         invoices = [{
             "id": "INV-2026-001",
             "plan": plan['name'],
@@ -560,8 +605,13 @@ def get_user_subscription(user_id):
         "usage": {
             "messages_today": messages_today,
             "messages_limit": plan['daily_messages'],
+            "is_messages_unlimited": True,
             "compilations_today": compilations_today,
             "compilations_limit": plan['daily_compilations'],
+            "attachments_today": attachments_today,
+            "attachments_limit": plan['daily_attachments'],
+            "max_attachment_mb": plan['max_attachment_mb'],
+            "refine_engine": plan['refine_engine'],
             "is_unlimited": tier == 'pro'
         },
         "invoices": invoices,
@@ -619,12 +669,42 @@ def get_user_invoices(user_id):
             cur.execute("SELECT id, plan, amount, status, date FROM invoices WHERE user_id = ? ORDER BY date DESC", (user_id,))
             return [dict(r) for r in cur.fetchall()]
 
-def check_and_increment_usage(user_id, usage_type='message'):
-    if not user_id:
-        tier = 'free'
-        limit = SUBSCRIPTION_PLANS['free']['daily_messages'] if usage_type == 'message' else SUBSCRIPTION_PLANS['free']['daily_compilations']
-        return True, 1, limit, tier
-    
+def check_and_increment_usage(user_id, usage_type='message', guest_usage=None):
+    """
+    Checks and increments daily usage for a user or guest.
+    usage_type: 'message' | 'compilation' | 'attachment'
+    guest_usage: optional dict passed from session for guest users, e.g. {'attachments_today': 1}
+    Returns: (is_allowed: bool, current_count: int, limit: int, tier: str)
+    """
+    # 1. AI Chat messages are completely UNLIMITED across all tiers (guest, free, plus, pro)
+    if usage_type == 'message':
+        tier = 'pro'
+        if not user_id or str(user_id).startswith('guest'):
+            tier = 'guest'
+        else:
+            u = get_user_by_id(user_id)
+            tier = (u.get('subscription_tier') if u else 'free') or 'free'
+        return True, 0, 999999, tier
+
+    # 2. Guest User handling
+    is_guest = not user_id or str(user_id).startswith('guest')
+    if is_guest:
+        guest_plan = SUBSCRIPTION_PLANS['guest']
+        if usage_type == 'attachment':
+            limit = guest_plan['daily_attachments']
+            current = (guest_usage.get('attachments_today', 0) if isinstance(guest_usage, dict) else 0)
+            if current >= limit:
+                return False, current, limit, 'guest'
+            return True, current + 1, limit, 'guest'
+        elif usage_type == 'compilation':
+            limit = guest_plan['daily_compilations']
+            current = (guest_usage.get('compilations_today', 0) if isinstance(guest_usage, dict) else 0)
+            if current >= limit:
+                return False, current, limit, 'guest'
+            return True, current + 1, limit, 'guest'
+        return True, 0, 999999, 'guest'
+
+    # 3. Logged-in User handling
     user = get_user_by_id(user_id)
     if not user:
         return True, 1, 999999, 'pro'
@@ -636,9 +716,17 @@ def check_and_increment_usage(user_id, usage_type='message'):
     if tier == 'pro':
         return True, 0, 999999, 'pro'
     
-    plan = SUBSCRIPTION_PLANS[tier]
-    col = 'messages_today' if usage_type == 'message' else 'compilations_today'
-    limit = plan['daily_messages'] if usage_type == 'message' else plan['daily_compilations']
+    plan = SUBSCRIPTION_PLANS.get(tier, SUBSCRIPTION_PLANS['free'])
+    if usage_type == 'attachment':
+        col = 'attachments_today'
+        limit = plan['daily_attachments']
+    elif usage_type == 'compilation':
+        col = 'compilations_today'
+        limit = plan['daily_compilations']
+    else:
+        col = 'messages_today'
+        limit = plan['daily_messages']
+        
     current = int(user.get(col) or 0)
     
     if current >= limit:

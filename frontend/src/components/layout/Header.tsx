@@ -145,13 +145,22 @@ export const Header: React.FC<HeaderProps> = ({
             )}
           </button>
         ) : (
-          <button
-            onClick={onOpenAuth}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white hover:bg-zinc-200 text-black font-semibold text-xs transition-all shadow-mono-glow"
-          >
-            <User className="w-3.5 h-3.5 text-black" />
-            <span>Sign In</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <div
+              className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-zinc-900/90 border border-amber-500/30 text-[11px] text-zinc-300 shadow-sm"
+              title="Vanish Mode Active: Your conversation is ephemeral and automatically vanishes when you refresh the page."
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+              <span className="font-mono text-amber-300 font-medium">Vanish Mode</span>
+            </div>
+            <button
+              onClick={onOpenAuth}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white hover:bg-zinc-200 text-black font-semibold text-xs transition-all shadow-mono-glow"
+            >
+              <User className="w-3.5 h-3.5 text-black" />
+              <span>Sign In</span>
+            </button>
+          </div>
         )}
       </div>
     </header>

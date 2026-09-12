@@ -37,7 +37,7 @@ export interface ChatSession {
   created_at?: string;
 }
 
-export type SubscriptionTier = 'free' | 'plus' | 'pro';
+export type SubscriptionTier = 'guest' | 'free' | 'plus' | 'pro';
 
 export interface PlanDetail {
   id: SubscriptionTier;
@@ -47,6 +47,9 @@ export interface PlanDetail {
   badge: string;
   daily_messages: number;
   daily_compilations: number;
+  daily_attachments: number;
+  max_attachment_mb: number;
+  refine_engine?: string;
   image_generation_daily: number;
   max_image_res: string;
   cloud_storage: string;
@@ -65,12 +68,17 @@ export interface InvoiceItem {
 export interface SubscriptionInfo {
   tier: SubscriptionTier;
   plan: PlanDetail;
-  all_plans: Record<SubscriptionTier, PlanDetail>;
+  all_plans: Record<string, PlanDetail>;
   usage: {
     messages_today: number;
     messages_limit: number;
+    is_messages_unlimited?: boolean;
     compilations_today: number;
     compilations_limit: number;
+    attachments_today: number;
+    attachments_limit: number;
+    max_attachment_mb?: number;
+    refine_engine?: string;
     is_unlimited: boolean;
   };
   invoices: InvoiceItem[];
@@ -95,6 +103,8 @@ export interface UserSettings {
   language: string;
   voice: string;
   autoSpeak?: boolean;
+  speechRate?: number;
+  speechPitch?: number;
 }
 
 export interface SystemStatus {

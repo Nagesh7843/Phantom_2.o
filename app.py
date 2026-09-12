@@ -1253,7 +1253,8 @@ def user_settings_api():
 def get_all_sessions():
     user_id = get_current_user_id()
     if not user_id:
-        user_id = session.get('guest_id', 'guest_default')
+        # Vanish Mode: Guest users have purely ephemeral sessions that vanish on page refresh
+        return jsonify({"sessions": [], "vanish_mode": True}), 200
 
     all_sessions = []
     try:
@@ -1276,7 +1277,7 @@ def get_all_sessions():
                     "last_updated": last_up.isoformat() if hasattr(last_up, 'isoformat') else str(last_up)
                 })
         
-        return jsonify({"sessions": all_sessions}), 200
+        return jsonify({"sessions": all_sessions, "vanish_mode": False}), 200
     except Exception as element:
         app.logger.error(f"Error fetching all sessions: {element}", exc_info=True)
         return jsonify({"error": "Failed to load chat history."}), 500
@@ -1286,10 +1287,10 @@ def get_all_sessions():
 def new_chat_session_api():
     user_id = get_current_user_id()
     if not user_id:
-        user_id = session.get('guest_id')
-        if not user_id:
-            user_id = "guest_" + str(ObjectId())
-            session['guest_id'] = user_id
+        user_id = "guest_" + str(ObjectId())
+        session['guest_id'] = user_id
+        session['current_chat_session_id'] = user_id
+        return jsonify({"message": "New ephemeral guest session created", "session_id": user_id, "vanish_mode": True}), 200
 
     new_session_id = str(ObjectId())
     
@@ -1307,7 +1308,7 @@ def new_chat_session_api():
         chat_sessions_collection.insert_one(chat_session_data)
 
     session['current_chat_session_id'] = new_session_id
-    return jsonify({"message": "New chat session created", "session_id": new_session_id}), 200
+    return jsonify({"message": "New chat session created", "session_id": new_session_id, "vanish_mode": False}), 200
 
 # --- STREAMING CHAT API (Server-Sent Events) ---
 @app.route('/api/chat/stream', methods=['POST'])
@@ -1316,7 +1317,8 @@ def chat_stream_api():
         return jsonify({"error": "Server: API key not configured on backend."}), 500
 
     user_id = get_current_user_id()
-    if not user_id:
+    is_guest = not user_id
+    if is_guest:
         user_id = session.get('guest_id')
         if not user_id:
             user_id = "guest_" + str(ObjectId())
@@ -1327,24 +1329,25 @@ def chat_stream_api():
 
     if not current_session_id:
         new_session_id = str(ObjectId())
-        if db_layer:
-            db_layer.create_session(new_session_id, user_id, "New Chat Session")
-        if chat_sessions_collection is not None:
-            chat_session_data = {
-                "_id": ObjectId(new_session_id),
-                "user_id": user_id,
-                "created_at": datetime.now(timezone.utc),
-                "last_updated": datetime.now(timezone.utc),
-                "title": "New Chat Session"
-            }
-            try:
-                chat_sessions_collection.insert_one(chat_session_data)
-            except Exception:
-                pass
+        if not is_guest:
+            if db_layer:
+                db_layer.create_session(new_session_id, user_id, "New Chat Session")
+            if chat_sessions_collection is not None:
+                chat_session_data = {
+                    "_id": ObjectId(new_session_id),
+                    "user_id": user_id,
+                    "created_at": datetime.now(timezone.utc),
+                    "last_updated": datetime.now(timezone.utc),
+                    "title": "New Chat Session"
+                }
+                try:
+                    chat_sessions_collection.insert_one(chat_session_data)
+                except Exception:
+                    pass
         session['current_chat_session_id'] = new_session_id
         current_session_id = new_session_id
     else:
-        if chat_sessions_collection is not None:
+        if not is_guest and chat_sessions_collection is not None:
             try:
                 session_doc = verify_session_ownership(current_session_id, user_id)
                 if session_doc and '_id' in session_doc:
@@ -1363,13 +1366,50 @@ def chat_stream_api():
         for msg in pruned_contents if isinstance(msg, dict) and 'role' in msg and 'parts' in msg
     ]
 
+    # Multimodal attachment check & tier quota enforcement
+    has_attachment = False
+    if messages_for_gemini and messages_for_gemini[-1]['role'] == 'user':
+        for part in messages_for_gemini[-1].get('parts', []):
+            if isinstance(part, dict):
+                if 'inlineData' in part:
+                    has_attachment = True
+                    break
+                if 'text' in part and str(part['text']).startswith('[Attached File:'):
+                    has_attachment = True
+                    break
+
+    if has_attachment:
+        today_str = datetime.now(timezone.utc).strftime('%Y-%m-%d')
+        if session.get('guest_usage_date') != today_str:
+            session['guest_usage_date'] = today_str
+            session['guest_attachments_today'] = 0
+            
+        guest_usage = {'attachments_today': session.get('guest_attachments_today', 0)}
+        allowed, current_count, limit, tier = db_layer.check_and_increment_usage(
+            user_id, usage_type='attachment', guest_usage=guest_usage
+        ) if db_layer else (True, 0, 999999, 'pro')
+
+        if not allowed:
+            if tier == 'guest':
+                limit_msg = f"⚠️ Guest upload quota reached ({limit}/{limit} attachments today). Please sign in for a free account (10 uploads/day) or upgrade to Plus/Pro for higher limits!"
+            else:
+                limit_msg = f"⚠️ Daily attachment quota reached ({limit}/{limit} uploads today for {tier.capitalize()} plan). Upgrade your plan in Settings > Billing to unlock more uploads!"
+                
+            def quota_exceeded_stream():
+                yield f"data: {json.dumps({'chunk': limit_msg, 'quota_exceeded': True, 'quota_type': 'attachment', 'tier': tier, 'limit': limit, 'current': current_count, 'session_id': current_session_id}, ensure_ascii=False)}\n\n"
+                yield f"data: {json.dumps({'done': True, 'session_id': current_session_id}, ensure_ascii=False)}\n\n"
+            return Response(quota_exceeded_stream(), content_type='text/event-stream; charset=utf-8')
+        else:
+            if str(user_id).startswith('guest'):
+                session['guest_attachments_today'] = current_count
+
     new_user_message_content = ""
     if messages_for_gemini and messages_for_gemini[-1]['role'] == 'user':
         for part in messages_for_gemini[-1]['parts']:
             if isinstance(part, dict) and 'text' in part:
                 new_user_message_content += remove_stars_and_hashes(part['text']) + " "
 
-    if new_user_message_content.strip():
+    if new_user_message_content.strip() and not is_guest:
         if db_layer:
             try:
                 db_layer.save_message(current_session_id, user_id, "user", new_user_message_content.strip(), "text")
@@ -1557,7 +1597,7 @@ Do not use special formatting characters like '*' or '#' in titles. Do not repea
                 yield f"data: {json.dumps({'chunk': err_msg, 'session_id': current_session_id, 'session_title': smart_session_title}, ensure_ascii=False)}\n\n"
 
         final_text = fix_mojibake("".join(full_response_accumulated)).strip()
-        if final_text:
+        if final_text and not is_guest:
             if db_layer:
                 try:
                     db_layer.save_message(current_session_id, user_id, "model", final_text, "text")
@@ -1640,6 +1680,47 @@ def chat_api():
 
         language_name = client_payload.get('language_name', 'English').strip() or 'English'
 
+        # Multimodal attachment check & tier quota enforcement
+        has_attachment = False
+        if messages_for_gemini and messages_for_gemini[-1]['role'] == 'user':
+            for part in messages_for_gemini[-1].get('parts', []):
+                if isinstance(part, dict):
+                    if 'inlineData' in part:
+                        has_attachment = True
+                        break
+                    if 'text' in part and str(part['text']).startswith('[Attached File:'):
+                        has_attachment = True
+                        break
+
+        if has_attachment:
+            today_str = datetime.now(timezone.utc).strftime('%Y-%m-%d')
+            if session.get('guest_usage_date') != today_str:
+                session['guest_usage_date'] = today_str
+                session['guest_attachments_today'] = 0
+                
+            guest_usage = {'attachments_today': session.get('guest_attachments_today', 0)}
+            allowed, current_count, limit, tier = db_layer.check_and_increment_usage(
+                user_id, usage_type='attachment', guest_usage=guest_usage
+            ) if db_layer else (True, 0, 999999, 'pro')
+
+            if not allowed:
+                if tier == 'guest':
+                    limit_msg = f"Guest upload quota reached ({limit}/{limit} attachments today). Sign in for free (10 uploads/day) or upgrade to Plus/Pro for higher limits."
+                else:
+                    limit_msg = f"Daily attachment quota reached ({limit}/{limit} uploads today for {tier.capitalize()} plan). Upgrade your plan in Settings to unlock more uploads."
+                return jsonify({
+                    "error": {
+                        "message": limit_msg,
+                        "quota_exceeded": True,
+                        "quota_type": "attachment",
+                        "tier": tier,
+                        "limit": limit
+                    }
+                }), 429
+            else:
+                if str(user_id).startswith('guest'):
+                    session['guest_attachments_today'] = current_count
+
         new_user_message_content = ""
         if messages_for_gemini and messages_for_gemini[-1]['role'] == 'user':
             for part in messages_for_gemini[-1]['parts']:
@@ -1651,8 +1732,6 @@ def chat_api():
                     mime_type = part['inlineData'].get('mimeType', '')
                     data = part['inlineData'].get('data', '')
                     if mime_type.startswith('image/'):
-                        if len(data) * 0.75 / (1024 * 1024) > 5:
-                            return jsonify({"error": {"message": "Image size exceeds 5MB limit."}}), 413
                         new_user_message_content += "[Image Data] "
                     else:
                         try:
@@ -1754,7 +1833,8 @@ Response Guidelines:
 def get_session_history(session_id):
     user_id = get_current_user_id()
     if not user_id:
-        user_id = session.get('guest_id', 'guest_default')
+        # Vanish Mode: Guest users do not have persistent history
+        return jsonify({"history": [], "vanish_mode": True}), 200
 
     try:
         formatted_messages = []

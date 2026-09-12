@@ -71,6 +71,62 @@ export function cleanTextForSpeech(text: string): string {
 }
 
 /**
+ * Splits arbitrary length text / long documents into natural, sentence-sized chunks (max ~160 chars)
+ * so browser SpeechSynthesis engines (Chromium, WebKit, Gecko) never drop, stall, or crash on long text.
+ */
+export function splitTextIntoSpeechChunks(text: string, maxChunkLen = 160): string[] {
+  if (!text) return [];
+  const cleaned = cleanTextForSpeech(text);
+  if (!cleaned) return [];
+
+  // 1. Split on sentence boundaries (. ! ? ;) or colon or newlines
+  const rawSentences = cleaned.split(/(?<=[.?!;:\n])\s+/);
+  const chunks: string[] = [];
+
+  for (const sentence of rawSentences) {
+    const s = sentence.trim();
+    if (!s) continue;
+
+    if (s.length <= maxChunkLen) {
+      chunks.push(s);
+    } else {
+      // 2. Split large sentence by commas or natural pauses
+      const subParts = s.split(/(?<=[,])\s+/);
+      let currentChunk = '';
+
+      for (const part of subParts) {
+        if ((currentChunk + ' ' + part).trim().length <= maxChunkLen) {
+          currentChunk = (currentChunk ? currentChunk + ' ' : '') + part;
+        } else {
+          if (currentChunk.trim()) chunks.push(currentChunk.trim());
+          if (part.length <= maxChunkLen) {
+            currentChunk = part;
+          } else {
+            // 3. Fallback: split long phrase by words
+            const words = part.split(/\s+/);
+            let wordChunk = '';
+            for (const word of words) {
+              if ((wordChunk + ' ' + word).trim().length <= maxChunkLen) {
+                wordChunk = (wordChunk ? wordChunk + ' ' : '') + word;
+              } else {
+                if (wordChunk.trim()) chunks.push(wordChunk.trim());
+                wordChunk = word;
+              }
+            }
+            currentChunk = wordChunk;
+          }
+        }
+      }
+      if (currentChunk.trim()) {
+        chunks.push(currentChunk.trim());
+      }
+    }
+  }
+
+  return chunks.filter((c) => c.length > 0);
+}
+
+/**
  * Maps a display language name or code to a standard BCP 47 language tag
  */
 export function mapLanguageToCode(lang?: string): string {
@@ -150,6 +206,24 @@ export function isMaleVoice(voice: SpeechSynthesisVoice): boolean {
 }
 
 /**
+ * Checks if a given SpeechSynthesisVoice is categorized as female
+ */
+export function isFemaleVoice(voice: SpeechSynthesisVoice): boolean {
+  if (!voice || !voice.name) return false;
+  const name = voice.name.toLowerCase();
+
+  // Known female matches
+  for (const fem of FEMALE_EXCLUSIONS) {
+    if (name.includes(fem)) return true;
+  }
+  if (name.includes('female') || name.includes(' woman ') || name.includes('girl') || name.includes('(female)')) {
+    return true;
+  }
+
+  return !isMaleVoice(voice);
+}
+
+/**
  * Finds the highest quality default male voice available in the current browser/OS
  */
 export function findBestMaleVoice(
@@ -167,14 +241,13 @@ export function findBestMaleVoice(
   const langTag = mapLanguageToCode(language);
   const langCode = langTag.split('-')[0].toLowerCase();
 
-  // Filter voices matching current language or English
   const matchingLangVoices = pool.filter(
     (v) => v.lang.toLowerCase().startsWith(langCode) || v.lang.toLowerCase().startsWith('en')
   );
 
   const candidatePool = matchingLangVoices.length > 0 ? matchingLangVoices : pool;
 
-  // 1. Natural / Neural / Online Male Voices in matching language (Highest Quality - Edge/Chrome)
+  // 1. Natural / Neural / Online Male Voices in matching language (Edge/Chrome)
   const premiumMale = candidatePool.find(
     (v) =>
       isMaleVoice(v) &&
@@ -185,7 +258,7 @@ export function findBestMaleVoice(
   );
   if (premiumMale) return premiumMale;
 
-  // 2. Standard Male Voice in matching language (e.g., Microsoft David, Alex, Daniel)
+  // 2. Standard Male Voice in matching language (David, Alex, Daniel)
   const standardMale = candidatePool.find((v) => isMaleVoice(v));
   if (standardMale) return standardMale;
 
@@ -193,22 +266,245 @@ export function findBestMaleVoice(
   const globalMale = pool.find((v) => isMaleVoice(v));
   if (globalMale) return globalMale;
 
-  // 4. Fallback: Preferred voice in language
   return candidatePool[0] || pool[0];
 }
 
 /**
- * Applies optimal male voice configuration & pitch settings to an utterance
+ * Finds the highest quality default female voice available in the current browser/OS
  */
-export function applyMaleVoiceSettings(
+export function findBestFemaleVoice(
+  voices?: SpeechSynthesisVoice[],
+  language = 'en-US'
+): SpeechSynthesisVoice | undefined {
+  let pool = voices;
+  if (!pool || pool.length === 0) {
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      pool = window.speechSynthesis.getVoices();
+    }
+  }
+  if (!pool || pool.length === 0) return undefined;
+
+  const langTag = mapLanguageToCode(language);
+  const langCode = langTag.split('-')[0].toLowerCase();
+
+  const matchingLangVoices = pool.filter(
+    (v) => v.lang.toLowerCase().startsWith(langCode) || v.lang.toLowerCase().startsWith('en')
+  );
+
+  const candidatePool = matchingLangVoices.length > 0 ? matchingLangVoices : pool;
+
+  // 1. Natural / Neural / Online Female Voices (Jenny, Aria, Google Female)
+  const premiumFemale = candidatePool.find(
+    (v) =>
+      isFemaleVoice(v) &&
+      (v.name.includes('Natural') ||
+        v.name.includes('Neural') ||
+        v.name.includes('Online') ||
+        v.name.includes('Google'))
+  );
+  if (premiumFemale) return premiumFemale;
+
+  // 2. Standard Female Voice (Zira, Samantha, Victoria)
+  const standardFemale = candidatePool.find((v) => isFemaleVoice(v));
+  if (standardFemale) return standardFemale;
+
+  const globalFemale = pool.find((v) => isFemaleVoice(v));
+  if (globalFemale) return globalFemale;
+
+  return candidatePool[0] || pool[0];
+}
+
+export interface CuratedVoiceItem {
+  id: string;
+  name: string;
+  voiceName: string;
+  gender: 'male' | 'female';
+  accent: string;
+  persona: string;
+  badge: 'Natural Neural' | 'Studio HD' | 'Classic Clear';
+  basePitch: number;
+}
+
+export interface CuratedVoiceCatalog {
+  topMale: CuratedVoiceItem[];
+  topFemale: CuratedVoiceItem[];
+}
+
+/**
+ * Extracts and curates exactly the Top 5 Best Male voices and Top 5 Best Female voices
+ * from the browser/OS speech synthesis system, with calibrated personas and fallback profiles.
+ */
+export function getCuratedTopVoices(
+  voices?: SpeechSynthesisVoice[],
+  language = 'en-US'
+): CuratedVoiceCatalog {
+  let pool = voices;
+  if (!pool || pool.length === 0) {
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      pool = window.speechSynthesis.getVoices();
+    }
+  }
+  const allVoices = pool || [];
+
+  // Filter available system voices
+  const maleVoices = allVoices.filter((v) => isMaleVoice(v));
+  const femaleVoices = allVoices.filter((v) => isFemaleVoice(v));
+
+  // Sort by Natural / Online > Desktop > Standard
+  const sortQuality = (list: SpeechSynthesisVoice[]) =>
+    [...list].sort((a, b) => {
+      const aScore = (a.name.includes('Natural') ? 4 : 0) + (a.name.includes('Online') ? 2 : 0) + (a.name.includes('Google') ? 3 : 0);
+      const bScore = (b.name.includes('Natural') ? 4 : 0) + (b.name.includes('Online') ? 2 : 0) + (b.name.includes('Google') ? 3 : 0);
+      return bScore - aScore;
+    });
+
+  const sortedMale = sortQuality(maleVoices);
+  const sortedFemale = sortQuality(femaleVoices);
+
+  const bestMale = findBestMaleVoice(allVoices, language);
+  const bestFemale = findBestFemaleVoice(allVoices, language);
+
+  // Curate Top 5 Male Personas
+  const topMale: CuratedVoiceItem[] = [
+    {
+      id: 'male-1',
+      name: 'Orion',
+      voiceName: sortedMale[0]?.name || bestMale?.name || 'Default Male',
+      gender: 'male',
+      accent: 'US / Global Studio',
+      persona: 'Authoritative, deep, ultra-clear neural studio voice',
+      badge: sortedMale[0]?.name.includes('Natural') ? 'Natural Neural' : 'Studio HD',
+      basePitch: 0.92,
+    },
+    {
+      id: 'male-2',
+      name: 'Atlas',
+      voiceName: sortedMale[1]?.name || sortedMale[0]?.name || bestMale?.name || 'Default Male',
+      gender: 'male',
+      accent: 'US Tech Dynamic',
+      persona: 'Crisp, articulate developer cadence and modern tone',
+      badge: sortedMale[1]?.name.includes('Natural') ? 'Natural Neural' : 'Studio HD',
+      basePitch: 0.98,
+    },
+    {
+      id: 'male-3',
+      name: 'Echo',
+      voiceName: sortedMale[2]?.name || sortedMale[0]?.name || bestMale?.name || 'Default Male',
+      gender: 'male',
+      accent: 'Warm Baritone',
+      persona: 'Calming, resonant, soothing conversational bass',
+      badge: 'Studio HD',
+      basePitch: 0.86,
+    },
+    {
+      id: 'male-4',
+      name: 'Sterling',
+      voiceName:
+        sortedMale.find((v) => v.lang.toLowerCase().includes('gb') || v.name.toLowerCase().includes('uk'))?.name ||
+        sortedMale[3]?.name ||
+        sortedMale[0]?.name ||
+        bestMale?.name ||
+        'Default Male',
+      gender: 'male',
+      accent: 'British Eloquent',
+      persona: 'Refined, polished, intellectual UK narrative cadence',
+      badge: 'Natural Neural',
+      basePitch: 0.94,
+    },
+    {
+      id: 'male-5',
+      name: 'Vortex',
+      voiceName: sortedMale[4]?.name || sortedMale[1]?.name || bestMale?.name || 'Default Male',
+      gender: 'male',
+      accent: 'Dynamic Turbo',
+      persona: 'High-energy, focused, rapid executive synthesizer',
+      badge: 'Classic Clear',
+      basePitch: 1.02,
+    },
+  ];
+
+  // Curate Top 5 Female Personas
+  const topFemale: CuratedVoiceItem[] = [
+    {
+      id: 'female-1',
+      name: 'Nova',
+      voiceName: sortedFemale[0]?.name || bestFemale?.name || 'Default Female',
+      gender: 'female',
+      accent: 'US / Global Studio',
+      persona: 'Warm, natural, empathetic neural studio voice',
+      badge: sortedFemale[0]?.name.includes('Natural') ? 'Natural Neural' : 'Studio HD',
+      basePitch: 1.0,
+    },
+    {
+      id: 'female-2',
+      name: 'Serena',
+      voiceName: sortedFemale[1]?.name || sortedFemale[0]?.name || bestFemale?.name || 'Default Female',
+      gender: 'female',
+      accent: 'Crisp Executive',
+      persona: 'Confident, clear, articulate professional tone',
+      badge: sortedFemale[1]?.name.includes('Natural') ? 'Natural Neural' : 'Studio HD',
+      basePitch: 1.05,
+    },
+    {
+      id: 'female-3',
+      name: 'Lyra',
+      voiceName: sortedFemale[2]?.name || sortedFemale[0]?.name || bestFemale?.name || 'Default Female',
+      gender: 'female',
+      accent: 'Bright Melodic',
+      persona: 'Lively, friendly, cheerful conversational assistant',
+      badge: 'Studio HD',
+      basePitch: 1.12,
+    },
+    {
+      id: 'female-4',
+      name: 'Athena',
+      voiceName:
+        sortedFemale.find((v) => v.lang.toLowerCase().includes('gb') || v.name.toLowerCase().includes('uk'))?.name ||
+        sortedFemale[3]?.name ||
+        sortedFemale[0]?.name ||
+        bestFemale?.name ||
+        'Default Female',
+      gender: 'female',
+      accent: 'British Refined',
+      persona: 'Sophisticated, elegant, articulate UK narrative cadence',
+      badge: 'Natural Neural',
+      basePitch: 0.98,
+    },
+    {
+      id: 'female-5',
+      name: 'Horizon',
+      voiceName: sortedFemale[4]?.name || sortedFemale[1]?.name || bestFemale?.name || 'Default Female',
+      gender: 'female',
+      accent: 'Gentle Ambient',
+      persona: 'Soothing, gentle, relaxed meditation and storytelling',
+      badge: 'Classic Clear',
+      basePitch: 0.92,
+    },
+  ];
+
+  return { topMale, topFemale };
+}
+
+/**
+ * Applies custom voice, speed rate, and pitch settings to a SpeechSynthesisUtterance
+ */
+export function applyVoiceCustomSettings(
   utterance: SpeechSynthesisUtterance,
   voices?: SpeechSynthesisVoice[],
   userVoicePreference?: string,
-  language = 'en-US'
+  language = 'en-US',
+  speechRate = 1.0,
+  speechPitch = 1.0
 ): void {
   const langTag = mapLanguageToCode(language);
   utterance.lang = langTag;
-  utterance.rate = 1.0;
+  
+  // Apply bounded rate (0.5x to 2.0x)
+  const safeRate = Math.max(0.5, Math.min(2.0, Number(speechRate) || 1.0));
+  utterance.rate = safeRate;
+
+  // Base pitch modifier
+  const safePitch = Math.max(0.5, Math.min(1.5, Number(speechPitch) || 1.0));
 
   let voiceList = voices;
   if (!voiceList || voiceList.length === 0) {
@@ -217,22 +513,51 @@ export function applyMaleVoiceSettings(
     }
   }
 
-  // User explicitly selected a custom voice
-  if (userVoicePreference && userVoicePreference.trim() && voiceList && voiceList.length > 0) {
-    const custom = voiceList.find((v) => v.name === userVoicePreference);
-    if (custom) {
-      utterance.voice = custom;
-      utterance.pitch = isMaleVoice(custom) ? 0.95 : 1.0;
+  // 1. Check curated personas or explicit voice name
+  const catalog = getCuratedTopVoices(voiceList, language);
+  const allCurated = [...catalog.topMale, ...catalog.topFemale];
+  const matchedCurated = allCurated.find(
+    (c) => c.name.toLowerCase() === (userVoicePreference || '').toLowerCase() || c.id === userVoicePreference
+  );
+
+  if (matchedCurated && voiceList && voiceList.length > 0) {
+    const directVoice = voiceList.find((v) => v.name === matchedCurated.voiceName);
+    if (directVoice) {
+      utterance.voice = directVoice;
+      utterance.pitch = Math.max(0.5, Math.min(1.5, safePitch * matchedCurated.basePitch));
       return;
     }
   }
 
-  // Default to best male voice
+  // 2. Direct voice name match
+  if (userVoicePreference && userVoicePreference.trim() && voiceList && voiceList.length > 0) {
+    const custom = voiceList.find((v) => v.name.toLowerCase() === userVoicePreference.toLowerCase());
+    if (custom) {
+      utterance.voice = custom;
+      const genderBase = isMaleVoice(custom) ? 0.95 : 1.02;
+      utterance.pitch = Math.max(0.5, Math.min(1.5, safePitch * genderBase));
+      return;
+    }
+  }
+
+  // 3. Default to Best Male Voice
   const defaultMale = findBestMaleVoice(voiceList, language);
   if (defaultMale) {
     utterance.voice = defaultMale;
-    utterance.pitch = isMaleVoice(defaultMale) ? 0.95 : 0.88;
+    utterance.pitch = Math.max(0.5, Math.min(1.5, safePitch * 0.92));
   } else {
-    utterance.pitch = 0.88;
+    utterance.pitch = safePitch;
   }
+}
+
+/**
+ * Backward compatibility wrapper
+ */
+export function applyMaleVoiceSettings(
+  utterance: SpeechSynthesisUtterance,
+  voices?: SpeechSynthesisVoice[],
+  userVoicePreference?: string,
+  language = 'en-US'
+): void {
+  applyVoiceCustomSettings(utterance, voices, userVoicePreference, language, 1.0, 1.0);
 }

@@ -11,7 +11,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { api } from '@/lib/api';
-import { applyMaleVoiceSettings, cleanTextForSpeech } from '@/lib/voiceUtils';
+import { applyVoiceCustomSettings, applyMaleVoiceSettings, cleanTextForSpeech } from '@/lib/voiceUtils';
 
 interface VoiceChatModalProps {
   isOpen: boolean;
@@ -26,6 +26,8 @@ interface VoiceChatModalProps {
   activeSessionId?: string;
   userVoice?: string;
   language?: string;
+  speechRate?: number;
+  speechPitch?: number;
   onSessionUpdated?: (sessionId: string, sessionTitle?: string) => void;
 }
 
@@ -37,6 +39,8 @@ export const VoiceChatModal: React.FC<VoiceChatModalProps> = ({
   activeSessionId,
   userVoice = '',
   language = 'en-US',
+  speechRate = 1.0,
+  speechPitch = 1.0,
   onSessionUpdated,
 }) => {
   const [voiceState, setVoiceState] = useState<'idle' | 'listening' | 'thinking' | 'speaking'>('idle');
@@ -385,7 +389,7 @@ export const VoiceChatModal: React.FC<VoiceChatModalProps> = ({
       activeUtteranceRef.current = utterance;
 
       const voices = window.speechSynthesis.getVoices();
-      applyMaleVoiceSettings(utterance, voices, userVoice, language);
+      applyVoiceCustomSettings(utterance, voices, userVoice, language, speechRate, speechPitch);
 
       let watchdogTimer: any = null;
 
