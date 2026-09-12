@@ -25,6 +25,7 @@ import {
   ChevronDown,
   Archive,
   ArchiveRestore,
+  ArrowLeft,
 } from 'lucide-react';
 import { ChatSession, UserProfile } from '@/types';
 import { ActiveTab } from '../layout/Header';
@@ -84,10 +85,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [showSearchBox, setShowSearchBox] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
-  const [showArchivedSection, setShowArchivedSection] = useState(false);
+  const [isViewingArchivedFolder, setIsViewingArchivedFolder] = useState(false);
+  const [swipeCount, setSwipeCount] = useState(0);
+  const [pullNotice, setPullNotice] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const touchStartY = useRef<number | null>(null);
+  const pullTimerRef = useRef<any>(null);
 
   // Focus search input when toggled open
   useEffect(() => {
@@ -107,6 +113,79 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const pinnedSessions = activeSessions.filter((s) => Boolean(s.is_pinned));
   const recentSessions = activeSessions.filter((s) => !s.is_pinned);
   const archivedSessions = filteredSessions.filter((s) => Boolean(s.is_archived));
+
+  // If viewing archived folder and all archived chats were restored/deleted, return to regular view
+  useEffect(() => {
+    if (isViewingArchivedFolder && archivedSessions.length === 0) {
+      setIsViewingArchivedFolder(false);
+    }
+  }, [isViewingArchivedFolder, archivedSessions.length]);
+
+  // Gesture: Swipe / Pull down 2 times at the top of the chat list to reveal/open Archived folder
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (scrollContainerRef.current && scrollContainerRef.current.scrollTop <= 0) {
+      touchStartY.current = e.touches[0].clientY;
+    } else {
+      touchStartY.current = null;
+    }
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartY.current === null) return;
+    const touchEndY = e.changedTouches[0].clientY;
+    const deltaY = touchEndY - touchStartY.current;
+    touchStartY.current = null;
+
+    if (deltaY > 50 && archivedSessions.length > 0 && !isViewingArchivedFolder) {
+      setSwipeCount((prev) => {
+        const next = prev + 1;
+        if (next >= 2) {
+          setIsViewingArchivedFolder(true);
+          setPullNotice('Opened Archived Folder');
+          if (pullTimerRef.current) clearTimeout(pullTimerRef.current);
+          pullTimerRef.current = setTimeout(() => setPullNotice(null), 2000);
+          return 0;
+        } else {
+          setPullNotice('Swipe down once more to open Archived');
+          if (pullTimerRef.current) clearTimeout(pullTimerRef.current);
+          pullTimerRef.current = setTimeout(() => {
+            setSwipeCount(0);
+            setPullNotice(null);
+          }, 3000);
+          return next;
+        }
+      });
+    }
+  };
+
+  const handleWheel = (e: React.WheelEvent) => {
+    if (
+      scrollContainerRef.current &&
+      scrollContainerRef.current.scrollTop <= 0 &&
+      e.deltaY < -35 &&
+      archivedSessions.length > 0 &&
+      !isViewingArchivedFolder
+    ) {
+      setSwipeCount((prev) => {
+        const next = prev + 1;
+        if (next >= 2) {
+          setIsViewingArchivedFolder(true);
+          setPullNotice('Opened Archived Folder');
+          if (pullTimerRef.current) clearTimeout(pullTimerRef.current);
+          pullTimerRef.current = setTimeout(() => setPullNotice(null), 2000);
+          return 0;
+        } else {
+          setPullNotice('Scroll up once more to open Archived');
+          if (pullTimerRef.current) clearTimeout(pullTimerRef.current);
+          pullTimerRef.current = setTimeout(() => {
+            setSwipeCount(0);
+            setPullNotice(null);
+          }, 3000);
+          return next;
+        }
+      });
+    }
+  };
 
   const startRename = (e: React.MouseEvent, session: ChatSession) => {
     e.stopPropagation();
@@ -430,8 +509,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* Divider */}
         <div className="mx-3 my-1.5 border-t border-zinc-850" />
 
-        {/* Chat History List */}
-        <div className="flex-1 overflow-y-auto px-2.5 py-1 space-y-2 custom-scrollbar">
+        {/* Chat History List with WhatsApp-Style Top Archived Folder & Swipe-Down Gesture */}
+        <div
+          ref={scrollContainerRef}
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+          onWheel={handleWheel}
+          className="flex-1 overflow-y-auto px-2.5 py-1 space-y-2 custom-scrollbar"
+        >
           {!isAuthenticated ? (
             <div className="py-6 text-center px-4 space-y-2.5">
               <div className="w-8 h-8 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center mx-auto text-zinc-400">
@@ -451,8 +536,80 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <span>Sign in</span>
               </button>
             </div>
+          ) : isViewingArchivedFolder ? (
+            /* Dedicated WhatsApp-Style Archived Folder View */
+            <div className="space-y-2 animate-in fade-in duration-150">
+              <div className="flex items-center justify-between px-1.5 py-1 pb-2 border-b border-zinc-850">
+                <button
+                  type="button"
+                  onClick={() => setIsViewingArchivedFolder(false)}
+                  className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-white transition-colors font-medium cursor-pointer group"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5 group-hover:-translate-x-0.5 transition-transform" />
+                  <span>Chats</span>
+                </button>
+                <div className="flex items-center gap-1.5 text-xs text-zinc-200 font-semibold">
+                  <Archive className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Archived</span>
+                  <span className="px-1.5 py-0.5 rounded-full bg-zinc-800 text-[10px] font-mono text-zinc-400">
+                    {archivedSessions.length}
+                  </span>
+                </div>
+              </div>
+
+              {archivedSessions.length === 0 ? (
+                <div className="py-8 text-center px-4 space-y-2">
+                  <Archive className="w-8 h-8 text-zinc-800 mx-auto" />
+                  <p className="text-xs text-zinc-400 font-medium">No archived chats</p>
+                  <button
+                    type="button"
+                    onClick={() => setIsViewingArchivedFolder(false)}
+                    className="px-3 py-1 text-xs text-zinc-300 hover:text-white bg-zinc-900 border border-zinc-800 rounded-lg cursor-pointer"
+                  >
+                    Back to chats
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-0.5">
+                  <div className="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-zinc-500">
+                    Archived Conversations
+                  </div>
+                  {archivedSessions.map((session) => renderSessionItem(session, true))}
+                </div>
+              )}
+            </div>
           ) : (
             <React.Fragment>
+              {/* Swipe-down / Pull notification badge */}
+              {pullNotice && (
+                <div className="py-1 px-2.5 rounded-lg bg-emerald-950/40 border border-emerald-800/50 text-emerald-400 text-[10px] font-medium text-center animate-in fade-in duration-150">
+                  {pullNotice}
+                </div>
+              )}
+
+              {/* 1. TOP ARCHIVED FOLDER ROW (WhatsApp Style - Situated at Top of Chat History) */}
+              {archivedSessions.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setIsViewingArchivedFolder(true)}
+                  className="w-full flex items-center justify-between px-2.5 py-2 rounded-xl bg-zinc-900/80 hover:bg-zinc-850 border border-zinc-800/80 hover:border-zinc-700 text-zinc-300 hover:text-white transition-all cursor-pointer group shadow-sm active:scale-[0.99] mb-2"
+                  title="Open Archived Chats (or swipe down twice to reveal)"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-6 h-6 rounded-lg bg-zinc-800 flex items-center justify-center text-zinc-400 group-hover:text-emerald-400 group-hover:bg-emerald-950/40 transition-colors">
+                      <Archive className="w-3.5 h-3.5" />
+                    </div>
+                    <span className="text-xs font-semibold">Archived</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="px-2 py-0.5 rounded-full bg-zinc-800 group-hover:bg-zinc-750 text-[11px] font-mono text-zinc-400 group-hover:text-white transition-colors">
+                      {archivedSessions.length}
+                    </span>
+                    <ChevronRight className="w-3.5 h-3.5 text-zinc-500 group-hover:text-zinc-300 group-hover:translate-x-0.5 transition-all" />
+                  </div>
+                </button>
+              )}
+
               {filteredSessions.length === 0 ? (
                 <div className="py-6 text-center px-4">
                   <MessageSquare className="w-7 h-7 text-zinc-800 mx-auto mb-1.5" />
@@ -482,45 +639,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   )}
 
                   {/* Recent Conversations Group */}
-                  <div className="space-y-0.5">
-                    <div className="px-2 py-0.5 flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-zinc-400">
-                      <span>Recent</span>
-                      <span className="text-[10px] text-zinc-500 font-mono">
-                        {recentSessions.length}
-                      </span>
-                    </div>
-                    {recentSessions.map((session) => renderSessionItem(session, false))}
-                  </div>
-
-                  {/* Archived Conversations Group (Expandable) */}
-                  {archivedSessions.length > 0 && (
-                    <div className="space-y-0.5 pt-2 border-t border-zinc-850/80">
-                      <button
-                        type="button"
-                        onClick={() => setShowArchivedSection(!showArchivedSection)}
-                        className="w-full px-2 py-1 flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-zinc-400 hover:text-zinc-200 transition-colors rounded-lg group"
-                      >
-                        <span className="flex items-center gap-1.5">
-                          <Archive className="w-3 h-3 text-zinc-400 group-hover:text-white" />
-                          <span>Archived Chats</span>
+                  {recentSessions.length > 0 && (
+                    <div className="space-y-0.5">
+                      <div className="px-2 py-0.5 flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+                        <span>Recent</span>
+                        <span className="text-[10px] text-zinc-500 font-mono">
+                          {recentSessions.length}
                         </span>
-                        <div className="flex items-center gap-1">
-                          <span className="text-[10px] text-zinc-500 font-mono">
-                            {archivedSessions.length}
-                          </span>
-                          <ChevronDown
-                            className={`w-3 h-3 text-zinc-500 transition-transform ${
-                              showArchivedSection ? 'rotate-180' : ''
-                            }`}
-                          />
-                        </div>
-                      </button>
-
-                      {showArchivedSection && (
-                        <div className="space-y-0.5 pt-0.5 animate-in fade-in duration-150">
-                          {archivedSessions.map((session) => renderSessionItem(session, true))}
-                        </div>
-                      )}
+                      </div>
+                      {recentSessions.map((session) => renderSessionItem(session, false))}
                     </div>
                   )}
                 </div>
