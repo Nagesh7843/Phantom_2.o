@@ -18,7 +18,20 @@ import { PhantomIconSvg, SidebarExpandIconSvg } from '@/components/common/Phanto
 import { api } from '@/lib/api';
 import { applyVoiceCustomSettings, applyMaleVoiceSettings, cleanTextForSpeech, splitTextIntoSpeechChunks } from '@/lib/voiceUtils';
 import { ChatMessage, ChatSession, UserProfile, UserSettings } from '@/types';
-import { ArrowLeft, Home as HomeIcon, User } from 'lucide-react';
+import {
+  ArrowLeft,
+  Home as HomeIcon,
+  User,
+  Share2,
+  MoreHorizontal,
+  Files,
+  Pin,
+  Archive,
+  Trash2,
+  Folder,
+  ChevronRight,
+  Check,
+} from 'lucide-react';
 
 interface WorkspaceAppProps {
   onNavigateHome?: () => void;
@@ -33,6 +46,25 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ onNavigateHome }) =>
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
+
+  // Top Right Chat Header Menu State
+  const [showChatMenu, setShowChatMenu] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
+  const chatMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (chatMenuRef.current && !chatMenuRef.current.contains(event.target as Node)) {
+        setShowChatMenu(false);
+      }
+    };
+    if (showChatMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showChatMenu]);
 
   // Code IDE Shared State
   const [ideCode, setIdeCode] = useState<string | undefined>(undefined);
@@ -285,6 +317,30 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ onNavigateHome }) =>
       } catch (err) {
         console.error('Failed to toggle pin on session:', err);
       }
+    }
+  };
+
+  const handleShareChat = async () => {
+    try {
+      const url = typeof window !== 'undefined' ? window.location.href : '';
+      if (navigator.clipboard) {
+        await navigator.clipboard.writeText(url);
+        setShareCopied(true);
+        setTimeout(() => setShareCopied(false), 2500);
+      }
+    } catch {
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 2500);
+    }
+  };
+
+  const handleArchiveCurrentChat = () => {
+    if (activeSessionId) {
+      const updated = sessions.filter((s) => s.session_id !== activeSessionId);
+      setSessions(updated);
+      handleNewChat();
+    } else {
+      handleNewChat();
     }
   };
 
@@ -712,8 +768,128 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ onNavigateHome }) =>
         <main className="flex-1 flex flex-col overflow-hidden relative">
           {activeTab === 'chat' && (
             <div className="flex-1 flex flex-col h-full overflow-hidden bg-cyber-dark relative">
-              {/* Top Right Header Controls: Sign In or User Profile */}
+              {/* Top Right Header Controls: Share, More Options, and Account */}
               <div className="absolute right-4 top-3.5 z-30 flex items-center gap-2">
+                {/* Share Button */}
+                <button
+                  type="button"
+                  onClick={handleShareChat}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-900/90 hover:bg-zinc-850 text-zinc-300 hover:text-white border border-zinc-800 hover:border-zinc-700 text-xs font-medium transition-all cursor-pointer shadow-sm active:scale-95"
+                  title="Share chat"
+                >
+                  {shareCopied ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-emerald-400" />
+                      <span className="text-emerald-400">Copied</span>
+                    </>
+                  ) : (
+                    <>
+                      <Share2 className="w-3.5 h-3.5 text-zinc-400" />
+                      <span>Share</span>
+                    </>
+                  )}
+                </button>
+
+                {/* More Options Dropdown */}
+                <div className="relative" ref={chatMenuRef}>
+                  <button
+                    type="button"
+                    onClick={() => setShowChatMenu(!showChatMenu)}
+                    className={`p-1.5 rounded-xl transition-all cursor-pointer border ${
+                      showChatMenu
+                        ? 'bg-zinc-800 text-white border-zinc-600 shadow-sm'
+                        : 'bg-zinc-900/90 hover:bg-zinc-850 text-zinc-400 hover:text-white border-zinc-800 hover:border-zinc-700'
+                    }`}
+                    title="More actions"
+                    aria-label="More actions"
+                  >
+                    <MoreHorizontal className="w-4 h-4" />
+                  </button>
+
+                  {/* Dropdown Menu matching user specification */}
+                  {showChatMenu && (
+                    <div className="absolute right-0 top-full mt-2 w-52 p-1.5 rounded-2xl glass-dropdown border border-zinc-700/80 shadow-2xl z-50 bg-zinc-950/95 backdrop-blur-xl animate-fade-in text-xs font-medium space-y-0.5">
+                      {/* 1. View files in chat */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowChatMenu(false);
+                          setLibraryOpen(true);
+                        }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-zinc-300 hover:text-white hover:bg-zinc-850 transition-colors cursor-pointer text-left"
+                      >
+                        <Files className="w-4 h-4 text-zinc-400" />
+                        <span>View files in chat</span>
+                      </button>
+
+                      {/* 2. Pin chat */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowChatMenu(false);
+                          if (activeSessionId) {
+                            handleTogglePinSession(activeSessionId);
+                          }
+                        }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-zinc-300 hover:text-white hover:bg-zinc-850 transition-colors cursor-pointer text-left"
+                      >
+                        <Pin className={`w-4 h-4 ${sessions.find((s) => s.session_id === activeSessionId)?.is_pinned ? 'text-amber-400 fill-amber-400' : 'text-zinc-400'}`} />
+                        <span>{sessions.find((s) => s.session_id === activeSessionId)?.is_pinned ? 'Unpin chat' : 'Pin chat'}</span>
+                      </button>
+
+                      {/* 3. Archive */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowChatMenu(false);
+                          handleArchiveCurrentChat();
+                        }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-zinc-300 hover:text-white hover:bg-zinc-850 transition-colors cursor-pointer text-left"
+                      >
+                        <Archive className="w-4 h-4 text-zinc-400" />
+                        <span>Archive</span>
+                      </button>
+
+                      {/* 4. Delete */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowChatMenu(false);
+                          if (activeSessionId) {
+                            handleDeleteSession(activeSessionId);
+                          } else {
+                            handleNewChat();
+                          }
+                        }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-rose-400 hover:text-rose-300 hover:bg-rose-950/40 transition-colors cursor-pointer text-left"
+                      >
+                        <Trash2 className="w-4 h-4 text-rose-400" />
+                        <span>Delete</span>
+                      </button>
+
+                      {/* Divider */}
+                      <div className="my-1 border-t border-zinc-800/80" />
+
+                      {/* 5. Move to project */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowChatMenu(false);
+                          setActiveTab('compiler');
+                        }}
+                        className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-zinc-300 hover:text-white hover:bg-zinc-850 transition-colors cursor-pointer text-left group"
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <Folder className="w-4 h-4 text-zinc-400 group-hover:text-white" />
+                          <span>Move to project</span>
+                        </div>
+                        <ChevronRight className="w-3.5 h-3.5 text-zinc-500 group-hover:text-zinc-300" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Account / User Profile / Sign In button */}
                 {userProfile?.authenticated ? (
                   <button
                     onClick={() => setProfileOpen(true)}
