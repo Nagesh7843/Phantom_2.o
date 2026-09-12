@@ -334,21 +334,21 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                     if (isDiff) {
                       const diffLines = codeString.split('\n');
                       return (
-                        <div className="my-3.5 rounded-xl overflow-hidden border border-zinc-800 bg-black font-mono text-xs shadow-sm">
-                          <div className="flex items-center justify-between px-4 py-2 bg-zinc-900 border-b border-zinc-800 select-none">
-                            <div className="flex items-center gap-2 text-xs font-mono text-zinc-300 font-medium">
-                              <GitCommit className="w-3.5 h-3.5 text-zinc-400" />
+                        <div className="code-card-container my-3.5 rounded-xl overflow-hidden font-mono text-xs shadow-sm">
+                          <div className="code-card-header flex items-center justify-between px-4 py-2 select-none">
+                            <div className="flex items-center gap-2 text-xs font-mono font-medium">
+                              <GitCommit className="w-3.5 h-3.5 opacity-70" />
                               <span className="lowercase">diff viewer</span>
                             </div>
                             <button
                               type="button"
                               onClick={() => handleCopyCode(codeString, codeId)}
-                              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors"
+                              className="code-card-copy-btn flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors"
                             >
                               {copiedCodeId === codeId ? (
                                 <>
-                                  <Check className="w-3.5 h-3.5 text-emerald-400" />
-                                  <span className="text-emerald-400">Copied</span>
+                                  <Check className="w-3.5 h-3.5 text-emerald-500" />
+                                  <span className="text-emerald-500">Copied</span>
                                 </>
                               ) : (
                                 <>
@@ -358,7 +358,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                               )}
                             </button>
                           </div>
-                          <div className="px-5 py-3.5 overflow-x-auto text-[12px] leading-relaxed bg-black space-y-0.5">
+                          <div className="code-card-body px-5 py-3.5 overflow-x-auto text-[12px] leading-relaxed space-y-0.5">
                             {diffLines.map((line, idx) => {
                               const isAdd = line.startsWith('+') && !line.startsWith('+++');
                               const isDel = line.startsWith('-') && !line.startsWith('---');
@@ -369,12 +369,12 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                                   key={idx}
                                   className={`px-2 py-0.5 rounded font-mono ${
                                     isAdd
-                                      ? 'bg-emerald-950/40 text-emerald-300 font-medium'
+                                      ? 'diff-line-add font-medium'
                                       : isDel
-                                      ? 'bg-rose-950/40 text-rose-300 font-medium'
+                                      ? 'diff-line-del font-medium'
                                       : isHdr
-                                      ? 'bg-indigo-950/30 text-indigo-300 font-semibold'
-                                      : 'text-zinc-300'
+                                      ? 'diff-line-hdr font-semibold'
+                                      : 'diff-line-plain'
                                   }`}
                                 >
                                   {line}
@@ -389,21 +389,21 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                     // 2. Error / Diagnostic Block
                     if (isError) {
                       return (
-                        <div className="my-3.5 rounded-xl overflow-hidden border border-rose-900/50 bg-rose-950/20 font-mono text-xs shadow-sm">
-                          <div className="flex items-center justify-between px-4 py-2 bg-rose-950/40 border-b border-rose-900/40 select-none">
-                            <div className="flex items-center gap-2 text-xs font-mono text-rose-300 font-semibold uppercase tracking-wider">
-                              <AlertOctagon className="w-3.5 h-3.5 text-rose-400" />
+                        <div className="code-card-container error-card my-3.5 rounded-xl overflow-hidden font-mono text-xs shadow-sm">
+                          <div className="code-card-header error-header flex items-center justify-between px-4 py-2 select-none">
+                            <div className="flex items-center gap-2 text-xs font-mono font-semibold uppercase tracking-wider">
+                              <AlertOctagon className="w-3.5 h-3.5 text-rose-500" />
                               <span>Error / Diagnostic</span>
                             </div>
                             <button
                               type="button"
                               onClick={() => handleCopyCode(codeString, codeId)}
-                              className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-medium text-rose-300 hover:text-white hover:bg-rose-900/40 transition-colors"
+                              className="code-card-copy-btn flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-medium transition-colors"
                             >
                               {copiedCodeId === codeId ? (
                                 <>
-                                  <Check className="w-3.5 h-3.5 text-emerald-400" />
-                                  <span className="text-emerald-400">Copied</span>
+                                  <Check className="w-3.5 h-3.5 text-emerald-500" />
+                                  <span className="text-emerald-500">Copied</span>
                                 </>
                               ) : (
                                 <>
@@ -413,7 +413,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                               )}
                             </button>
                           </div>
-                          <pre className="code-pre overflow-x-auto text-rose-200 leading-relaxed font-mono text-[13px] bg-black/40">
+                          <pre className="code-card-body code-pre error-body overflow-x-auto leading-relaxed font-mono text-[13px]">
                             <code className="block">{children}</code>
                           </pre>
                         </div>
@@ -423,33 +423,33 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                     // 3. Terminal / Command Card
                     if (isCommand) {
                       return (
-                        <div className="my-3.5 rounded-xl overflow-hidden border border-zinc-800 bg-[#09090b] font-mono text-xs shadow-sm">
-                          <div className="flex items-center justify-between px-4 py-2 bg-zinc-900 border-b border-zinc-800 select-none">
-                            <div className="flex items-center gap-2 text-xs font-mono text-emerald-400 font-medium">
-                              <Terminal className="w-3.5 h-3.5 text-emerald-400" />
-                              <span className="lowercase">{displayLang}</span>
+                        <div className="code-card-container my-3.5 rounded-xl overflow-hidden font-mono text-xs shadow-sm">
+                          <div className="code-card-header flex items-center justify-between px-4 py-2 select-none">
+                            <div className="flex items-center gap-2 text-xs font-mono text-emerald-500 font-medium">
+                              <Terminal className="w-3.5 h-3.5 text-emerald-500" />
+                              <span className="lowercase font-semibold">{displayLang}</span>
                             </div>
                             <div className="flex items-center gap-2">
                               {onSendToIDE && (
                                 <button
                                   type="button"
                                   onClick={() => onSendToIDE(codeString, displayLang)}
-                                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium text-emerald-400 hover:text-emerald-300 hover:bg-zinc-800 transition-colors"
+                                  className="code-card-action-btn flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors"
                                   title="Run Command in Dev Studio Terminal"
                                 >
-                                  <Terminal className="w-3.5 h-3.5" />
+                                  <Terminal className="w-3.5 h-3.5 text-emerald-500" />
                                   <span>Run Command</span>
                                 </button>
                               )}
                               <button
                                 type="button"
                                 onClick={() => handleCopyCode(codeString, codeId)}
-                                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors"
+                                className="code-card-copy-btn flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors"
                               >
                                 {copiedCodeId === codeId ? (
                                   <>
-                                    <Check className="w-3.5 h-3.5 text-emerald-400" />
-                                    <span className="text-emerald-400">Copied</span>
+                                    <Check className="w-3.5 h-3.5 text-emerald-500" />
+                                    <span className="text-emerald-500">Copied</span>
                                   </>
                                 ) : (
                                   <>
@@ -460,7 +460,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                               </button>
                             </div>
                           </div>
-                          <pre className="code-pre overflow-x-auto text-zinc-100 selection:bg-zinc-800 leading-relaxed font-mono text-[13px] bg-black">
+                          <pre className="code-card-body code-pre overflow-x-auto leading-relaxed font-mono text-[13px]">
                             <code className={`block ${className || ''}`}>{children}</code>
                           </pre>
                         </div>
@@ -469,20 +469,20 @@ export const MessageItem: React.FC<MessageItemProps> = ({
 
                     // 4. Syntax-Highlighted Code Box (Java, Python, JS, TS, HTML, CSS, etc.)
                     return (
-                      <div className="my-3.5 rounded-xl overflow-hidden border border-zinc-800 bg-[#09090b] font-mono text-xs shadow-sm">
+                      <div className="code-card-container my-3.5 rounded-xl overflow-hidden font-mono text-xs shadow-sm">
                         {/* Header Bar */}
-                        <div className="flex items-center justify-between px-4 py-2 bg-zinc-900 border-b border-zinc-800 select-none">
-                          <div className="flex items-center gap-2 text-xs font-mono text-zinc-300 font-medium">
+                        <div className="code-card-header flex items-center justify-between px-4 py-2 select-none">
+                          <div className="flex items-center gap-2 text-xs font-mono font-medium">
                             {detectedFileName ? (
                               <>
-                                <FileCode className="w-3.5 h-3.5 text-zinc-400" />
-                                <span className="text-zinc-200 font-semibold">{detectedFileName}</span>
-                                <span className="text-[11px] text-zinc-500 lowercase">({displayLang})</span>
+                                <FileCode className="w-3.5 h-3.5 opacity-70" />
+                                <span className="font-semibold">{detectedFileName}</span>
+                                <span className="text-[11px] opacity-60 lowercase">({displayLang})</span>
                               </>
                             ) : (
                               <>
-                                <Code2 className="w-3.5 h-3.5 text-zinc-400" />
-                                <span className="text-zinc-400 lowercase">{displayLang}</span>
+                                <Code2 className="w-3.5 h-3.5 opacity-70" />
+                                <span className="lowercase font-semibold">{displayLang}</span>
                               </>
                             )}
                           </div>
@@ -491,22 +491,22 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                               <button
                                 type="button"
                                 onClick={() => onSendToIDE(codeString, displayLang)}
-                                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors"
+                                className="code-card-action-btn flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors"
                                 title="Run in Dev Studio"
                               >
-                                <Play className="w-3.5 h-3.5 text-emerald-400" />
+                                <Play className="w-3.5 h-3.5 text-emerald-500" />
                                 <span>Run in IDE</span>
                               </button>
                             )}
                             <button
                               type="button"
                               onClick={() => handleCopyCode(codeString, codeId)}
-                              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors"
+                              className="code-card-copy-btn flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors"
                             >
                               {copiedCodeId === codeId ? (
                                 <>
-                                  <Check className="w-3.5 h-3.5 text-emerald-400" />
-                                  <span className="text-emerald-400">Copied</span>
+                                  <Check className="w-3.5 h-3.5 text-emerald-500" />
+                                  <span className="text-emerald-500">Copied</span>
                                 </>
                               ) : (
                                 <>
@@ -519,7 +519,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
                         </div>
 
                         {/* Highlighted Code Area */}
-                        <pre className="code-pre overflow-x-auto text-zinc-100 bg-[#0c0c0e] selection:bg-zinc-800 leading-relaxed font-mono text-[13px]">
+                        <pre className="code-card-body code-pre overflow-x-auto leading-relaxed font-mono text-[13px]">
                           <code className={`block ${className || ''}`}>{children}</code>
                         </pre>
                       </div>

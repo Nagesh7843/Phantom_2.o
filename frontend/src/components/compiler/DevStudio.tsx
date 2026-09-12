@@ -2861,6 +2861,9 @@ export const DevStudio: React.FC<DevStudioProps> = ({
         setIsDirty(true);
       }
     } finally {
+      if (e?.target) {
+        e.target.value = '';
+      }
       setTimeout(() => {
         setProjectLoadingState({ isLoading: false, message: '', progress: 100 });
       }, 250);
@@ -2926,6 +2929,9 @@ export const DevStudio: React.FC<DevStudioProps> = ({
     } catch (err) {
       alert('Failed to parse ZIP archive.');
     } finally {
+      if (e?.target) {
+        e.target.value = '';
+      }
       setTimeout(() => {
         setProjectLoadingState({ isLoading: false, message: '', progress: 100 });
       }, 250);
@@ -2956,42 +2962,44 @@ export const DevStudio: React.FC<DevStudioProps> = ({
     }, 3200);
   }, []);
 
-  // --- Initial Session Restoration (PostgreSQL for Auth Users / Local Draft for Guests) ---
+  // --- Instant Session Restoration (Local Draft + PostgreSQL Cloud Sync) ---
   useEffect(() => {
     let isMounted = true;
 
     const restoreSession = async () => {
       if (initialCode) return; // If code was sent from chat prompt, keep it
 
-      if (!isAuthenticated) {
-        // Guest mode: restore local draft if available
-        try {
-          const draft = localStorage.getItem('phantom_ide_draft_session');
-          if (draft) {
-            const parsed = JSON.parse(draft);
-            if (parsed.files && Object.keys(parsed.files).length > 0 && isMounted) {
-              setFiles(parsed.files);
-              if (parsed.projectName) setProjectName(parsed.projectName);
-              if (parsed.openTabs) setOpenTabs(parsed.openTabs);
-              if (parsed.activeFilename) setActiveFilename(parsed.activeFilename);
-              if (parsed.currentTemplate) setCurrentTemplate(parsed.currentTemplate);
-              setSyncStatus('local');
+      // 1. Immediately restore local draft session (ensures zero data loss on page refresh / reload)
+      try {
+        const draft = localStorage.getItem('phantom_ide_draft_session');
+        if (draft) {
+          const parsed = JSON.parse(draft);
+          if (parsed.files && Object.keys(parsed.files).length > 0 && isMounted) {
+            setFiles(parsed.files);
+            if (parsed.projectName) setProjectName(parsed.projectName);
+            if (parsed.openTabs && parsed.openTabs.length > 0) setOpenTabs(parsed.openTabs);
+            if (parsed.activeFilename && parsed.files[parsed.activeFilename]) setActiveFilename(parsed.activeFilename);
+            if (parsed.currentTemplate) {
+              setCurrentTemplate(parsed.currentTemplate);
+              setActiveEngine(parsed.currentTemplate === 'web' ? 'web' : 'compiler');
             }
+            if (parsed.currentProjectId) setCurrentProjectId(parsed.currentProjectId);
+            setSyncStatus(isAuthenticated ? 'synced' : 'local');
           }
-        } catch {
-          // ignore draft parse error
         }
-        return;
+      } catch {
+        // ignore local draft parse error
       }
 
-      // Authenticated Mode: Load active project from PostgreSQL
+      if (!isAuthenticated) return;
+
+      // 2. Authenticated Mode: Verify & sync with latest project from PostgreSQL
       try {
-        setSyncStatus('saving');
         const res = await api.getProjects();
         if (isMounted && res.projects && res.projects.length > 0) {
           const latest = res.projects[0];
           const fullProj = await api.getProject(latest.id);
-          if (isMounted && fullProj.project) {
+          if (isMounted && fullProj.project && fullProj.project.files && Object.keys(fullProj.project.files).length > 0) {
             const loadedFiles: Record<string, VirtualFile> = {};
             Object.entries(fullProj.project.files).forEach(([name, val]: [string, any]) => {
               loadedFiles[name] =
@@ -2999,23 +3007,28 @@ export const DevStudio: React.FC<DevStudioProps> = ({
                   ? { name, language: getLanguageForFilename(name), content: val }
                   : val;
             });
-            setFiles(loadedFiles);
-            const fnames = Object.keys(loadedFiles);
-            setOpenTabs(fnames.slice(0, 5));
-            setActiveFilename(fnames[0] || 'index.html');
-            setProjectName(fullProj.project.name);
-            setCurrentProjectId(fullProj.project.id);
-            setCurrentTemplate(fullProj.project.template || 'web');
-            setActiveEngine(fullProj.project.template === 'web' ? 'web' : 'compiler');
-            setSyncStatus('synced');
-            setLastSavedAt(new Date(fullProj.project.last_updated || Date.now()));
-            setIsDirty(false);
-            showToast(`Loaded Cloud session "${fullProj.project.name}"`, 'info');
+            
+            // Only override local draft if cloud project has newer or equal timestamp
+            const draft = localStorage.getItem('phantom_ide_draft_session');
+            const localTimestamp = draft ? (JSON.parse(draft).timestamp || 0) : 0;
+            const cloudTimestamp = new Date(fullProj.project.last_updated || 0).getTime();
+
+            if (cloudTimestamp >= localTimestamp || !draft) {
+              setFiles(loadedFiles);
+              const fnames = Object.keys(loadedFiles);
+              setOpenTabs(fnames.slice(0, 5));
+              setActiveFilename(fnames[0] || 'index.html');
+              setProjectName(fullProj.project.name);
+              setCurrentProjectId(fullProj.project.id);
+              setCurrentTemplate(fullProj.project.template || 'web');
+              setActiveEngine(fullProj.project.template === 'web' ? 'web' : 'compiler');
+              setSyncStatus('synced');
+              setLastSavedAt(new Date(fullProj.project.last_updated || Date.now()));
+              setIsDirty(false);
+            }
           }
-        } else if (isMounted) {
-          setSyncStatus('synced');
         }
-      } catch (err) {
+      } catch {
         if (isMounted) setSyncStatus('local');
       }
     };
@@ -3025,6 +3038,52 @@ export const DevStudio: React.FC<DevStudioProps> = ({
       isMounted = false;
     };
   }, [isAuthenticated, initialCode, showToast]);
+
+  // --- Immediate Local Storage Sync on any File Mutation ---
+  useEffect(() => {
+    if (!files || Object.keys(files).length === 0) return;
+    try {
+      localStorage.setItem(
+        'phantom_ide_draft_session',
+        JSON.stringify({
+          files,
+          projectName,
+          activeFilename,
+          openTabs,
+          currentTemplate,
+          currentProjectId,
+          timestamp: Date.now(),
+        })
+      );
+    } catch {
+      // ignore storage quota or serialization issues
+    }
+  }, [files, projectName, activeFilename, openTabs, currentTemplate, currentProjectId]);
+
+  // --- Flush on Page Refresh / Navigation (beforeunload) ---
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      try {
+        if (files && Object.keys(files).length > 0) {
+          localStorage.setItem(
+            'phantom_ide_draft_session',
+            JSON.stringify({
+              files,
+              projectName,
+              activeFilename,
+              openTabs,
+              currentTemplate,
+              currentProjectId,
+              timestamp: Date.now(),
+            })
+          );
+        }
+      } catch {}
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [files, projectName, activeFilename, openTabs, currentTemplate, currentProjectId]);
 
   // --- Debounced Auto-Save to PostgreSQL when Logged In ---
   useEffect(() => {
@@ -3050,25 +3109,9 @@ export const DevStudio: React.FC<DevStudioProps> = ({
           setSyncStatus('unsaved');
         }
       } else {
-        // Save locally for guest
-        try {
-          localStorage.setItem(
-            'phantom_ide_draft_session',
-            JSON.stringify({
-              files,
-              projectName,
-              activeFilename,
-              openTabs,
-              currentTemplate,
-              timestamp: Date.now(),
-            })
-          );
-          setSyncStatus('local');
-        } catch {
-          // ignore
-        }
+        setSyncStatus('local');
       }
-    }, 2500);
+    }, 1000);
 
     return () => clearTimeout(timeout);
   }, [files, projectName, currentTemplate, isDirty, isAuthenticated, currentProjectId, activeFilename, openTabs]);

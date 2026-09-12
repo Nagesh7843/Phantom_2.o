@@ -2904,11 +2904,16 @@ class PersistentTerminalSession:
         for secret_key in ('SECRET_KEY', 'DATABASE_URL', 'DB_PASSWORD', 'OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'GEMINI_API_KEY', 'GOOGLE_API_KEY'):
             safe_env.pop(secret_key, None)
 
-        # Inject user local compilers into PATH
+        # Inject workspace directory into PYTHONPATH and NODE_PATH for seamless module imports
+        safe_env['PYTHONPATH'] = f"{self.cwd};{safe_env.get('PYTHONPATH', '')}"
+        safe_env['NODE_PATH'] = f"{self.cwd};{os.path.join(self.cwd, 'node_modules')};{safe_env.get('NODE_PATH', '')}"
+
+        # Inject user local compilers and active Python environment into PATH
         user_home = os.path.expanduser('~')
         compiler_bin = os.path.join(user_home, r'.local\compiler\w64devkit\bin')
-        if os.path.isdir(compiler_bin):
-            safe_env['PATH'] = f"{compiler_bin};{safe_env.get('PATH', '')}"
+        py_dir = os.path.dirname(sys.executable)
+        py_scripts = os.path.join(py_dir, 'Scripts')
+        safe_env['PATH'] = f"{py_dir};{py_scripts};{compiler_bin};{safe_env.get('PATH', '')}"
 
         if os.name == 'nt':
             if shell_type.lower() in ('cmd', 'cmd.exe'):
@@ -3703,8 +3708,13 @@ def run_code():
         safe_env['PYTHONUNBUFFERED'] = '1'
         user_home = os.path.expanduser('~')
         compiler_bin = os.path.join(user_home, r'.local\compiler\w64devkit\bin')
-        if os.path.isdir(compiler_bin):
-            safe_env['PATH'] = f"{compiler_bin};{safe_env.get('PATH', '')}"
+        py_dir = os.path.dirname(sys.executable)
+        py_scripts = os.path.join(py_dir, 'Scripts')
+        safe_env['PATH'] = f"{py_dir};{py_scripts};{compiler_bin};{safe_env.get('PATH', '')}"
+
+        target_cwd = cwd or os.getcwd()
+        safe_env['PYTHONPATH'] = f"{target_cwd};{safe_env.get('PYTHONPATH', '')}"
+        safe_env['NODE_PATH'] = f"{target_cwd};{os.path.join(target_cwd, 'node_modules')};{safe_env.get('NODE_PATH', '')}"
 
         for secret_key in ('SECRET_KEY', 'DATABASE_URL', 'DB_PASSWORD', 'OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'GEMINI_API_KEY', 'GOOGLE_API_KEY'):
             safe_env.pop(secret_key, None)
@@ -3782,8 +3792,8 @@ def run_code():
                 return jsonify({'error': 'C compiler (gcc) is not installed on the server.'}), 400
             src_target = filename if filename.endswith('.c') else 'main.c'
             exe_target = os.path.join(workspace_dir, 'main.exe' if os.name == 'nt' else 'main')
-            commands_executed.append(f"$ gcc {src_target} -o main.exe")
-            c_out, c_err, c_code = run_cmd([gcc_bin, os.path.join(workspace_dir, src_target), '-o', exe_target, '-lm'], cwd=workspace_dir)
+            commands_executed.append(f"$ gcc {src_target} -I . -o main.exe")
+            c_out, c_err, c_code = run_cmd([gcc_bin, os.path.join(workspace_dir, src_target), '-I', workspace_dir, '-o', exe_target, '-lm'], cwd=workspace_dir)
             if c_code != 0:
                 return jsonify({'stdout': c_out, 'stderr': f"[Compilation Error]\n{c_err}", 'commands': commands_executed, 'exit_code': c_code})
             commands_executed.append("$ ./main.exe")
@@ -3796,8 +3806,8 @@ def run_code():
                 return jsonify({'error': 'C++ compiler (g++) is not installed on the server.'}), 400
             src_target = filename if filename.endswith(('.cpp', '.cc', '.cxx')) else 'main.cpp'
             exe_target = os.path.join(workspace_dir, 'main.exe' if os.name == 'nt' else 'main')
-            commands_executed.append(f"$ g++ {src_target} -o main.exe -std=c++17")
-            c_out, c_err, c_code = run_cmd([gpp_bin, os.path.join(workspace_dir, src_target), '-o', exe_target, '-std=c++17'], cwd=workspace_dir)
+            commands_executed.append(f"$ g++ {src_target} -I . -o main.exe -std=c++17")
+            c_out, c_err, c_code = run_cmd([gpp_bin, os.path.join(workspace_dir, src_target), '-I', workspace_dir, '-o', exe_target, '-std=c++17'], cwd=workspace_dir)
             if c_code != 0:
                 return jsonify({'stdout': c_out, 'stderr': f"[Compilation Error]\n{c_err}", 'commands': commands_executed, 'exit_code': c_code})
             commands_executed.append("$ ./main.exe")
@@ -3949,13 +3959,21 @@ def _normalize_terminal_command(cmd: str) -> str:
             match = re.match(r'^rm\s+(.+)$', trimmed, re.IGNORECASE)
             return f'del /f /q {match.group(1)}'
 
+    # Auto-normalize Python and Pip invocations to use sys.executable directly
+    if re.match(r'^(?:python|py|python3)\s+(.+)$', trimmed, re.IGNORECASE):
+        rest = re.sub(r'^(?:python|py|python3)\s+', '', trimmed, flags=re.IGNORECASE)
+        return f'"{sys.executable}" {rest}'
+    if re.match(r'^pip\s+(.+)$', trimmed, re.IGNORECASE):
+        rest = re.sub(r'^pip\s+', '', trimmed, flags=re.IGNORECASE)
+        return f'"{sys.executable}" -m pip {rest}'
+
     bare_file_match = re.match(r'^(?:(?:\.\/|\\.\\)?)([a-zA-Z0-9_\-\.\/]+\.(py|pyw|rpy|js|mjs|cjs|jsx|ts|tsx|mts|cts|java|cpp|cc|cxx|c\+\+|c|cs|csx|go|rs|php|phtml|rb|kt|kts|swift|dart|scala|r|lua|pl|pm|sh|bash|zsh|bat|cmd|ps1))(?:\s+(.*))?$', trimmed, re.IGNORECASE)
     if bare_file_match:
         file_path = bare_file_match.group(1)
         ext = bare_file_match.group(2).lower()
         args = bare_file_match.group(3) or ''
         if ext in ('py', 'pyw', 'rpy'):
-            return f"python {file_path} {args}".strip()
+            return f'"{sys.executable}" {file_path} {args}'.strip()
         elif ext in ('js', 'mjs', 'cjs', 'jsx'):
             return f"node {file_path} {args}".strip()
         elif ext in ('ts', 'tsx', 'mts', 'cts'):
@@ -3965,10 +3983,10 @@ def _normalize_terminal_command(cmd: str) -> str:
             return f"javac -cp . {file_path} && java -cp . {class_name} {args}".strip()
         elif ext in ('cpp', 'cc', 'cxx', 'c++'):
             exe = 'main.exe' if os.name == 'nt' else './main'
-            return f"g++ {file_path} -o {exe} -std=c++17 && {exe} {args}".strip()
+            return f"g++ -I . {file_path} -o {exe} -std=c++17 && {exe} {args}".strip()
         elif ext == 'c':
             exe = 'main.exe' if os.name == 'nt' else './main'
-            return f"gcc {file_path} -o {exe} -lm && {exe} {args}".strip()
+            return f"gcc -I . {file_path} -o {exe} -lm && {exe} {args}".strip()
         elif ext == 'go':
             return f"go run {file_path} {args}".strip()
         elif ext == 'rs':
@@ -4016,8 +4034,13 @@ def terminal_exec():
     safe_env['FORCE_COLOR'] = '1'
     user_home = os.path.expanduser('~')
     compiler_bin = os.path.join(user_home, r'.local\compiler\w64devkit\bin')
-    if os.path.isdir(compiler_bin):
-        safe_env['PATH'] = f"{compiler_bin};{safe_env.get('PATH', '')}"
+    py_dir = os.path.dirname(sys.executable)
+    py_scripts = os.path.join(py_dir, 'Scripts')
+    safe_env['PATH'] = f"{py_dir};{py_scripts};{compiler_bin};{safe_env.get('PATH', '')}"
+
+    # Inject workspace directory into PYTHONPATH and NODE_PATH for seamless imports
+    safe_env['PYTHONPATH'] = f"{workspace_dir};{safe_env.get('PYTHONPATH', '')}"
+    safe_env['NODE_PATH'] = f"{workspace_dir};{os.path.join(workspace_dir, 'node_modules')};{safe_env.get('NODE_PATH', '')}"
 
     for secret_key in ('SECRET_KEY', 'DATABASE_URL', 'DB_PASSWORD', 'OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'GEMINI_API_KEY', 'GOOGLE_API_KEY'):
         safe_env.pop(secret_key, None)
