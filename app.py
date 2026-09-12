@@ -1282,7 +1282,7 @@ def get_all_sessions():
         app.logger.error(f"Error fetching all sessions: {element}", exc_info=True)
         return jsonify({"error": "Failed to load chat history."}), 500
 
-# --- NEW: API for starting a new chat session ---
+# --- API for initializing a new chat session state ---
 @app.route('/api/new_chat_session', methods=['POST'])
 def new_chat_session_api():
     user_id = get_current_user_id()
@@ -1290,25 +1290,12 @@ def new_chat_session_api():
         user_id = "guest_" + str(ObjectId())
         session['guest_id'] = user_id
         session['current_chat_session_id'] = user_id
-        return jsonify({"message": "New ephemeral guest session created", "session_id": user_id, "vanish_mode": True}), 200
+        return jsonify({"message": "New ephemeral guest session ready", "session_id": user_id, "vanish_mode": True}), 200
 
     new_session_id = str(ObjectId())
-    
-    if db_layer:
-        db_layer.create_session(new_session_id, user_id, "New Chat Session")
-
-    if chat_sessions_collection is not None:
-        chat_session_data = {
-            "_id": ObjectId(new_session_id),
-            "user_id": user_id,
-            "created_at": datetime.now(timezone.utc),
-            "last_updated": datetime.now(timezone.utc),
-            "title": "New Chat Session"
-        }
-        chat_sessions_collection.insert_one(chat_session_data)
-
+    # Note: Keep in session memory; only write to database once user sends their first message
     session['current_chat_session_id'] = new_session_id
-    return jsonify({"message": "New chat session created", "session_id": new_session_id, "vanish_mode": False}), 200
+    return jsonify({"message": "New chat session ready", "session_id": new_session_id, "vanish_mode": False}), 200
 
 # --- STREAMING CHAT API (Server-Sent Events) ---
 @app.route('/api/chat/stream', methods=['POST'])

@@ -762,7 +762,13 @@ def get_all_sessions(user_id):
         conn = _pg_pool.getconn()
         try:
             with conn.cursor(cursor_factory=extras.RealDictCursor) as cur:
-                cur.execute("SELECT id as session_id, title, is_pinned, is_archived, last_updated, created_at FROM chat_sessions WHERE user_id = %s ORDER BY is_pinned DESC, last_updated DESC", (user_id,))
+                cur.execute("""
+                    SELECT cs.id as session_id, cs.title, cs.is_pinned, cs.is_archived, cs.last_updated, cs.created_at 
+                    FROM chat_sessions cs 
+                    WHERE cs.user_id = %s 
+                      AND (EXISTS (SELECT 1 FROM messages m WHERE m.session_id = cs.id) OR cs.is_pinned = TRUE)
+                    ORDER BY cs.is_pinned DESC, cs.last_updated DESC
+                """, (user_id,))
                 rows = cur.fetchall()
                 return [
                     {
@@ -780,14 +786,26 @@ def get_all_sessions(user_id):
             cur = conn.cursor()
             # Ensure is_archived column exists in sqlite
             try:
-                cur.execute("SELECT id as session_id, title, is_pinned, is_archived, last_updated, created_at FROM chat_sessions WHERE user_id = ? ORDER BY is_pinned DESC, last_updated DESC", (user_id,))
+                cur.execute("""
+                    SELECT cs.id as session_id, cs.title, cs.is_pinned, cs.is_archived, cs.last_updated, cs.created_at 
+                    FROM chat_sessions cs 
+                    WHERE cs.user_id = ? 
+                      AND (EXISTS (SELECT 1 FROM messages m WHERE m.session_id = cs.id) OR cs.is_pinned = 1)
+                    ORDER BY cs.is_pinned DESC, cs.last_updated DESC
+                """, (user_id,))
             except Exception:
                 try:
                     conn.execute("ALTER TABLE chat_sessions ADD COLUMN is_archived INTEGER DEFAULT 0")
                     conn.commit()
                 except Exception:
                     pass
-                cur.execute("SELECT id as session_id, title, is_pinned, is_archived, last_updated, created_at FROM chat_sessions WHERE user_id = ? ORDER BY is_pinned DESC, last_updated DESC", (user_id,))
+                cur.execute("""
+                    SELECT cs.id as session_id, cs.title, cs.is_pinned, cs.is_archived, cs.last_updated, cs.created_at 
+                    FROM chat_sessions cs 
+                    WHERE cs.user_id = ? 
+                      AND (EXISTS (SELECT 1 FROM messages m WHERE m.session_id = cs.id) OR cs.is_pinned = 1)
+                    ORDER BY cs.is_pinned DESC, cs.last_updated DESC
+                """, (user_id,))
             
             return [
                 {

@@ -252,27 +252,10 @@ export const WorkspaceApp: React.FC<WorkspaceAppProps> = ({ onNavigateHome }) =>
     }
   };
 
-  const handleNewChat = async () => {
+  const handleNewChat = () => {
     setActiveSessionId(null);
     sessionStorage.removeItem('phantom_active_session');
     setMessages([]);
-
-    if (userProfile?.authenticated) {
-      try {
-        const res = await api.startNewChat();
-        if (res && res.session_id) {
-          setActiveSessionId(res.session_id);
-          sessionStorage.setItem('phantom_active_session', res.session_id);
-          await loadAllSessions();
-        }
-      } catch {
-        const localId = 'guest_' + Date.now();
-        setActiveSessionId(localId);
-      }
-    } else {
-      const guestId = 'guest_' + Date.now();
-      setActiveSessionId(guestId);
-    }
   };
 
   const handleRenameSession = async (sessionId: string, newTitle: string) => {
